@@ -1,0 +1,91 @@
+// Traductions FR / EN. `t('clé', { variable })` remplace les {variable}.
+import { Lang } from '@shared/types'
+
+const fr = {
+  'nav.overview': 'Vue d’ensemble', 'nav.settings': 'Paramètres',
+  'platform.youtube': 'YouTube', 'platform.instagram': 'Instagram', 'platform.tiktok': 'TikTok', 'platform.brawlhalla': 'Brawlhalla',
+  'metric.subscribers': 'Abonnés', 'metric.views': 'Vues', 'metric.likes': 'Likes', 'metric.comments': 'Commentaires', 'metric.videos': 'Vidéos',
+  'metric.elo_1v1': 'ELO 1v1', 'metric.peak_1v1': 'ELO max 1v1', 'metric.elo_2v2': 'ELO 2v2 (meilleure équipe)', 'metric.games': 'Parties',
+  'metric.wins': 'Victoires', 'metric.winrate': 'Taux de victoire', 'metric.level': 'Niveau', 'metric.global_rank': 'Classement mondial', 'metric.region_rank': 'Classement régional',
+  'chart.line': 'Courbe', 'chart.area': 'Aire', 'chart.bar': 'Barres', 'chart.pie': 'Camembert', 'chart.radar': 'Radar',
+  'range.7': '7 j', 'range.30': '30 j', 'range.90': '90 j', 'range.all': 'Tout',
+  'overview.title': 'Vue d’ensemble', 'overview.empty': 'Aucun compte pour le moment. Ajoute ta première plateforme pour démarrer le suivi.',
+  'overview.add': 'Ajouter un compte', 'overview.share': 'Répartition des abonnés',
+  'platform.notConnected': 'Compte non connecté', 'platform.connect': 'Connecter un compte',
+  'platform.history': 'Évolution', 'platform.topVideos': 'Meilleures vidéos', 'platform.legends': 'Légendes', 'platform.legendGames': 'Parties par légende',
+  'platform.legendWinrate': 'Taux de victoire par légende', 'platform.noData': 'Pas encore assez de données : l’historique commence au début du suivi.',
+  'platform.soon': 'Bientôt disponible', 'platform.demo': 'Données simulées', 'platform.synced': 'Actualisé {time}', 'platform.never': 'jamais', 'platform.refresh': 'Actualiser',
+  'platform.syncError': 'Dernière actualisation en échec : {error}',
+  'video.views': 'vues',
+  'add.title': 'Ajouter un compte', 'add.input.youtube': 'Lien de la chaîne ou @handle', 'add.input.brawlhalla': 'ID Brawlhalla, Steam ID ou lien de profil Steam',
+  'add.input.instagram': 'Lien du profil', 'add.input.tiktok': 'Lien du profil', 'add.submit': 'Ajouter', 'add.cancel': 'Annuler', 'add.demo': 'Essayer avec des données simulées',
+  'add.needKey': 'Une clé API est nécessaire. Ajoute-la dans Paramètres › Comptes connectés, ou essaie le mode démo.',
+  'add.loading': 'Vérification…',
+  'settings.title': 'Paramètres',
+  'settings.appearance': 'Apparence', 'settings.theme': 'Thème', 'settings.theme.dark': 'Sombre', 'settings.theme.light': 'Clair',
+  'settings.language': 'Langue', 'settings.glass': 'Intensité du verre', 'settings.animations': 'Intensité des animations',
+  'settings.refresh': 'Actualisation', 'settings.refreshEvery': 'Fréquence d’actualisation', 'settings.minutes': '{n} min',
+  'settings.charts': 'Types de graphique', 'settings.charts.hint': 'Choisis le graphique utilisé pour chaque statistique.',
+  'settings.accounts': 'Comptes connectés', 'settings.apiKey': 'Clé API', 'settings.saved': 'Enregistrée', 'settings.notSet': 'Non définie',
+  'settings.save': 'Enregistrer', 'settings.remove': 'Supprimer', 'settings.paste': 'Colle ta clé ici',
+  'settings.keyHelp.youtube': 'Google Cloud Console › activer « YouTube Data API v3 » › Identifiants › Clé API.',
+  'settings.keyHelp.brawlhalla': 'Clé personnelle à demander à Blue Mammoth Games (portail développeur / Discord officiel).',
+  'settings.keyHelp.instagram': 'API officielle : compte Professionnel + app Meta (étape 3 du projet).', 'settings.keyHelp.tiktok': 'API officielle sur validation TikTok, sinon lecture publique (étape 4).',
+  'settings.encryptionOff': 'Le chiffrement du système est indisponible : les clés ne peuvent pas être enregistrées.',
+  'settings.system': 'Système', 'settings.startup': 'Démarrer avec Windows', 'settings.tray': 'Réduire dans la barre système à la fermeture',
+  'settings.scraping': 'Lecture des pages publiques (TikTok / Instagram)', 'settings.scraping.warn': 'Fragile : peut cesser de fonctionner sans préavis et peut enfreindre les conditions d’utilisation des plateformes. Désactivée par défaut.',
+  'settings.account.remove': 'Retirer ce compte', 'settings.account.none': 'Aucun compte connecté.',
+  'settings.limits': 'Limites connues', 'settings.limits.text': 'YouTube : stats publiques (likes/commentaires = 50 dernières vidéos). Instagram : compte Pro requis pour l’API officielle. TikTok : API soumise à validation. Brawlhalla : clé API personnelle.',
+  'err.missing_key': 'clé API manquante ou refusée', 'err.invalid_input': 'lien ou identifiant non reconnu', 'err.not_found': 'compte introuvable',
+  'err.rate_limit': 'limite de requêtes atteinte', 'err.api': 'erreur de l’API', 'err.network': 'réseau indisponible', 'err.unsupported': 'plateforme pas encore disponible',
+  'err.already_added': 'un compte est déjà connecté pour cette plateforme',
+  'common.loading': 'Chargement…'
+}
+const en: typeof fr = {
+  'nav.overview': 'Overview', 'nav.settings': 'Settings',
+  'platform.youtube': 'YouTube', 'platform.instagram': 'Instagram', 'platform.tiktok': 'TikTok', 'platform.brawlhalla': 'Brawlhalla',
+  'metric.subscribers': 'Subscribers', 'metric.views': 'Views', 'metric.likes': 'Likes', 'metric.comments': 'Comments', 'metric.videos': 'Videos',
+  'metric.elo_1v1': '1v1 ELO', 'metric.peak_1v1': '1v1 peak ELO', 'metric.elo_2v2': '2v2 ELO (best team)', 'metric.games': 'Games',
+  'metric.wins': 'Wins', 'metric.winrate': 'Win rate', 'metric.level': 'Level', 'metric.global_rank': 'Global rank', 'metric.region_rank': 'Regional rank',
+  'chart.line': 'Line', 'chart.area': 'Area', 'chart.bar': 'Bars', 'chart.pie': 'Pie', 'chart.radar': 'Radar',
+  'range.7': '7 d', 'range.30': '30 d', 'range.90': '90 d', 'range.all': 'All',
+  'overview.title': 'Overview', 'overview.empty': 'No account yet. Add your first platform to start tracking.',
+  'overview.add': 'Add an account', 'overview.share': 'Subscriber split',
+  'platform.notConnected': 'No account connected', 'platform.connect': 'Connect an account',
+  'platform.history': 'Trend', 'platform.topVideos': 'Top videos', 'platform.legends': 'Legends', 'platform.legendGames': 'Games per legend',
+  'platform.legendWinrate': 'Win rate per legend', 'platform.noData': 'Not enough data yet: history starts when tracking begins.',
+  'platform.soon': 'Coming soon', 'platform.demo': 'Simulated data', 'platform.synced': 'Updated {time}', 'platform.never': 'never', 'platform.refresh': 'Refresh',
+  'platform.syncError': 'Last refresh failed: {error}',
+  'video.views': 'views',
+  'add.title': 'Add an account', 'add.input.youtube': 'Channel link or @handle', 'add.input.brawlhalla': 'Brawlhalla ID, Steam ID or Steam profile link',
+  'add.input.instagram': 'Profile link', 'add.input.tiktok': 'Profile link', 'add.submit': 'Add', 'add.cancel': 'Cancel', 'add.demo': 'Try with simulated data',
+  'add.needKey': 'An API key is required. Add it in Settings › Connected accounts, or try demo mode.',
+  'add.loading': 'Checking…',
+  'settings.title': 'Settings',
+  'settings.appearance': 'Appearance', 'settings.theme': 'Theme', 'settings.theme.dark': 'Dark', 'settings.theme.light': 'Light',
+  'settings.language': 'Language', 'settings.glass': 'Glass intensity', 'settings.animations': 'Animation intensity',
+  'settings.refresh': 'Refresh', 'settings.refreshEvery': 'Refresh frequency', 'settings.minutes': '{n} min',
+  'settings.charts': 'Chart types', 'settings.charts.hint': 'Pick the chart used for each statistic.',
+  'settings.accounts': 'Connected accounts', 'settings.apiKey': 'API key', 'settings.saved': 'Saved', 'settings.notSet': 'Not set',
+  'settings.save': 'Save', 'settings.remove': 'Delete', 'settings.paste': 'Paste your key here',
+  'settings.keyHelp.youtube': 'Google Cloud Console › enable “YouTube Data API v3” › Credentials › API key.',
+  'settings.keyHelp.brawlhalla': 'Personal key to request from Blue Mammoth Games (developer portal / official Discord).',
+  'settings.keyHelp.instagram': 'Official API: Professional account + Meta app (project step 3).', 'settings.keyHelp.tiktok': 'Official API requires TikTok approval, otherwise public-page reading (step 4).',
+  'settings.encryptionOff': 'System encryption is unavailable: keys cannot be saved.',
+  'settings.system': 'System', 'settings.startup': 'Start with Windows', 'settings.tray': 'Minimize to the system tray on close',
+  'settings.scraping': 'Public page reading (TikTok / Instagram)', 'settings.scraping.warn': 'Fragile: may stop working without notice and may violate platform terms of service. Off by default.',
+  'settings.account.remove': 'Remove this account', 'settings.account.none': 'No connected account.',
+  'settings.limits': 'Known limits', 'settings.limits.text': 'YouTube: public stats (likes/comments = last 50 videos). Instagram: Pro account required for the official API. TikTok: API needs approval. Brawlhalla: personal API key.',
+  'err.missing_key': 'API key missing or rejected', 'err.invalid_input': 'unrecognized link or ID', 'err.not_found': 'account not found',
+  'err.rate_limit': 'rate limit reached', 'err.api': 'API error', 'err.network': 'network unavailable', 'err.unsupported': 'platform not available yet',
+  'err.already_added': 'an account is already connected for this platform',
+  'common.loading': 'Loading…'
+}
+
+export type TKey = keyof typeof fr
+const dict = { fr, en }
+export function translate(lang: Lang, key: string, vars?: Record<string, string | number>): string {
+  let s: string = (dict[lang] as Record<string, string>)[key] ?? key
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, String(v))
+  return s
+}

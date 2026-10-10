@@ -1,0 +1,16 @@
+appId: app.wavedash.desktop
+productName: WaveDash
+directories: { buildResources: resources, output: dist }
+files: ["out/**/*", "package.json"]
+extraResources: [{ from: resources, to: resources }]   # icônes lues à l'exécution (barre système)
+win:
+  target: [{ target: nsis, arch: [x64] }]
+  icon: resources/icon.ico
+  artifactName: WaveDash-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: WaveDash
+publish:
+  provider: github   # lu par electron-updater ; renseigner owner/repo dans le README

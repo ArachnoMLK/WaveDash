@@ -1,0 +1,19 @@
+# Compile l'installateur Windows à chaque tag vX.Y.Z et le publie dans les Releases.
+name: Release
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: write
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, }
+      - run: npm install --no-audit --no-fund   # pas de package-lock.json fourni : il sera généré au premier npm install
+      - run: npm run build
+      - run: npx electron-builder --win nsis --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
