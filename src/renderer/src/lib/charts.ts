@@ -5,13 +5,13 @@ import { BarChart, LineChart, PieChart, RadarChart } from 'echarts/charts'
 import { AriaComponent, GridComponent, LegendComponent, RadarComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { EChartsOption } from 'echarts'
-import { ChartType, Lang, Point } from '@shared/types'
+import { ChartPalette, ChartType, Lang, Point } from '@shared/types'
 import { fmt } from './format'
 
 echarts.use([BarChart, LineChart, PieChart, RadarChart, AriaComponent, GridComponent, LegendComponent, RadarComponent, TooltipComponent, CanvasRenderer])
 export { echarts }
 
-export interface ChartTheme { dark: boolean; lang: Lang; animMs: number }
+export interface ChartTheme { dark: boolean; lang: Lang; animMs: number; palette: ChartPalette; accent: string }
 export interface NamedSeries { name: string; points: Point[] }
 export interface Category { name: string; value: number }
 
@@ -20,13 +20,35 @@ const PALETTE = {
   light: ['#141414', '#454545', '#767676', '#a2a2a2', '#cbcbcb', '#2c2c2c', '#8c8c8c']
 }
 
+const MULTI = {
+  dark: ['#8ab4ff', '#7ee0a1', '#ff8f8f', '#ffd479', '#c9a0ff', '#7fe3e8', '#ffb27a'],
+  light: ['#2f6fe0', '#1f9d57', '#d94c4c', '#c98a00', '#8a52d6', '#0f9ba3', '#d9702a']
+}
+
+/** Mélange deux couleurs hexadécimales (t = part de b). */
+function mix(a: string, b: string, t: number): string {
+  const p = (h: string, i: number): number => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16)
+  const c = (i: number): string => Math.round(p(a, i) * (1 - t) + p(b, i) * t).toString(16).padStart(2, '0')
+  return `#${c(0)}${c(1)}${c(2)}`
+}
+
+function palette(th: ChartTheme): string[] {
+  if (th.palette === 'multi') return th.dark ? MULTI.dark : MULTI.light
+  if (th.palette === 'accent') {
+    const a = th.accent
+    return [a, mix(a, '#ffffff', 0.4), mix(a, '#000000', 0.35), mix(a, '#ffffff', 0.7), mix(a, '#000000', 0.6), mix(a, '#808080', 0.5), mix(a, '#ffffff', 0.2)]
+  }
+  return th.dark ? PALETTE.dark : PALETTE.light
+}
+
 function base(th: ChartTheme): EChartsOption {
   const ink = th.dark ? '#e6e6e6' : '#1a1a1a'
   return {
-    color: th.dark ? PALETTE.dark : PALETTE.light,
+    color: palette(th),
     textStyle: { color: ink, fontFamily: 'Inter Variable, Segoe UI, sans-serif' },
     animationDuration: th.animMs, animationDurationUpdate: th.animMs, animationEasing: 'cubicOut',
-    aria: { enabled: true, decal: { show: true } },
+    // Les motifs (hachures) ne servent qu'en niveaux de gris ; avec des couleurs, la couleur suffit.
+    aria: { enabled: true, decal: { show: th.palette === 'mono' } },
     tooltip: {
       trigger: 'item', confine: true, borderWidth: 0, textStyle: { color: ink, fontSize: 12.5 },
       backgroundColor: th.dark ? 'rgba(30,30,30,0.92)' : 'rgba(255,255,255,0.94)'

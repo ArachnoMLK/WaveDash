@@ -1,12 +1,11 @@
 // Processus principal : fenêtre en verre, barre système, mises à jour, démarrage des services.
 import { app, BrowserWindow, Menu, shell, Tray } from 'electron'
-import { autoUpdater } from 'electron-updater'
-import os from 'os'
 import { join } from 'path'
 import { getSettings, initDb } from './db'
 import { registerIpc } from './ipc'
 import { refreshAll } from './scheduler'
-import { applySystemSettings } from './system'
+import { applySystemSettings, materialFor, solidBackground } from './system'
+import { initUpdater } from './updater'
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -17,13 +16,13 @@ const resource = (f: string): string =>
 
 function createWindow(): void {
   const s = getSettings()
-  const nativeGlass = process.platform === 'win32' && parseInt(os.release().split('.')[2] ?? '0', 10) >= 22621
+  const material = materialFor(s)
   win = new BrowserWindow({
     width: 1280, height: 820, minWidth: 980, minHeight: 640,
     title: 'WaveDash', icon: resource('icon.ico'), show: false,
-    // Verre natif Windows 11 ; sur Windows 10 on retombe sur un fond uni (le flou CSS reste actif dans les panneaux).
-    backgroundMaterial: nativeGlass ? 'acrylic' : 'none',
-    backgroundColor: nativeGlass ? '#00000000' : s.theme === 'dark' ? '#101010' : '#f2f2f2',
+    // Matériau natif Windows 11 choisi dans les réglages ; sinon fond uni (le flou CSS des panneaux reste indépendant).
+    backgroundMaterial: material,
+    backgroundColor: material !== 'none' ? '#00000000' : solidBackground(s),
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#00000000', symbolColor: s.theme === 'dark' ? '#e8e8e8' : '#1a1a1a', height: 40 },
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
@@ -66,7 +65,7 @@ else {
     registerIpc(() => win)
     applySystemSettings(getSettings(), win)
     void refreshAll()
-    if (app.isPackaged) void autoUpdater.checkForUpdatesAndNotify()
+    initUpdater(() => win)
   })
   app.on('before-quit', () => { quitting = true })
   app.on('window-all-closed', () => { /* l'appli reste dans la barre système */ })

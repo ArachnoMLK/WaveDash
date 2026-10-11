@@ -4,7 +4,8 @@ import type { ChartTheme } from './charts'
 
 export function useChartTheme(): ChartTheme {
   const { settings, dur } = useApp()
-  return useMemo(() => ({ dark: settings.theme === 'dark', lang: settings.lang, animMs: Math.round(dur * 1100) }), [settings.theme, settings.lang, dur])
+  return useMemo(() => ({ dark: settings.theme === 'dark', lang: settings.lang, animMs: Math.round(dur * 1100), palette: settings.chartPalette, accent: settings.accentColor }),
+    [settings.theme, settings.lang, settings.chartPalette, settings.accentColor, dur])
 }
 
 /** « bodvar » → « Bodvar » (l'API renvoie des clés en minuscules). */

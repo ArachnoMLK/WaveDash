@@ -13,4 +13,5 @@ nsis:
   createDesktopShortcut: true
   shortcutName: WaveDash
 publish:
-  provider: github   # lu par electron-updater ; renseigner owner/repo dans le README
+  provider: github   # lu par electron-updater
+  releaseType: release   # publie directement la Release (sinon elle reste en brouillon et l’appli ne la voit pas)

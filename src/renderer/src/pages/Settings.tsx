@@ -1,16 +1,11 @@
-import { ReactNode, useEffect, useState } from 'react'
-import { ChartType, Lang, METRICS_BY_PLATFORM, Platform, PLATFORMS, ThemeMode } from '@shared/types'
+import { useEffect, useState } from 'react'
+import { ChartType, METRICS_BY_PLATFORM, Platform, PLATFORMS } from '@shared/types'
 import { SECRET_OF } from '../components/AddAccountDialog'
+import { Row, Section } from '../components/settingsUi'
 import { Reveal, Switch, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
 import { CATEGORY_CHARTS, chartKey, CHART_KEYS, DEFAULT_CHART, TIME_CHARTS } from '../lib/constants'
-
-const Row = ({ title, help, children }: { title: string; help?: string; children: ReactNode }): JSX.Element => (
-  <div className="setting"><div><div>{title}</div>{help && <div className="help">{help}</div>}</div><div>{children}</div></div>
-)
-const Section = ({ title, children, delay = 0 }: { title: string; children: ReactNode; delay?: number }): JSX.Element => (
-  <Reveal className="glass pad sect" delay={delay}><h2 style={{ marginBottom: 6 }}>{title}</h2>{children}</Reveal>
-)
+import { AppearanceSettings } from './AppearanceSettings'
 
 /** Saisie d'une clé API : elle part chiffrée vers le processus principal et n'est jamais relue par l'interface. */
 function KeyRow({ platform }: { platform: Platform }): JSX.Element {
@@ -36,39 +31,29 @@ function KeyRow({ platform }: { platform: Platform }): JSX.Element {
   )
 }
 
+function AccountsSettings(): JSX.Element {
+  const { t, accounts, reloadAccounts } = useApp()
+  return (
+    <Section title={t('settings.accounts')}>
+      {PLATFORMS.map((p) => <KeyRow key={p} platform={p} />)}
+      {accounts.length === 0 && <p className="muted small" style={{ paddingTop: 10 }}>{t('settings.account.none')}</p>}
+      {accounts.map((a) => (
+        <Row key={a.id} title={`${t(`platform.${a.platform}`)} · ${a.displayName}`}>
+          <button className="btn small" onClick={() => void window.api.removeAccount(a.id).then(reloadAccounts)}>{t('settings.account.remove')}</button>
+        </Row>
+      ))}
+    </Section>
+  )
+}
+
 const REFRESH_CHOICES = [5, 15, 30, 60, 120, 360]
 
-export function Settings(): JSX.Element {
-  const { t, settings, accounts, info, updateSettings, reloadAccounts } = useApp()
+function GeneralSettings(): JSX.Element {
+  const { t, settings, updateSettings } = useApp()
   const setChart = (k: string, c: ChartType): void => void updateSettings({ chartTypes: { ...settings.chartTypes, [k]: c } })
-
   return (
     <div>
-      <div className="page-head"><h1>{t('settings.title')}</h1></div>
-
-      <Section title={t('settings.appearance')}>
-        <Row title={t('settings.theme')}>
-          <Tabs<ThemeMode> value={settings.theme} onChange={(v) => void updateSettings({ theme: v })}
-            options={[{ id: 'dark', label: t('settings.theme.dark') }, { id: 'light', label: t('settings.theme.light') }]} />
-        </Row>
-        <Row title={t('settings.language')}>
-          <Tabs<Lang> value={settings.lang} onChange={(v) => void updateSettings({ lang: v })} options={[{ id: 'fr', label: 'Français' }, { id: 'en', label: 'English' }]} />
-        </Row>
-        <Row title={t('settings.glass')}><input type="range" min={0} max={100} value={settings.glass} onChange={(e) => void updateSettings({ glass: +e.target.value })} /></Row>
-        <Row title={t('settings.animations')}><input type="range" min={0} max={100} value={settings.animations} onChange={(e) => void updateSettings({ animations: +e.target.value })} /></Row>
-      </Section>
-
-      <Section title={t('settings.accounts')} delay={0.05}>
-        {PLATFORMS.map((p) => <KeyRow key={p} platform={p} />)}
-        {accounts.length === 0 && <p className="muted small" style={{ paddingTop: 10 }}>{t('settings.account.none')}</p>}
-        {accounts.map((a) => (
-          <Row key={a.id} title={`${t(`platform.${a.platform}`)} · ${a.displayName}`}>
-            <button className="btn small" onClick={() => void window.api.removeAccount(a.id).then(reloadAccounts)}>{t('settings.account.remove')}</button>
-          </Row>
-        ))}
-      </Section>
-
-      <Section title={t('settings.refresh')} delay={0.1}>
+      <Section title={t('settings.refresh')}>
         <Row title={t('settings.refreshEvery')}>
           <select value={settings.refreshMinutes} onChange={(e) => void updateSettings({ refreshMinutes: +e.target.value })}>
             {REFRESH_CHOICES.map((m) => <option key={m} value={m}>{m >= 60 ? `${m / 60} h` : t('settings.minutes', { n: m })}</option>)}
@@ -76,7 +61,7 @@ export function Settings(): JSX.Element {
         </Row>
       </Section>
 
-      <Section title={t('settings.charts')} delay={0.15}>
+      <Section title={t('settings.charts')} delay={0.05}>
         <p className="muted small" style={{ marginBottom: 4 }}>{t('settings.charts.hint')}</p>
         {(['youtube', 'brawlhalla'] as Platform[]).flatMap((p) => METRICS_BY_PLATFORM[p].map((m) => {
           const k = chartKey(p, m)
@@ -97,14 +82,56 @@ export function Settings(): JSX.Element {
         ))}
       </Section>
 
-      <Section title={t('settings.system')} delay={0.2}>
+      <Section title={t('settings.system')} delay={0.1}>
         <Row title={t('settings.startup')}><Switch on={settings.startWithWindows} label={t('settings.startup')} onChange={(v) => void updateSettings({ startWithWindows: v })} /></Row>
         <Row title={t('settings.tray')}><Switch on={settings.closeToTray} label={t('settings.tray')} onChange={(v) => void updateSettings({ closeToTray: v })} /></Row>
         <Row title={t('settings.scraping')} help={t('settings.scraping.warn')}><Switch on={settings.scrapingEnabled} label={t('settings.scraping')} onChange={(v) => void updateSettings({ scrapingEnabled: v })} /></Row>
       </Section>
+    </div>
+  )
+}
 
-      <Section title={t('settings.limits')} delay={0.25}><p className="muted small" style={{ lineHeight: 1.6 }}>{t('settings.limits.text')}</p></Section>
+function UpdatesSettings(): JSX.Element {
+  const { t, settings, update, info, updateSettings } = useApp()
+  const msg =
+    update.state === 'downloading' ? t('up.state.downloading', { v: update.version ?? '', p: update.percent ?? 0 })
+    : update.state === 'ready' ? t('up.state.ready', { v: update.version ?? '' })
+    : t(`up.state.${update.state}`)
+  return (
+    <div>
+      <Section title={t('up.title')}>
+        <Row title={t('up.auto')} help={t('up.auto.help')}><Switch on={settings.autoUpdate} label={t('up.auto')} onChange={(v) => void updateSettings({ autoUpdate: v })} /></Row>
+        <Row title={`${t('settings.version', { v: info?.version ?? '' })}`} help={msg + (update.state === 'error' && update.message ? ` (${update.message})` : '')}>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn small" disabled={update.state === 'checking' || update.state === 'downloading'} onClick={() => void window.api.checkUpdate()}>{t('up.check')}</button>
+            {update.state === 'ready' && <button className="btn small primary" onClick={() => void window.api.installUpdate()}>{t('up.install')}</button>}
+          </div>
+        </Row>
+      </Section>
+      <Section title={t('settings.limits')} delay={0.05}><p className="muted small" style={{ lineHeight: 1.6 }}>{t('settings.limits.text')}</p></Section>
+    </div>
+  )
+}
 
+type Tab = 'appearance' | 'accounts' | 'general' | 'updates'
+
+export function Settings(): JSX.Element {
+  const { t, info } = useApp()
+  const [tab, setTab] = useState<Tab>('appearance')
+  return (
+    <div>
+      <div className="page-head">
+        <h1 className="grow">{t('settings.title')}</h1>
+        <Tabs<Tab> value={tab} onChange={setTab} options={[
+          { id: 'appearance', label: t('tab.appearance') }, { id: 'accounts', label: t('tab.accounts') },
+          { id: 'general', label: t('tab.general') }, { id: 'updates', label: t('tab.updates') }]} />
+      </div>
+      <Reveal key={tab}>
+        {tab === 'appearance' && <AppearanceSettings />}
+        {tab === 'accounts' && <AccountsSettings />}
+        {tab === 'general' && <GeneralSettings />}
+        {tab === 'updates' && <UpdatesSettings />}
+      </Reveal>
       <p className="muted small" style={{ textAlign: 'center', marginTop: 26 }}>WaveDash · {t('settings.version', { v: info?.version ?? '' })}</p>
     </div>
   )

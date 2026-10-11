@@ -69,24 +69,81 @@ export interface ProviderResult {
   extra?: { tier?: string; region?: string }
 }
 
+export type NativeMaterial = 'none' | 'mica' | 'acrylic'
+export type BgMode = 'default' | 'solid' | 'gradient' | 'image'
+export type ChartPalette = 'mono' | 'accent' | 'multi'
+export type Density = 'compact' | 'comfortable' | 'spacious'
+export type FontFamily = 'inter' | 'system' | 'serif' | 'mono'
+
 export interface Settings {
   theme: ThemeMode
   lang: Lang
-  /** 0–100 : intensité du verre dépoli. */
-  glass: number
-  /** 0–100 : intensité des animations (0 = aucune). */
-  animations: number
   refreshMinutes: number
   chartTypes: Record<string, ChartType>
   scrapingEnabled: boolean
   startWithWindows: boolean
   closeToTray: boolean
+  autoUpdate: boolean
+
+  /* --- Apparence (sauvegardable en préréglage / exportable en thème) --- */
+  /** Effet verre : false = panneaux opaques, sans flou. */
+  glassEnabled: boolean
+  /** 0–100 : flou du verre. */
+  glass: number
+  /** 0–100 : opacité des panneaux. */
+  glassOpacity: number
+  /** 100–200 (%) : saturation derrière le verre. */
+  glassSaturation: number
+  /** Matériau natif de la fenêtre (Windows 11 uniquement). */
+  nativeMaterial: NativeMaterial
+  bgMode: BgMode
+  bgColor: string
+  bgColor2: string
+  bgAngle: number
+  bgBlur: number
+  bgDim: number
+  ambient: boolean
+  accentEnabled: boolean
+  accentColor: string
+  chartPalette: ChartPalette
+  /** Arrondi des coins en px. */
+  radius: number
+  density: Density
+  /** Taille de l'interface en %. */
+  uiScale: number
+  fontFamily: FontFamily
+  /** 0–100 : intensité des animations (0 = aucune). */
+  animations: number
+
+  /* --- Données locales, non exportées dans un thème --- */
+  /** Nom du fichier d'image de fond copié dans le dossier de l'appli. */
+  bgImage: string | null
+  navOrder: string[]
+  navHidden: string[]
+  themePresets: Record<string, ThemeData>
 }
 
+/** Réglages d'apparence regroupés dans un thème. */
+export const THEME_KEYS = [
+  'theme', 'glassEnabled', 'glass', 'glassOpacity', 'glassSaturation', 'nativeMaterial',
+  'bgMode', 'bgColor', 'bgColor2', 'bgAngle', 'bgBlur', 'bgDim', 'ambient',
+  'accentEnabled', 'accentColor', 'chartPalette', 'radius', 'density', 'uiScale', 'fontFamily', 'animations'
+] as const
+export type ThemeKey = (typeof THEME_KEYS)[number]
+export type ThemeData = Pick<Settings, ThemeKey>
+
 export const DEFAULT_SETTINGS: Settings = {
-  theme: 'dark', lang: 'fr', glass: 70, animations: 60, refreshMinutes: 30,
-  chartTypes: {}, scrapingEnabled: false, startWithWindows: false, closeToTray: true
+  theme: 'dark', lang: 'fr', refreshMinutes: 30, chartTypes: {}, scrapingEnabled: false,
+  startWithWindows: false, closeToTray: true, autoUpdate: true,
+  glassEnabled: true, glass: 70, glassOpacity: 50, glassSaturation: 120, nativeMaterial: 'acrylic',
+  bgMode: 'default', bgColor: '#101010', bgColor2: '#2a2a2a', bgAngle: 160, bgBlur: 8, bgDim: 35, ambient: true,
+  accentEnabled: false, accentColor: '#8ab4ff', chartPalette: 'mono',
+  radius: 18, density: 'comfortable', uiScale: 100, fontFamily: 'inter', animations: 60,
+  bgImage: null, navOrder: ['overview', 'youtube', 'instagram', 'tiktok', 'brawlhalla'], navHidden: [], themePresets: {}
 }
+
+export type UpdateState = 'idle' | 'checking' | 'downloading' | 'ready' | 'none' | 'error' | 'dev'
+export interface UpdateStatus { state: UpdateState; version?: string; percent?: number; message?: string }
 
 export interface AppInfo { version: string; nativeGlass: boolean; encryptionAvailable: boolean }
 
@@ -118,4 +175,15 @@ export interface WaveApi {
   setSecret(key: SecretKey, value: string): Promise<void>
   deleteSecret(key: SecretKey): Promise<void>
   onDataUpdated(cb: () => void): () => void
+  /** Zoom de l'interface (1 = 100 %). */
+  setZoom(factor: number): void
+  pickBackground(): Promise<{ ok: boolean; filename?: string; error?: string }>
+  getBackground(): Promise<string | null>
+  clearBackground(): Promise<void>
+  exportTheme(name: string, theme: ThemeData): Promise<boolean>
+  importTheme(): Promise<{ ok: boolean; name?: string; theme?: Partial<ThemeData>; error?: string }>
+  checkUpdate(): Promise<void>
+  installUpdate(): Promise<void>
+  getUpdateStatus(): Promise<UpdateStatus>
+  onUpdateStatus(cb: (s: UpdateStatus) => void): () => void
 }
