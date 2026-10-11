@@ -92,7 +92,13 @@ export interface AppInfo { version: string; nativeGlass: boolean; encryptionAvai
 
 export type SecretKey = 'youtube.apiKey' | 'brawlhalla.apiKey'
 
-export interface AddAccountInput { platform: Platform; input: string; demo?: boolean }
+export interface AddAccountInput {
+  platform: Platform
+  input: string
+  demo?: boolean
+  /** true = remplace le compte existant de cette plateforme (une fois le nouveau compte validé). */
+  replace?: boolean
+}
 export interface AddAccountResult { ok: boolean; account?: Account; error?: string }
 
 /** API exposée à l'interface par le preload. Aucun secret ne remonte jamais vers l'interface. */

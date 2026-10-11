@@ -35,7 +35,7 @@ function AccountSummary({ account }: { account: Account }): JSX.Element {
   )
 }
 
-export function Overview({ onAdd }: { onAdd: (p: Platform) => void }): JSX.Element {
+export function Overview({ onAdd }: { onAdd: (p: Platform, replace?: boolean) => void }): JSX.Element {
   const { t, accounts, settings, dataVersion } = useApp()
   const th = useChartTheme()
   const socials = accounts.filter((a) => SOCIAL.includes(a.platform))

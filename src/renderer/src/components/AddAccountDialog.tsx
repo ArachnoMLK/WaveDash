@@ -5,7 +5,7 @@ import { useApp } from '../lib/AppContext'
 
 export const SECRET_OF: Partial<Record<Platform, SecretKey>> = { youtube: 'youtube.apiKey', brawlhalla: 'brawlhalla.apiKey' }
 
-export function AddAccountDialog({ platform, onClose }: { platform: Platform; onClose: () => void }): JSX.Element {
+export function AddAccountDialog({ platform, replace = false, onClose }: { platform: Platform; replace?: boolean; onClose: () => void }): JSX.Element {
   const { t, dur, reloadAccounts } = useApp()
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -17,7 +17,7 @@ export function AddAccountDialog({ platform, onClose }: { platform: Platform; on
 
   const submit = async (demo: boolean): Promise<void> => {
     setBusy(true); setError(null)
-    const res = await window.api.addAccount({ platform, input: input.trim(), demo })
+    const res = await window.api.addAccount({ platform, input: input.trim(), demo, replace })
     setBusy(false)
     if (res.ok) { await reloadAccounts(); onClose() } else setError(res.error ?? 'api')
   }
@@ -26,7 +26,7 @@ export function AddAccountDialog({ platform, onClose }: { platform: Platform; on
     <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: dur * 0.5 }} onMouseDown={onClose}>
       <motion.div className="glass modal" initial={dur ? { y: 14, opacity: 0 } : false} animate={{ y: 0, opacity: 1 }} transition={{ duration: dur * 0.7, ease: [0.22, 0.61, 0.36, 1] }}
         onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={t('add.title')}>
-        <h2 style={{ fontSize: 18, marginBottom: 4 }}>{t('add.title')}</h2>
+        <h2 style={{ fontSize: 18, marginBottom: 4 }}>{replace ? t('add.titleReplace') : t('add.title')}</h2>
         <p className="muted small" style={{ marginBottom: 16 }}>{t(`platform.${platform}`)}</p>
         {available ? (
           <>

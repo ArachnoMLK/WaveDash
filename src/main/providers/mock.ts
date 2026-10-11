@@ -39,12 +39,17 @@ export function nextMetrics(platform: Platform, last: LatestMetrics, seed = Date
 }
 
 /** Historique simulé sur 30 jours, pour que les graphiques ne soient pas vides. */
-export function seedHistory(platform: Platform): { ts: number; metrics: ProviderResult['metrics'] }[] {
+export function seedHistory(platform: Platform, salt = 0): { ts: number; metrics: ProviderResult['metrics'] }[] {
   const out: { ts: number; metrics: ProviderResult['metrics'] }[] = []
-  let last: LatestMetrics = Object.fromEntries(Object.entries(BASE[platform]).map(([k, v]) => [k, (v as number) * 0.9]))
+  // La graine fait varier l'échelle (compteurs) et le niveau (ELO) : chaque compte démo est différent.
+  const scale = 0.4 + (salt % 160) / 50, eloShift = (salt % 700) - 350
+  let last: LatestMetrics = Object.fromEntries(Object.entries(BASE[platform]).map(([k, v]) => {
+    const n = v as number
+    return [k, k.startsWith('elo') || k === 'peak_1v1' ? n + eloShift : k === 'level' || k.endsWith('rank') ? n : n * 0.9 * scale]
+  }))
   const start = Date.now() - 30 * DAY
   for (let d = 0; d < 30; d++) {
-    const res = nextMetrics(platform, last, 1000 + d)
+    const res = nextMetrics(platform, last, 1000 + d + salt)
     // Évolution journalière un peu plus marquée pour des courbes lisibles.
     for (const k of Object.keys(res.metrics) as MetricKey[]) {
       if (!k.startsWith('elo') && k !== 'level' && !k.endsWith('rank') && k !== 'winrate' && k !== 'peak_1v1') res.metrics[k] = Math.round((last[k] ?? 0) + (res.metrics[k]! - (last[k] ?? 0)) * 18)

@@ -29,6 +29,9 @@ function createWindow(): void {
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   })
   win.once('ready-to-show', () => win?.show())
+  // Après une réduction, certaines configurations (fenêtre translucide) ne repeignent pas le contenu : on force le rendu.
+  const repaint = (): void => win?.webContents.invalidate()
+  win.on('restore', repaint); win.on('show', repaint); win.on('maximize', repaint); win.on('unmaximize', repaint)
   // Les liens externes s'ouvrent dans le navigateur, jamais dans l'appli.
   win.webContents.setWindowOpenHandler(({ url }) => { void shell.openExternal(url); return { action: 'deny' } })
   win.on('close', (e) => {

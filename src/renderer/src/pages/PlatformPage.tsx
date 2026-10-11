@@ -72,7 +72,7 @@ function BrawlhallaExtras({ data }: { data: AccountData }): JSX.Element | null {
   )
 }
 
-export function PlatformPage({ platform, onAdd }: { platform: Platform; onAdd: (p: Platform) => void }): JSX.Element {
+export function PlatformPage({ platform, onAdd }: { platform: Platform; onAdd: (p: Platform, replace?: boolean) => void }): JSX.Element {
   const { t, accounts, settings, updateSettings, reloadAccounts } = useApp()
   const th = useChartTheme()
   const account = accounts.find((a) => a.platform === platform)
@@ -98,6 +98,7 @@ export function PlatformPage({ platform, onAdd }: { platform: Platform; onAdd: (
   const type: ChartType = settings.chartTypes[chartKey(platform, metric)] ?? 'line'
   const refresh = async (): Promise<void> => { setBusy(true); await window.api.refreshNow(); await reloadAccounts(); setBusy(false) }
   const series = data?.series[metric] ?? []
+  const disconnect = async (): Promise<void> => { await window.api.removeAccount(account.id); await reloadAccounts() }
 
   return (
     <div>
@@ -109,6 +110,8 @@ export function PlatformPage({ platform, onAdd }: { platform: Platform; onAdd: (
         </div>
         {account.demo && <span className="badge">{t('platform.demo')}</span>}
         <button className="btn" disabled={busy} onClick={() => void refresh()}>{t('platform.refresh')}</button>
+        <button className="btn" onClick={() => onAdd(platform, true)}>{t('platform.change')}</button>
+        <button className="btn" onClick={() => void disconnect()}>{t('platform.disconnect')}</button>
       </div>
       {account.lastError && <div className="err" style={{ marginBottom: 16 }}>{t('platform.syncError', { error: t(`err.${account.lastError}`) })}</div>}
 

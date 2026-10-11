@@ -39,7 +39,7 @@ function KeyRow({ platform }: { platform: Platform }): JSX.Element {
 const REFRESH_CHOICES = [5, 15, 30, 60, 120, 360]
 
 export function Settings(): JSX.Element {
-  const { t, settings, accounts, updateSettings, reloadAccounts } = useApp()
+  const { t, settings, accounts, info, updateSettings, reloadAccounts } = useApp()
   const setChart = (k: string, c: ChartType): void => void updateSettings({ chartTypes: { ...settings.chartTypes, [k]: c } })
 
   return (
@@ -104,6 +104,8 @@ export function Settings(): JSX.Element {
       </Section>
 
       <Section title={t('settings.limits')} delay={0.25}><p className="muted small" style={{ lineHeight: 1.6 }}>{t('settings.limits.text')}</p></Section>
+
+      <p className="muted small" style={{ textAlign: 'center', marginTop: 26 }}>WaveDash · {t('settings.version', { v: info?.version ?? '' })}</p>
     </div>
   )
 }

@@ -12,15 +12,20 @@ import { applySystemSettings } from './system'
 
 const DEMO_NAMES = { youtube: 'Chaîne démo', brawlhalla: 'Joueur démo', instagram: 'Compte démo', tiktok: 'Compte démo' }
 
+/** Empreinte simple d'un texte : rend les comptes démo différents selon ce qui est saisi. */
+const hash = (s: string): number => [...s.trim().toLowerCase()].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
+
 async function addAccount(a: AddAccountInput): Promise<AddAccountResult> {
-  // Un seul compte par plateforme (choix de l'utilisateur pour la v1).
-  if (db.listAccounts().some((x) => x.platform === a.platform)) return { ok: false, error: 'already_added' }
+  // Un seul compte par plateforme ; `replace` permet d'en changer sans perdre l'ancien si le nouveau échoue.
+  const existing = db.listAccounts().find((x) => x.platform === a.platform)
+  if (existing && !a.replace) return { ok: false, error: 'already_added' }
   try {
     const resolved = a.demo
-      ? { externalId: `demo-${a.platform}`, displayName: DEMO_NAMES[a.platform] }
+      ? { externalId: `demo-${a.platform}-${hash(a.input)}`, displayName: a.input.trim().slice(0, 40) || DEMO_NAMES[a.platform] }
       : await getProvider(a.platform).resolve(a.input)
+    if (existing) db.deleteAccount(existing.id)
     const account = db.insertAccount({ platform: a.platform, input: a.input, demo: !!a.demo, ...resolved })
-    if (a.demo) for (const h of seedHistory(a.platform)) db.insertSnapshots(account.id, h.metrics, h.ts)
+    if (a.demo) for (const h of seedHistory(a.platform, hash(a.input))) db.insertSnapshots(account.id, h.metrics, h.ts)
     await refreshAccount(account)
     return { ok: true, account: db.getAccount(account.id) }
   } catch (e) {

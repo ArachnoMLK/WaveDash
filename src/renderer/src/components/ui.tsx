@@ -31,8 +31,9 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boo
 }
 
 /** Apparition douce d'un bloc ; `delay` permet un léger décalage entre éléments voisins. */
+// Animation purement CSS (fill-mode « backwards ») : une fois terminée, l'élément reprend son style normal,
+// et elle ne dépend plus de JavaScript, donc rien ne peut rester invisible après une réduction de la fenêtre.
 export function Reveal({ children, delay = 0, className }: { children: ReactNode; delay?: number; className?: string }): JSX.Element {
   const { dur } = useApp()
-  return <motion.div className={className} initial={dur ? { opacity: 0, y: 10 } : false} animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: dur, delay: dur ? delay : 0, ease: [0.22, 0.61, 0.36, 1] }}>{children}</motion.div>
+  return <div className={`reveal ${className ?? ''}`} style={{ animationDuration: `${dur}s`, animationDelay: dur ? `${delay}s` : '0s' }}>{children}</div>
 }
