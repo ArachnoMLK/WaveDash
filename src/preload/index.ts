@@ -1,6 +1,6 @@
 // Pont sécurisé : expose uniquement les fonctions nécessaires à l'interface.
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
-import type { UpdateStatus } from '@shared/types'
+import type { MilestoneEvent, UpdateStatus } from '@shared/types'
 import type { WaveApi } from '@shared/types'
 
 const api: WaveApi = {
@@ -19,6 +19,17 @@ const api: WaveApi = {
   setSecret: (k, v) => ipcRenderer.invoke('secret:set', k, v),
   deleteSecret: (k) => ipcRenderer.invoke('secret:delete', k),
   setZoom: (f) => webFrame.setZoomFactor(f),
+  reloadSettings: () => ipcRenderer.invoke('settings:get'),
+  getMilestoneEvents: (limit) => ipcRenderer.invoke('milestones:events', limit),
+  testNotification: () => ipcRenderer.invoke('notify:test'),
+  onMilestone: (cb) => {
+    const h = (_e: unknown, ev: MilestoneEvent): void => cb(ev)
+    ipcRenderer.on('milestone:fired', h)
+    return () => ipcRenderer.removeListener('milestone:fired', h)
+  },
+  exportData: (format) => ipcRenderer.invoke('export:data', format),
+  exportBackup: () => ipcRenderer.invoke('backup:export'),
+  importBackup: () => ipcRenderer.invoke('backup:import'),
   pickBackground: () => ipcRenderer.invoke('bg:pick'),
   getBackground: () => ipcRenderer.invoke('bg:get'),
   clearBackground: () => ipcRenderer.invoke('bg:clear'),

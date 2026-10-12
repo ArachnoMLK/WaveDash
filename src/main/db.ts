@@ -3,7 +3,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 import {
-  Account, DEFAULT_SETTINGS, ItemStat, LatestMetrics, LegendStat, MetricKey, Platform, Point, Settings
+  Account, DEFAULT_SETTINGS, ItemStat, LatestMetrics, LegendStat, MetricKey, MilestoneEvent, Platform, Point, Settings
 } from '@shared/types'
 
 let db: Database.Database
@@ -49,7 +49,15 @@ export function initDb(): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER, metric TEXT, value REAL, direction TEXT, ts INTEGER
     );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    -- Valeurs non numériques propres à un compte (ex. rang Brawlhalla précédent).
+    CREATE TABLE IF NOT EXISTS account_meta (
+      account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL,
+      PRIMARY KEY (account_id, key)
+    );
   `)
+  // Migration : la table milestone_events (créée en 0.1) reçoit une colonne pour le détail JSON.
+  const cols = db.prepare('PRAGMA table_info(milestone_events)').all() as { name: string }[]
+  if (!cols.some((c) => c.name === 'detail')) db.exec('ALTER TABLE milestone_events ADD COLUMN detail TEXT')
 }
 
 /* ---------- Paramètres ---------- */
@@ -151,3 +159,35 @@ export const getLegends = (accountId: number): LegendStat[] =>
   (db.prepare('SELECT * FROM legend_stats WHERE account_id = ? ORDER BY games DESC').all(accountId) as any[])
     .map((r) => ({ legendId: r.legend_id, name: r.name, games: r.games, wins: r.wins, kos: r.kos, falls: r.falls,
       damageDealt: r.damage_dealt, matchTimeSec: r.match_time, level: r.level }))
+
+/* ---------- Valeurs propres à un compte (rang précédent) ---------- */
+export const getMeta = (accountId: number, key: string): string | null =>
+  (db.prepare('SELECT value FROM account_meta WHERE account_id = ? AND key = ?').get(accountId, key) as { value: string } | undefined)?.value ?? null
+export const setMeta = (accountId: number, key: string, value: string): void => {
+  db.prepare('INSERT INTO account_meta VALUES (?,?,?) ON CONFLICT(account_id, key) DO UPDATE SET value = excluded.value').run(accountId, key, value)
+}
+
+/* ---------- Événements de paliers ---------- */
+export function insertEvent(e: Omit<MilestoneEvent, 'id'>): number {
+  const { id: _id, ...detail } = e as MilestoneEvent
+  const info = db.prepare('INSERT INTO milestone_events (account_id, metric, value, direction, ts, detail) VALUES (?,?,?,?,?,?)')
+    .run(e.accountId, e.metric, e.threshold, e.direction, e.ts, JSON.stringify(detail))
+  return Number(info.lastInsertRowid)
+}
+
+export function listEvents(limit = 50): MilestoneEvent[] {
+  const rows = db.prepare('SELECT id, detail FROM milestone_events WHERE detail IS NOT NULL ORDER BY ts DESC, id DESC LIMIT ?').all(limit) as { id: number; detail: string }[]
+  const out: MilestoneEvent[] = []
+  for (const r of rows) { try { out.push({ ...JSON.parse(r.detail), id: r.id }) } catch { /* ligne illisible ignorée */ } }
+  return out
+}
+
+/* ---------- Export ---------- */
+export interface SnapshotRow { platform: Platform; account: string; metric: string; ts: number; value: number }
+export const allSnapshotRows = (): SnapshotRow[] =>
+  db.prepare(`SELECT a.platform AS platform, a.display_name AS account, s.metric AS metric, s.ts AS ts, s.value AS value
+    FROM snapshots s JOIN accounts a ON a.id = s.account_id ORDER BY a.platform, s.metric, s.ts`).all() as SnapshotRow[]
+
+/** Dernière valeur connue d'une métrique à l'instant `ts` (ou avant), sinon null. */
+export const valueAt = (accountId: number, metric: MetricKey, ts: number): number | null =>
+  (db.prepare('SELECT value FROM snapshots WHERE account_id = ? AND metric = ? AND ts <= ? ORDER BY ts DESC LIMIT 1').get(accountId, metric, ts) as { value: number } | undefined)?.value ?? null

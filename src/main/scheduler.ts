@@ -1,6 +1,7 @@
 // Actualisation périodique des comptes suivis.
 import { Account } from '@shared/types'
 import * as db from './db'
+import { processRefresh } from './milestones'
 import { nextMetrics } from './providers/mock'
 import { getProvider } from './providers'
 import { ProviderError } from './providers/types'
@@ -11,8 +12,12 @@ let onUpdate: () => void = () => {}
 /** Actualise un compte et enregistre le résultat ; l'erreur éventuelle est conservée pour l'affichage. */
 export async function refreshAccount(a: Account): Promise<void> {
   try {
-    const res = a.demo ? nextMetrics(a.platform, db.getLatest(a.id)) : await getProvider(a.platform).fetch(a.externalId)
+    const prev = db.getLatest(a.id), prevTier = db.getMeta(a.id, 'tier')
+    const res = a.demo ? nextMetrics(a.platform, prev) : await getProvider(a.platform).fetch(a.externalId)
+    // Les paliers sont comparés avant d'enregistrer le nouveau relevé ; une erreur de notification ne doit pas bloquer l'actualisation.
+    try { processRefresh(a, prev, prevTier, res) } catch (e) { console.error('Paliers :', e) }
     db.insertSnapshots(a.id, res.metrics)
+    if (res.extra?.tier) db.setMeta(a.id, 'tier', res.extra.tier)
     if (res.items) db.saveItems(a.id, res.items)
     if (res.legends) db.saveLegends(a.id, res.legends)
     db.markSync(a.id, null)

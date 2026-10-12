@@ -5,7 +5,7 @@ Windows dashboard for your **YouTube, Instagram, TikTok and Brawlhalla** stats.
 
 Electron · React · TypeScript · SQLite · ECharts — style gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
 
-> **Version 0.3.0** — YouTube, Brawlhalla, mode démo, personnalisation avancée (verre, fond, couleur, police, thèmes `.wdtheme`), mises à jour automatiques. À venir : paliers et notifications (0.4), plugins `.wdsh` (0.5), Instagram, TikTok.
+> **Version 0.4.0** — YouTube, Brawlhalla, mode démo, personnalisation avancée (thèmes `.wdtheme`), mises à jour automatiques, **paliers et notifications** (hausses/baisses, textes personnalisables, son, célébration), **objectifs** avec date estimée, comparaison de périodes, **export** CSV/JSON/PDF, sauvegarde de la configuration. À venir : plugins `.wdsh` (0.5), Instagram, TikTok.
 >
 > Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit être **public**.
 

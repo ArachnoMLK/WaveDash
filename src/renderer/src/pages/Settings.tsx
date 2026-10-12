@@ -6,6 +6,8 @@ import { Reveal, Switch, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
 import { CATEGORY_CHARTS, chartKey, CHART_KEYS, DEFAULT_CHART, TIME_CHARTS } from '../lib/constants'
 import { AppearanceSettings } from './AppearanceSettings'
+import { DataSettings } from './DataSettings'
+import { NotificationSettings } from './NotificationSettings'
 
 /** Saisie d'une clé API : elle part chiffrée vers le processus principal et n'est jamais relue par l'interface. */
 function KeyRow({ platform }: { platform: Platform }): JSX.Element {
@@ -113,7 +115,7 @@ function UpdatesSettings(): JSX.Element {
   )
 }
 
-type Tab = 'appearance' | 'accounts' | 'general' | 'updates'
+type Tab = 'appearance' | 'notifications' | 'accounts' | 'general' | 'data' | 'updates'
 
 export function Settings(): JSX.Element {
   const { t, info } = useApp()
@@ -123,13 +125,15 @@ export function Settings(): JSX.Element {
       <div className="page-head">
         <h1 className="grow">{t('settings.title')}</h1>
         <Tabs<Tab> value={tab} onChange={setTab} options={[
-          { id: 'appearance', label: t('tab.appearance') }, { id: 'accounts', label: t('tab.accounts') },
-          { id: 'general', label: t('tab.general') }, { id: 'updates', label: t('tab.updates') }]} />
+          { id: 'appearance', label: t('tab.appearance') }, { id: 'notifications', label: t('tab.notifications') }, { id: 'accounts', label: t('tab.accounts') },
+          { id: 'general', label: t('tab.general') }, { id: 'data', label: t('tab.data') }, { id: 'updates', label: t('tab.updates') }]} />
       </div>
       <Reveal key={tab}>
         {tab === 'appearance' && <AppearanceSettings />}
+        {tab === 'notifications' && <NotificationSettings />}
         {tab === 'accounts' && <AccountsSettings />}
         {tab === 'general' && <GeneralSettings />}
+        {tab === 'data' && <DataSettings />}
         {tab === 'updates' && <UpdatesSettings />}
       </Reveal>
       <p className="muted small" style={{ textAlign: 'center', marginTop: 26 }}>WaveDash · {t('settings.version', { v: info?.version ?? '' })}</p>

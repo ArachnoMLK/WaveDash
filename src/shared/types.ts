@@ -69,6 +69,39 @@ export interface ProviderResult {
   extra?: { tier?: string; region?: string }
 }
 
+export type SoundKind = 'chime' | 'pulse' | 'bell'
+export type TemplateKey = 'up' | 'down' | 'rankUp' | 'rankDown'
+
+/** Règle de paliers d'une statistique : séquence 10-20-50…, incrément, valeurs précises (cumulables). */
+export interface MilestoneRule {
+  enabled: boolean
+  /** 10, 20, 50, 100, 200, 500, 1 000… qui se prolonge automatiquement. */
+  sequence: boolean
+  /** Un palier tous les N (0 = désactivé). */
+  increment: number
+  custom: number[]
+  /** Notifier aussi quand la valeur repasse sous un palier. */
+  notifyDown: boolean
+}
+
+export interface MilestoneEvent {
+  id: number
+  accountId: number
+  platform: Platform
+  account: string
+  /** Une métrique, ou 'rank' pour un changement de rang. */
+  metric: string
+  threshold: number
+  previous: number
+  value: number
+  direction: 'up' | 'down'
+  ts: number
+  fromRank?: string
+  toRank?: string
+  message: string
+  demo: boolean
+}
+
 export type NativeMaterial = 'none' | 'mica' | 'acrylic'
 export type BgMode = 'default' | 'solid' | 'gradient' | 'image'
 export type ChartPalette = 'mono' | 'accent' | 'multi'
@@ -84,6 +117,21 @@ export interface Settings {
   startWithWindows: boolean
   closeToTray: boolean
   autoUpdate: boolean
+
+  /* --- Paliers et notifications --- */
+  notificationsEnabled: boolean
+  /** Notifier les changements de rang Brawlhalla. */
+  notifyRank: boolean
+  notifySound: boolean
+  notifySoundKind: SoundKind
+  /** 0–100 */
+  notifyVolume: number
+  /** Écran de célébration dans l'appli. */
+  notifyCelebration: boolean
+  /** Textes personnalisés ; vide = texte par défaut de la langue. */
+  notifyTemplates: Partial<Record<TemplateKey, string>>
+  /** Règles de paliers par statistique, clé « plateforme.métrique ». Absent = règle par défaut. */
+  milestoneRules: Record<string, MilestoneRule>
 
   /* --- Apparence (sauvegardable en préréglage / exportable en thème) --- */
   /** Effet verre : false = panneaux opaques, sans flou. */
@@ -139,7 +187,9 @@ export const DEFAULT_SETTINGS: Settings = {
   bgMode: 'default', bgColor: '#101010', bgColor2: '#2a2a2a', bgAngle: 160, bgBlur: 8, bgDim: 35, ambient: true,
   accentEnabled: false, accentColor: '#8ab4ff', chartPalette: 'mono',
   radius: 18, density: 'comfortable', uiScale: 100, fontFamily: 'inter', animations: 60,
-  bgImage: null, navOrder: ['overview', 'youtube', 'instagram', 'tiktok', 'brawlhalla'], navHidden: [], themePresets: {}
+  bgImage: null, navOrder: ['overview', 'goals', 'youtube', 'instagram', 'tiktok', 'brawlhalla'], navHidden: [], themePresets: {},
+  notificationsEnabled: true, notifyRank: true, notifySound: true, notifySoundKind: 'chime', notifyVolume: 60,
+  notifyCelebration: true, notifyTemplates: {}, milestoneRules: {}
 }
 
 export type UpdateState = 'idle' | 'checking' | 'downloading' | 'ready' | 'none' | 'error' | 'dev'
@@ -177,6 +227,13 @@ export interface WaveApi {
   onDataUpdated(cb: () => void): () => void
   /** Zoom de l'interface (1 = 100 %). */
   setZoom(factor: number): void
+  reloadSettings(): Promise<Settings>
+  getMilestoneEvents(limit?: number): Promise<MilestoneEvent[]>
+  testNotification(): Promise<void>
+  onMilestone(cb: (e: MilestoneEvent) => void): () => void
+  exportData(format: 'csv' | 'json' | 'pdf'): Promise<{ ok: boolean; error?: string }>
+  exportBackup(): Promise<boolean>
+  importBackup(): Promise<{ ok: boolean; error?: string }>
   pickBackground(): Promise<{ ok: boolean; filename?: string; error?: string }>
   getBackground(): Promise<string | null>
   clearBackground(): Promise<void>

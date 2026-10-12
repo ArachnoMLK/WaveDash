@@ -136,3 +136,32 @@ input[type='color'] { width: 46px; height: 34px; padding: 2px; border-radius: va
 .banner { margin: 6px 4px 8px; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong); font-size: 12.5px; line-height: 1.4; }
 .banner button { margin-top: 8px; width: 100%; justify-content: center; }
 .order-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); } .order-row:first-of-type { border-top: 0; } .order-row .grow { flex: 1; }
+
+/* Objectifs, tableaux, règles de paliers */
+.page-head { flex-wrap: wrap; }
+.bar { height: 8px; border-radius: 999px; background: var(--ctrl); overflow: hidden; margin-top: 12px; }
+.bar > i { display: block; height: 100%; border-radius: 999px; background: var(--accent); transform-origin: left; animation: bar-in calc(var(--dur) * 1.6) var(--ease) backwards; }
+@keyframes bar-in { from { transform: scaleX(0); } }
+.goal-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.tbl-wrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.table th { text-align: left; color: var(--muted); font-weight: 500; padding: 8px 8px; white-space: nowrap; }
+.table td { padding: 10px 8px; border-top: 1px solid var(--line); white-space: nowrap; }
+.table .sub { display: block; color: var(--muted); font-size: 11.5px; }
+details.rule { border-top: 1px solid var(--line); padding: 12px 0; } details.rule:first-of-type { border-top: 0; }
+details.rule > summary { cursor: pointer; display: flex; align-items: center; gap: 10px; list-style: none; }
+details.rule > summary::-webkit-details-marker { display: none; }
+details.rule > summary .grow { flex: 1; }
+details.rule[open] > summary { margin-bottom: 4px; }
+.tpl-preview { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+
+/* Écran de célébration (CSS pur : jamais bloqué à l'état invisible) */
+.celebrate { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(0,0,0,0.4); backdrop-filter: blur(5px); cursor: pointer; animation: page-in calc(var(--dur) * 0.6) var(--ease) backwards; }
+.celebrate .rings { position: absolute; width: 12px; height: 12px; pointer-events: none; }
+.celebrate .rings i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--accent); opacity: 0; animation: ring 3.2s var(--ease) infinite; animation-play-state: var(--ambient-play, running); }
+.celebrate .rings i:nth-child(2) { animation-delay: 1s; } .celebrate .rings i:nth-child(3) { animation-delay: 2s; }
+@keyframes ring { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(64); opacity: 0; } }
+.celebrate .card { position: relative; text-align: center; padding: 38px 56px; animation: pop var(--dur) var(--ease) backwards; }
+.celebrate .card.glass { background: var(--panel-solid); }
+@keyframes pop { from { opacity: 0; transform: translateY(16px) scale(0.96); } }
+.celebrate .big { font-size: 72px; font-weight: 200; letter-spacing: -0.04em; line-height: 1.05; margin-top: 8px; }

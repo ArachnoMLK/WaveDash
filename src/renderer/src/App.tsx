@@ -4,6 +4,8 @@ import { Platform, Settings as AppSettings } from '@shared/types'
 import { AddAccountDialog } from './components/AddAccountDialog'
 import { Route, Sidebar, visibleNav } from './components/Sidebar'
 import { useApp } from './lib/AppContext'
+import { Celebration } from './components/Celebration'
+import { Goals } from './pages/Goals'
 import { Overview } from './pages/Overview'
 import { PlatformPage } from './pages/PlatformPage'
 import { Settings } from './pages/Settings'
@@ -28,6 +30,7 @@ export function App(): JSX.Element {
   const bg = backgroundStyle(settings, bgUrl)
 
   const page = current === 'overview' ? <Overview onAdd={openAdd} />
+    : current === 'goals' ? <Goals />
     : current === 'settings' ? <Settings />
     : <PlatformPage platform={current as Platform} onAdd={openAdd} />
 
@@ -42,6 +45,7 @@ export function App(): JSX.Element {
         {/* key = changement de page : le bloc est recréé et rejoue son apparition CSS */}
         <main><div className="page" key={current}>{page}</div></main>
       </div>
+      <Celebration />
       <AnimatePresence>
         {adding && <AddAccountDialog key="add" platform={adding.platform} replace={adding.replace} onClose={() => setAdding(null)} />}
       </AnimatePresence>

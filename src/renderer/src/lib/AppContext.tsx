@@ -1,7 +1,8 @@
 // État global : réglages, comptes, langue, mises à jour. Applique thème, verre, fond, couleur et police au document.
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { Account, AppInfo, DEFAULT_SETTINGS, Settings, UpdateStatus } from '@shared/types'
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Account, AppInfo, DEFAULT_SETTINGS, MilestoneEvent, Settings, UpdateStatus } from '@shared/types'
 import { translate } from '../i18n'
+import { playSound } from './sound'
 
 interface Ctx {
   settings: Settings
@@ -15,6 +16,10 @@ interface Ctx {
   /** Image de fond (data URL) quand le fond « Image » est choisi. */
   bgUrl: string | null
   update: UpdateStatus
+  /** Palier à célébrer (null = rien à afficher). */
+  celebration: MilestoneEvent | null
+  dismissCelebration: () => void
+  reloadSettings: () => Promise<void>
   updateSettings: (patch: Partial<Settings>) => Promise<void>
   reloadAccounts: () => Promise<void>
 }
@@ -45,6 +50,9 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
   const [ready, setReady] = useState(false)
   const [bgUrl, setBgUrl] = useState<string | null>(null)
   const [update, setUpdate] = useState<UpdateStatus>({ state: 'idle' })
+  const [celebration, setCelebration] = useState<MilestoneEvent | null>(null)
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
 
   const reloadAccounts = useCallback(async () => { setAccounts(await window.api.listAccounts()) }, [])
 
@@ -60,6 +68,13 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
     void window.api.getUpdateStatus().then(setUpdate)
     return window.api.onUpdateStatus(setUpdate)
   }, [])
+
+  // Palier franchi : son et célébration selon les réglages du moment.
+  useEffect(() => window.api.onMilestone((ev) => {
+    const s = settingsRef.current
+    if (s.notifySound) playSound(s.notifySoundKind, s.notifyVolume)
+    if (s.notifyCelebration) setCelebration(ev)
+  }), [])
 
   // L'image de fond est relue quand le fichier change.
   useEffect(() => {
@@ -108,10 +123,12 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
     window.api.setZoom(s.uiScale / 100)
   }, [settings, info, dur])
 
+  const dismissCelebration = useCallback(() => setCelebration(null), [])
+  const reloadSettings = useCallback(async () => { setSettings(await window.api.reloadSettings()) }, [])
   const updateSettings = useCallback(async (patch: Partial<Settings>) => { setSettings(await window.api.setSettings(patch)) }, [])
   const t = useCallback((k: string, v?: Record<string, string | number>) => translate(settings.lang, k, v), [settings.lang])
-  const value = useMemo(() => ({ settings, info, accounts, dataVersion, t, dur, bgUrl, update, updateSettings, reloadAccounts }),
-    [settings, info, accounts, dataVersion, t, dur, bgUrl, update, updateSettings, reloadAccounts])
+  const value = useMemo(() => ({ settings, info, accounts, dataVersion, t, dur, bgUrl, update, celebration, dismissCelebration, reloadSettings, updateSettings, reloadAccounts }),
+    [settings, info, accounts, dataVersion, t, dur, bgUrl, update, celebration, dismissCelebration, reloadSettings, updateSettings, reloadAccounts])
 
   return ready ? <AppCtx.Provider value={value}>{children}</AppCtx.Provider> : null
 }

@@ -5,7 +5,7 @@ import { DEFAULT_THEME, themeFromSettings } from '@shared/theme'
 import { Row, Section, Slider } from '../components/settingsUi'
 import { Switch, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
-import { orderedNav } from '../lib/constants'
+import { navLabelKey, orderedNav } from '../lib/constants'
 
 const ACCENTS = ['#8ab4ff', '#7ee0a1', '#ff8f8f', '#ffd479', '#c9a0ff', '#ff9ec7']
 
@@ -160,7 +160,7 @@ export function AppearanceSettings(): JSX.Element {
         <p className="muted small" style={{ marginBottom: 6 }}>{t('ap.nav.help')}</p>
         {order.map((id, i) => (
           <div className="order-row" key={id}>
-            <span className="grow">{id === 'overview' ? t('nav.overview') : t(`platform.${id}`)}</span>
+            <span className="grow">{t(navLabelKey(id))}</span>
             <button className="btn small" disabled={i === 0} aria-label={t('ap.up')} onClick={() => move(i, -1)}>↑</button>
             <button className="btn small" disabled={i === order.length - 1} aria-label={t('ap.down')} onClick={() => move(i, 1)}>↓</button>
             {id === 'overview' ? <span style={{ width: 42 }} /> : <Switch on={!s.navHidden.includes(id)} label={id} onChange={(v) => toggleHidden(id, v)} />}

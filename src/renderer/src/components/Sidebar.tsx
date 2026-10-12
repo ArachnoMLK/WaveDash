@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { useApp } from '../lib/AppContext'
-import { orderedNav } from '../lib/constants'
+import { navLabelKey, orderedNav } from '../lib/constants'
 import logoWhite from '../lib/logo-white.png'
 import logoDark from '../lib/logo-dark.png'
 
@@ -23,7 +23,7 @@ export function Sidebar({ route, onRoute }: { route: Route; onRoute: (r: Route) 
     <nav className="glass sidebar">
       <div className="brand"><img src={settings.theme === 'dark' ? logoWhite : logoDark} alt="" />WaveDash</div>
       {visibleNav(settings.navOrder, settings.navHidden).map((id) =>
-        id === 'overview' ? item(id, t('nav.overview')) : item(id, t(`platform.${id}`), accounts.some((a) => a.platform === id)))}
+        item(id, t(navLabelKey(id)), accounts.some((a) => a.platform === id)))}
       <div className="nav-spacer" />
       {update.state === 'ready' && (
         <div className="banner">

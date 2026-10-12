@@ -11,6 +11,8 @@ import { ProviderError } from './providers/types'
 import { refreshAccount, refreshAll, startScheduler } from './scheduler'
 import * as secrets from './secrets'
 import { applySystemSettings, hasNativeGlass } from './system'
+import { exportBackup, exportData, importBackup } from './export'
+import { fireTest, initMilestones } from './milestones'
 import { checkUpdate, getUpdateStatus, installUpdate } from './updater'
 
 const DEMO_NAMES = { youtube: 'Chaîne démo', brawlhalla: 'Joueur démo', instagram: 'Compte démo', tiktok: 'Compte démo' }
@@ -39,6 +41,8 @@ async function addAccount(a: AddAccountInput): Promise<AddAccountResult> {
 export function registerIpc(win: () => BrowserWindow | null): void {
   const notifyUpdated = (): void => win()?.webContents.send('data:updated')
   startScheduler(notifyUpdated)
+  // Un palier franchi : l'interface joue le son et affiche la célébration ; un clic sur la notification ouvre la fenêtre.
+  initMilestones((e) => win()?.webContents.send('milestone:fired', e), () => { const w = win(); w?.show(); w?.focus() })
 
   ipcMain.handle('app:info', (): AppInfo => ({
     version: app.getVersion(),
@@ -106,6 +110,20 @@ export function registerIpc(win: () => BrowserWindow | null): void {
       if (json?.wavedashTheme !== 1) return { ok: false, error: 'invalid' }
       return { ok: true, name: String(json.name ?? 'Thème').slice(0, 40), theme: sanitizeTheme(json.theme) }
     } catch { return { ok: false, error: 'invalid' } }
+  })
+
+  /* ---------- Paliers, export, sauvegarde ---------- */
+  ipcMain.handle('milestones:events', (_e, limit?: number) => db.listEvents(Math.min(Math.max(limit ?? 50, 1), 200)))
+  ipcMain.handle('notify:test', () => fireTest())
+  ipcMain.handle('export:data', (_e, format: 'csv' | 'json' | 'pdf') => (['csv', 'json', 'pdf'].includes(format) ? exportData(win(), format) : { ok: false }))
+  ipcMain.handle('backup:export', () => exportBackup(win()))
+  ipcMain.handle('backup:import', async () => {
+    const r = await importBackup(win())
+    if (!r.ok || !r.patch) return { ok: false, error: r.error }
+    const s = db.setSettings(r.patch)
+    applySystemSettings(s, win())
+    startScheduler()
+    return { ok: true }
   })
 
   /* ---------- Mises à jour ---------- */

@@ -35,7 +35,7 @@ export function nextMetrics(platform: Platform, last: LatestMetrics, seed = Date
     m.winrate = m.games ? ((m.wins ?? 0) / m.games) * 100 : 0
   }
   return { metrics: m, items: platform === 'youtube' ? mockItems(seed) : undefined, legends: platform === 'brawlhalla' ? mockLegends(seed) : undefined,
-    extra: platform === 'brawlhalla' ? { tier: 'Gold 2', region: 'EU' } : undefined }
+    extra: platform === 'brawlhalla' ? { tier: demoTier(m.elo_1v1 ?? 1400), region: 'EU' } : undefined }
 }
 
 /** Historique simulé sur 30 jours, pour que les graphiques ne soient pas vides. */
@@ -78,4 +78,12 @@ function mockLegends(seed: number): LegendStat[] {
       falls: Math.round(games * (2 + r() * 2)), damageDealt: Math.round(games * (900 + r() * 700)),
       matchTimeSec: Math.round(games * (230 + r() * 80)), level: Math.round(10 + r() * 60) }
   })
+}
+
+/** Rang de démonstration déduit de l'ELO (seuils approximatifs, uniquement pour le mode démo). */
+function demoTier(elo: number): string {
+  const tiers: [number, string][] = [[0, 'Tin'], [1000, 'Bronze'], [1200, 'Silver'], [1400, 'Gold'], [1650, 'Platinum'], [1900, 'Diamond']]
+  let name = 'Tin', base = 0
+  for (const [b, n] of tiers) if (elo >= b) { name = n; base = b }
+  return name === 'Diamond' ? name : `${name} ${Math.min(5, Math.floor((elo - base) / 50))}`
 }
