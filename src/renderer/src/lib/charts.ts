@@ -1,14 +1,14 @@
 // Construction des options ECharts en niveaux de gris. Les séries sont distinguées par la nuance ET par des
 // motifs (hachures) grâce à l'option `aria.decal`, pour rester lisibles sans couleur.
 import * as echarts from 'echarts/core'
-import { BarChart, LineChart, PieChart, RadarChart } from 'echarts/charts'
+import { BarChart, LineChart, PieChart, RadarChart, ScatterChart } from 'echarts/charts'
 import { AriaComponent, GridComponent, LegendComponent, RadarComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { EChartsOption } from 'echarts'
 import { ChartPalette, ChartType, Lang, Point } from '@shared/types'
 import { fmt } from './format'
 
-echarts.use([BarChart, LineChart, PieChart, RadarChart, AriaComponent, GridComponent, LegendComponent, RadarComponent, TooltipComponent, CanvasRenderer])
+echarts.use([BarChart, LineChart, PieChart, RadarChart, ScatterChart, AriaComponent, GridComponent, LegendComponent, RadarComponent, TooltipComponent, CanvasRenderer])
 export { echarts }
 
 export interface ChartTheme { dark: boolean; lang: Lang; animMs: number; palette: ChartPalette; accent: string }
@@ -102,4 +102,25 @@ export function categoryOption(type: ChartType, data: Category[], th: ChartTheme
     xAxis: { type: 'category', data: data.map((d) => d.name), ...ax, splitLine: { show: false }, axisLabel: { ...ax.axisLabel, interval: 0, rotate: data.length > 7 ? 35 : 0 } },
     yAxis: { type: 'value', ...ax },
     series: [{ type: 'bar', barMaxWidth: 26, itemStyle: { borderRadius: [5, 5, 0, 0] }, data: data.map((d) => d.value) }] }
+}
+
+
+/** Frise d'événements : une ligne par joueur, un repère par événement (ex. KO), l'axe horizontal en minutes:secondes. */
+export function timelineOption(tl: { duration: number; lanes: string[]; events: { t: number; lane: number; label?: string }[] }, th: ChartTheme): EChartsOption {
+  const ax = axisStyle(th)
+  const mmss = (v: number): string => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`
+  const pal = palette(th)
+  const h = Math.max(160, 54 + tl.lanes.length * 38)
+  return {
+    ...base(th),
+    grid: { left: 8, right: 22, top: 12, bottom: 6, containLabel: true, height: h - 60 },
+    xAxis: { type: 'value', min: 0, max: Math.ceil(tl.duration), axisLabel: { ...ax.axisLabel, formatter: (v: number) => mmss(v) }, axisLine: ax.axisLine, splitLine: ax.splitLine },
+    yAxis: { type: 'category', data: tl.lanes, inverse: true, axisLabel: { ...ax.axisLabel, width: 120, overflow: 'truncate' }, axisLine: ax.axisLine, splitLine: { show: true, lineStyle: ax.splitLine.lineStyle } },
+    tooltip: { ...(base(th).tooltip as object), trigger: 'item', formatter: (p: any) => `${tl.lanes[p.value[1]] ?? ''}<br/>${p.data.label ?? 'KO'} · ${mmss(p.value[0])}` },
+    series: [{
+      type: 'scatter', symbol: 'diamond', symbolSize: 16,
+      itemStyle: { color: (p: any) => pal[p.value[1] % pal.length] },
+      data: tl.events.map((e) => ({ value: [e.t, e.lane], label: e.label }))
+    }]
+  } as EChartsOption
 }

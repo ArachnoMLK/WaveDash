@@ -5,7 +5,7 @@ import { ChartType, Point, RawMetrics } from '@shared/types'
 import { Chart } from '../components/Chart'
 import { Reveal, StatCard, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
-import { timeOption } from '../lib/charts'
+import { timelineOption, timeOption } from '../lib/charts'
 import { TIME_CHARTS } from '../lib/constants'
 import { ago, fmtDelta } from '../lib/format'
 import { RangeKey, sinceOf } from '../lib/hooks'
@@ -26,6 +26,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [series, setSeries] = useState<Record<string, Point[]>>({})
   const [extra, setExtra] = useState<{ items: PluginItem[]; logs: string[]; error: string | null }>({ items: [], logs: [], error: null })
   const [busy, setBusy] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!m) return
@@ -44,6 +45,8 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const type: ChartType = settings.chartTypes[ckey] ?? 'line'
   const refresh = async (): Promise<void> => { setBusy(true); await window.api.pluginAccountRefresh(accountId); await reloadPlugins(); setBusy(false) }
   const hasDates = extra.items.some((i) => i.ts)
+  const hasDetail = extra.items.some((i) => i.detail)
+  const opened = extra.items.find((i) => i.id === openId && i.detail)
   const lang = settings.lang === 'fr' ? 'fr-FR' : 'en-US'
 
   return (
@@ -85,12 +88,34 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
       {extra.items.length > 0 && (
         <Reveal className="glass pad sect" delay={0.16}>
           <h2 style={{ marginBottom: 6 }}>{t('pp.items')}</h2>
+          {hasDetail && <p className="muted small" style={{ marginBottom: 6 }}>{t('pp.clickHint')}</p>}
           <div className="tbl-wrap"><table className="table">
             <thead><tr><th>{t('pp.name')}</th>{hasDates && <th>{t('pp.date')}</th>}{m.itemColumns.map((c) => <th key={c.key}>{loc(c.label, settings.lang)}</th>)}</tr></thead>
             <tbody>{extra.items.map((it) => (
-              <tr key={it.id}><td>{it.title}</td>{hasDates && <td>{it.ts ? new Date(it.ts).toLocaleString(lang) : '—'}</td>}
+              <tr key={it.id} className={it.detail ? `click${it.id === openId ? ' sel' : ''}` : undefined} onClick={it.detail ? () => setOpenId(it.id === openId ? null : it.id) : undefined}><td>{it.title}</td>{hasDates && <td>{it.ts ? new Date(it.ts).toLocaleString(lang) : '—'}</td>}
                 {m.itemColumns.map((c) => <td key={c.key}>{it.fields[c.key] ?? '—'}{it.fields[c.key] !== undefined && c.unit ? ` ${c.unit}` : ''}</td>)}</tr>))}</tbody>
           </table></div>
+        </Reveal>
+      )}
+
+      {opened?.detail && (
+        <Reveal className="glass pad sect" delay={0}>
+          <div className="row between" style={{ marginBottom: 8 }}>
+            <h2>{t('pp.detail')} · <span className="muted" style={{ fontWeight: 400 }}>{opened.title}</span></h2>
+            <button className="btn" onClick={() => setOpenId(null)}>{t('pp.close')}</button>
+          </div>
+          {opened.detail.table && (
+            <div className="tbl-wrap"><table className="table">
+              <thead><tr>{opened.detail.table.columns.map((c, i) => <th key={i}>{c}</th>)}</tr></thead>
+              <tbody>{opened.detail.table.rows.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j}>{v}</td>)}</tr>)}</tbody>
+            </table></div>
+          )}
+          {opened.detail.timeline && (
+            <div style={{ marginTop: 14 }}>
+              <h3 className="small muted" style={{ marginBottom: 4 }}>{t('pp.timeline')}</h3>
+              <Chart option={timelineOption(opened.detail.timeline, th)} height={Math.max(160, 54 + opened.detail.timeline.lanes.length * 38)} />
+            </div>
+          )}
         </Reveal>
       )}
 

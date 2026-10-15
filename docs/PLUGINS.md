@@ -72,6 +72,15 @@ var plugin = {
 
 `ctx` contient : `inputs` (valeurs saisies), `secrets` (vos clés, déchiffrées), `lang` (`fr` ou `en`), `account` (`{ externalId, displayName }`, dans `refresh`).
 
+Un élément peut aussi porter un **`detail`** facultatif, affiché quand on clique sur sa ligne :
+
+```js
+detail: {
+  table:    { columns: ['Joueur', 'Score'], rows: [['Alby', 2], ['Close', 1]] },        // 8 colonnes, 40 lignes max
+  timeline: { duration: 183, lanes: ['Alby', 'Close'], events: [{ t: 29.1, lane: 0, label: 'KO' }] }  // frise : 16 lignes, 400 repères max, t en secondes
+}
+```
+
 **Tout ce qui n'est pas déclaré dans le manifeste est ignoré** : métriques inconnues, colonnes inconnues, valeurs non numériques, horodatages absurdes.
 
 ### L'objet `host` : tout ce que le plugin peut faire
@@ -106,6 +115,14 @@ Réinstaller un `.wdsh` de même `id` met le plugin à jour en conservant ses co
 ## Pour déboguer
 
 La page d'un compte de plugin affiche l'erreur de la dernière actualisation et un **journal** (`host.log`). Une erreur lancée par ton code (`throw new Error('…')`) apparaît telle quelle.
+
+## Plugin fourni : Brawlhalla Replays
+
+`examples/brawlhalla-replays-1.0.0.wdsh` lit les fichiers `.replay` d'un dossier (permission `folder`, aucun réseau) : parties, victoires/défaites, taux de victoire, stocks pris/perdus, durée moyenne, et pour chaque partie un détail (joueurs, équipes, place, stocks perdus) avec une frise des KOs. Il décompresse le fichier lui-même (inflate en JavaScript) dans le bac à sable et garde les parties déjà lues en cache : environ 65 ms par nouveau replay, 60 nouveaux replays au maximum par actualisation. Formats lus : versions 261 et 270 (patch 11.00 comprise) ; le format évolue avec le jeu, une version inconnue peut donc être signalée « illisible » dans le journal sans rien casser d'autre.
+
+Limites actuelles : les noms de légendes et de cartes s'affichent en numéros (`#36`), faute de table officielle. Un KO indique **qui a perdu un stock** et quand ; le fichier ne dit pas directement qui l'a infligé.
+
+Le format de fichier a été compris grâce aux projets open source BrawlhallaReplayLibrary (allhailcheese) et brawlhalla-replay-reader (itselectroz), tous deux sous licence MIT.
 
 ## Pas encore disponible
 

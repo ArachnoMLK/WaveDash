@@ -147,6 +147,7 @@ input[type='color'] { width: 46px; height: 34px; padding: 2px; border-radius: va
 .table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .table th { text-align: left; color: var(--muted); font-weight: 500; padding: 8px 8px; white-space: nowrap; }
 .table td { padding: 10px 8px; border-top: 1px solid var(--line); white-space: nowrap; }
+.table tr.click { cursor: pointer; } .table tr.click:hover td { background: var(--ctrl); } .table tr.sel td { background: var(--ctrl); }
 .table .sub { display: block; color: var(--muted); font-size: 11.5px; }
 details.rule { border-top: 1px solid var(--line); padding: 12px 0; } details.rule:first-of-type { border-top: 0; }
 details.rule > summary { cursor: pointer; display: flex; align-items: center; gap: 10px; list-style: none; }

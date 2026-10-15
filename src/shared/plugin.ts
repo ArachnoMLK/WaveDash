@@ -141,7 +141,13 @@ export function validateManifest(raw: unknown): Result {
 }
 
 /* ---------- Résultats renvoyés par un plugin ---------- */
-export interface PluginItem { id: string; title: string; ts?: number; fields: Record<string, string | number> }
+/** Détail facultatif d'un élément : un tableau et/ou une frise d'événements (affichés quand on clique sur l'élément). */
+export interface PluginDetail {
+  table?: { columns: string[]; rows: (string | number)[][] }
+  timeline?: { duration: number; lanes: string[]; events: { t: number; lane: number; label?: string }[] }
+}
+export interface PluginItem { id: string; title: string; ts?: number; fields: Record<string, string | number>; detail?: PluginDetail }
+export const DETAIL_LIMITS = { columns: 8, rows: 40, cell: 80, lanes: 16, events: 400, label: 24 }
 export interface PluginRunResult {
   metrics: Record<string, number>
   items: PluginItem[]
@@ -151,6 +157,32 @@ export interface PluginRunResult {
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e15 ? v : null)
 
 /** Ne garde que ce que le manifeste déclare, avec les bons types. Rien d'autre n'entre dans la base. */
+/** Détail d'un élément : tailles bornées, types vérifiés, rien d'autre n'est conservé. */
+export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>, L = DETAIL_LIMITS, out: PluginDetail = {}
+  const t = r.table as Record<string, unknown> | undefined
+  if (t && Array.isArray(t.columns) && Array.isArray(t.rows)) {
+    const columns = t.columns.slice(0, L.columns).map((c) => String(c ?? '').slice(0, L.cell))
+    const rows = t.rows.slice(0, L.rows).filter(Array.isArray).map((row) =>
+      (row as unknown[]).slice(0, columns.length).map((v) => (typeof v === 'number' ? (Number.isFinite(v) ? v : 0) : String(v ?? '').slice(0, L.cell))))
+    if (columns.length && rows.length) out.table = { columns, rows }
+  }
+  const tl = r.timeline as Record<string, unknown> | undefined
+  if (tl && Array.isArray(tl.lanes) && Array.isArray(tl.events)) {
+    const lanes = tl.lanes.slice(0, L.lanes).map((x) => String(x ?? '').slice(0, L.cell))
+    const duration = num(tl.duration)
+    const events: { t: number; lane: number; label?: string }[] = []
+    for (const e of tl.events.slice(0, L.events) as Record<string, unknown>[]) {
+      const at = num(e?.t), lane = num(e?.lane)
+      if (at === null || at < 0 || at > 86_400 || lane === null || !Number.isInteger(lane) || lane < 0 || lane >= lanes.length) continue
+      events.push({ t: at, lane, label: typeof e.label === 'string' ? e.label.slice(0, L.label) : undefined })
+    }
+    if (lanes.length && duration !== null && duration > 0 && duration <= 86_400) out.timeline = { duration, lanes, events }
+  }
+  return out.table || out.timeline ? out : undefined
+}
+
 export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.now()): PluginRunResult {
   const out: PluginRunResult = { metrics: {}, items: [], history: [] }
   if (!raw || typeof raw !== 'object') return out
@@ -172,7 +204,7 @@ export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.no
         if (typeof v === 'string') fields[k] = v.slice(0, 200); else { const n = num(v); if (n !== null) fields[k] = n }
       }
       const ts = num(it.ts)
-      out.items.push({ id: it.id.slice(0, 100), title: it.title.slice(0, 200), ts: ts !== null && ts > 0 && ts < now + 86_400_000 ? ts : undefined, fields })
+      out.items.push({ id: it.id.slice(0, 100), title: it.title.slice(0, 200), ts: ts !== null && ts > 0 && ts < now + 86_400_000 ? ts : undefined, fields, detail: sanitizeDetail(it.detail) })
     }
   }
   if (Array.isArray(r.history)) {

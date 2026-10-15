@@ -248,7 +248,11 @@ const fr = {
   "pp.items": "Éléments",
   "pp.name": "Nom",
   "pp.date": "Date",
-  "pp.log": "Journal du plugin"
+  "pp.log": "Journal du plugin",
+  "pp.detail": "Détail",
+  "pp.timeline": "Frise des KOs",
+  "pp.close": "Fermer",
+  "pp.clickHint": "Clique sur une ligne pour voir le détail."
 }
 const en: typeof fr = {
   'nav.overview': 'Overview', 'nav.settings': 'Settings',
@@ -497,7 +501,11 @@ const en: typeof fr = {
   "pp.items": "Items",
   "pp.name": "Name",
   "pp.date": "Date",
-  "pp.log": "Plugin log"
+  "pp.log": "Plugin log",
+  "pp.detail": "Detail",
+  "pp.timeline": "KO timeline",
+  "pp.close": "Close",
+  "pp.clickHint": "Click a row to see the detail."
 }
 
 export type TKey = keyof typeof fr
