@@ -49,6 +49,19 @@ export function initDb(): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER, metric TEXT, value REAL, direction TEXT, ts INTEGER
     );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    -- Plugins .wdsh : le script installé, ses comptes (liés à une ligne de la table accounts, plateforme plugin) et son stockage.
+    CREATE TABLE IF NOT EXISTS plugins (
+      id TEXT PRIMARY KEY, manifest TEXT NOT NULL, script TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
+      installed_at INTEGER NOT NULL, failures INTEGER NOT NULL DEFAULT 0, last_error TEXT, hash TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS plugin_accounts (
+      account_id INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+      plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, inputs TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS plugin_storage (
+      plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, account_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
+      PRIMARY KEY (plugin_id, account_id, key)
+    );
     -- Valeurs non numériques propres à un compte (ex. rang Brawlhalla précédent).
     CREATE TABLE IF NOT EXISTS account_meta (
       account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL,
@@ -86,7 +99,7 @@ const toAccount = (r: AccountRow): Account => ({
 })
 
 export const listAccounts = (): Account[] =>
-  (db.prepare('SELECT * FROM accounts ORDER BY id').all() as AccountRow[]).map(toAccount)
+  (db.prepare("SELECT * FROM accounts WHERE platform != 'plugin' ORDER BY id").all() as AccountRow[]).map(toAccount)
 
 export const getAccount = (id: number): Account | undefined => {
   const r = db.prepare('SELECT * FROM accounts WHERE id = ?').get(id) as AccountRow | undefined
@@ -100,14 +113,19 @@ export function insertAccount(a: Omit<Account, 'id' | 'createdAt' | 'lastSyncAt'
   return getAccount(Number(info.lastInsertRowid))!
 }
 
-export const deleteAccount = (id: number): void => { db.prepare('DELETE FROM accounts WHERE id = ?').run(id) }
+export const deleteAccount = (id: number): void => {
+  db.transaction(() => {
+    db.prepare('DELETE FROM plugin_storage WHERE account_id = ?').run(id)   // le stockage d'un plugin n'a pas de lien étranger vers accounts
+    db.prepare('DELETE FROM accounts WHERE id = ?').run(id)
+  })()
+}
 
 export const markSync = (id: number, error: string | null): void => {
   db.prepare('UPDATE accounts SET last_sync_at = ?, last_error = ? WHERE id = ?').run(error ? null : Date.now(), error, id)
 }
 
 /* ---------- Historique ---------- */
-export function insertSnapshots(accountId: number, metrics: Partial<Record<MetricKey, number>>, ts = Date.now()): void {
+export function insertSnapshots(accountId: number, metrics: Partial<Record<string, number>>, ts = Date.now()): void {
   const stmt = db.prepare('INSERT INTO snapshots (account_id, metric, ts, value) VALUES (?,?,?,?)')
   const tx = db.transaction(() => {
     for (const [m, v] of Object.entries(metrics)) if (typeof v === 'number' && Number.isFinite(v)) stmt.run(accountId, m, ts, v)
@@ -115,15 +133,15 @@ export function insertSnapshots(accountId: number, metrics: Partial<Record<Metri
   tx()
 }
 
-export const getSeries = (accountId: number, metric: MetricKey, sinceMs: number): Point[] =>
+export const getSeries = (accountId: number, metric: string, sinceMs: number): Point[] =>
   db.prepare('SELECT ts, value FROM snapshots WHERE account_id = ? AND metric = ? AND ts >= ? ORDER BY ts')
     .all(accountId, metric, sinceMs) as Point[]
 
-export function getLatest(accountId: number): LatestMetrics {
+export function getLatest(accountId: number): Record<string, number> {
   const rows = db.prepare(`
     SELECT metric, value FROM snapshots s WHERE account_id = ?
     AND ts = (SELECT MAX(ts) FROM snapshots WHERE account_id = s.account_id AND metric = s.metric)
-  `).all(accountId) as { metric: MetricKey; value: number }[]
+  `).all(accountId) as { metric: string; value: number }[]
   return Object.fromEntries(rows.map((r) => [r.metric, r.value]))
 }
 
@@ -183,11 +201,70 @@ export function listEvents(limit = 50): MilestoneEvent[] {
 }
 
 /* ---------- Export ---------- */
-export interface SnapshotRow { platform: Platform; account: string; metric: string; ts: number; value: number }
+export interface SnapshotRow { platform: string; account: string; metric: string; ts: number; value: number }
 export const allSnapshotRows = (): SnapshotRow[] =>
-  db.prepare(`SELECT a.platform AS platform, a.display_name AS account, s.metric AS metric, s.ts AS ts, s.value AS value
-    FROM snapshots s JOIN accounts a ON a.id = s.account_id ORDER BY a.platform, s.metric, s.ts`).all() as SnapshotRow[]
+  db.prepare(`SELECT COALESCE('plugin:' || pa.plugin_id, a.platform) AS platform, a.display_name AS account, s.metric AS metric, s.ts AS ts, s.value AS value
+    FROM snapshots s JOIN accounts a ON a.id = s.account_id LEFT JOIN plugin_accounts pa ON pa.account_id = a.id ORDER BY 1, s.metric, s.ts`).all() as SnapshotRow[]
 
 /** Dernière valeur connue d'une métrique à l'instant `ts` (ou avant), sinon null. */
 export const valueAt = (accountId: number, metric: MetricKey, ts: number): number | null =>
   (db.prepare('SELECT value FROM snapshots WHERE account_id = ? AND metric = ? AND ts <= ? ORDER BY ts DESC LIMIT 1').get(accountId, metric, ts) as { value: number } | undefined)?.value ?? null
+
+/* ---------- Plugins ---------- */
+export interface PluginRow { id: string; manifest: string; script: string; enabled: number; installed_at: number; failures: number; last_error: string | null; hash: string }
+export interface PluginAccountRow { account_id: number; plugin_id: string; inputs: string; display_name: string; external_id: string; created_at: number; last_sync_at: number | null; last_error: string | null }
+
+export const getPluginRow = (id: string): PluginRow | undefined => db.prepare('SELECT * FROM plugins WHERE id = ?').get(id) as PluginRow | undefined
+export const listPluginRows = (): PluginRow[] => db.prepare('SELECT * FROM plugins ORDER BY installed_at').all() as PluginRow[]
+
+/** Installe ou met à jour un plugin ; ses comptes, clés et stockage sont conservés. */
+export function upsertPlugin(id: string, manifest: string, script: string, hash: string): void {
+  db.prepare(`INSERT INTO plugins (id, manifest, script, enabled, installed_at, failures, last_error, hash) VALUES (?,?,?,1,?,0,NULL,?)
+    ON CONFLICT(id) DO UPDATE SET manifest = excluded.manifest, script = excluded.script, hash = excluded.hash, enabled = 1, failures = 0, last_error = NULL`)
+    .run(id, manifest, script, Date.now(), hash)
+}
+export const setPluginEnabled = (id: string, enabled: boolean): void => {
+  db.prepare('UPDATE plugins SET enabled = ?, failures = CASE WHEN ? THEN 0 ELSE failures END, last_error = CASE WHEN ? THEN NULL ELSE last_error END WHERE id = ?').run(enabled ? 1 : 0, enabled ? 1 : 0, enabled ? 1 : 0, id)
+}
+export const setPluginState = (id: string, failures: number, lastError: string | null, disable = false): void => {
+  db.prepare('UPDATE plugins SET failures = ?, last_error = ?, enabled = CASE WHEN ? THEN 0 ELSE enabled END WHERE id = ?').run(failures, lastError, disable ? 1 : 0, id)
+}
+/** Supprime le plugin, ses comptes (et leur historique) et son stockage. */
+export function deletePlugin(id: string): void {
+  db.transaction(() => {
+    db.prepare('DELETE FROM accounts WHERE id IN (SELECT account_id FROM plugin_accounts WHERE plugin_id = ?)').run(id)
+    db.prepare('DELETE FROM plugins WHERE id = ?').run(id)
+  })()
+}
+
+export function insertPluginAccount(pluginId: string, displayName: string, externalId: string, inputs: Record<string, string>): number {
+  return db.transaction(() => {
+    const info = db.prepare("INSERT INTO accounts (platform, input, display_name, external_id, avatar, demo, created_at) VALUES ('plugin', '', ?, ?, NULL, 0, ?)")
+      .run(displayName, externalId, Date.now())
+    const id = Number(info.lastInsertRowid)
+    db.prepare('INSERT INTO plugin_accounts (account_id, plugin_id, inputs) VALUES (?,?,?)').run(id, pluginId, JSON.stringify(inputs))
+    return id
+  })()
+}
+
+const PA_SELECT = `SELECT pa.account_id, pa.plugin_id, pa.inputs, a.display_name, a.external_id, a.created_at, a.last_sync_at, a.last_error
+  FROM plugin_accounts pa JOIN accounts a ON a.id = pa.account_id`
+export const listPluginAccountRows = (): PluginAccountRow[] => db.prepare(`${PA_SELECT} ORDER BY pa.account_id`).all() as PluginAccountRow[]
+export const getPluginAccountRow = (accountId: number): PluginAccountRow | undefined => db.prepare(`${PA_SELECT} WHERE pa.account_id = ?`).get(accountId) as PluginAccountRow | undefined
+
+export const pluginStorageGet = (pluginId: string, accountId: number, key: string): string | null =>
+  (db.prepare('SELECT value FROM plugin_storage WHERE plugin_id = ? AND account_id = ? AND key = ?').get(pluginId, accountId, key) as { value: string } | undefined)?.value ?? null
+export const pluginStorageCount = (pluginId: string, accountId: number): number =>
+  (db.prepare('SELECT COUNT(*) AS n FROM plugin_storage WHERE plugin_id = ? AND account_id = ?').get(pluginId, accountId) as { n: number }).n
+export const pluginStorageSet = (pluginId: string, accountId: number, key: string, value: string): void => {
+  db.prepare('INSERT INTO plugin_storage VALUES (?,?,?,?) ON CONFLICT(plugin_id, account_id, key) DO UPDATE SET value = excluded.value').run(pluginId, accountId, key, value)
+}
+
+/** Ajoute des points d'historique fournis par un plugin, sans doublon (même compte, métrique et instant). */
+export function insertHistory(accountId: number, points: { ts: number; metrics: Record<string, number> }[]): void {
+  const exists = db.prepare('SELECT 1 FROM snapshots WHERE account_id = ? AND metric = ? AND ts = ?')
+  const ins = db.prepare('INSERT INTO snapshots (account_id, metric, ts, value) VALUES (?,?,?,?)')
+  db.transaction(() => {
+    for (const p of points) for (const [m, v] of Object.entries(p.metrics)) if (!exists.get(accountId, m, p.ts)) ins.run(accountId, m, p.ts, v)
+  })()
+}

@@ -5,6 +5,7 @@ import { getSettings, initDb } from './db'
 import { registerIpc } from './ipc'
 import { refreshAll } from './scheduler'
 import { applySystemSettings, materialFor, solidBackground } from './system'
+import { setPendingFile } from './plugins/manager'
 import { initUpdater } from './updater'
 
 let win: BrowserWindow | null = null
@@ -53,16 +54,24 @@ function createTray(): void {
   tray.on('click', () => { win?.show(); win?.focus() })
 }
 
+/** Chemin d'un fichier .wdsh passé en argument (double-clic dans l'Explorateur). */
+const wdshArg = (argv: string[]): string | undefined => argv.find((a) => a.toLowerCase().endsWith('.wdsh') && !a.startsWith('--'))
+
 // Une seule instance à la fois.
 if (!app.requestSingleInstanceLock()) app.quit()
 else {
-  app.on('second-instance', () => { win?.show(); win?.focus() })
+  app.on('second-instance', (_e, argv) => {
+    const f = wdshArg(argv)
+    if (f) win?.webContents.send('plugin:file', f)
+    win?.show(); win?.focus()
+  })
   app.whenReady().then(() => {
     app.setAppUserModelId('app.wavedash.desktop')   // requis pour les notifications Windows
     initDb()
     createWindow()
     createTray()
     registerIpc(() => win)
+    setPendingFile(wdshArg(process.argv) ?? null)
     applySystemSettings(getSettings(), win)
     void refreshAll()
     initUpdater(() => win)

@@ -1,11 +1,14 @@
 import { AnimatePresence } from 'framer-motion'
-import { CSSProperties, useState } from 'react'
+import { CSSProperties, useEffect, useState } from 'react'
 import { Platform, Settings as AppSettings } from '@shared/types'
 import { AddAccountDialog } from './components/AddAccountDialog'
 import { Route, Sidebar, visibleNav } from './components/Sidebar'
 import { useApp } from './lib/AppContext'
 import { Celebration } from './components/Celebration'
 import { Goals } from './pages/Goals'
+import { PluginPage } from './pages/PluginPage'
+import { PluginsPage } from './pages/PluginsPage'
+import { pluginAccountOfRoute } from './lib/plugin'
 import { Overview } from './pages/Overview'
 import { PlatformPage } from './pages/PlatformPage'
 import { Settings } from './pages/Settings'
@@ -19,18 +22,29 @@ function backgroundStyle(s: AppSettings, bgUrl: string | null): CSSProperties | 
 }
 
 export function App(): JSX.Element {
-  const { settings, bgUrl } = useApp()
+  const { settings, bgUrl, pluginAccounts } = useApp()
   const [route, setRoute] = useState<Route>('overview')
   // `replace` : le nouveau compte remplace celui déjà connecté sur cette plateforme.
   const [adding, setAdding] = useState<{ platform: Platform; replace: boolean } | null>(null)
   const openAdd = (platform: Platform, replace = false): void => setAdding({ platform, replace })
 
-  // Un onglet masqué dans les paramètres ramène à la vue d'ensemble.
-  const current = route === 'settings' || visibleNav(settings.navOrder, settings.navHidden).includes(route) ? route : 'overview'
+  // Fichier .wdsh reçu (double-clic dans l'Explorateur ou fenêtre déjà ouverte) : on ouvre la page Plugins pour le valider.
+  const [incoming, setIncoming] = useState<string | null>(null)
+  useEffect(() => {
+    void window.api.takePendingPluginFile().then((p) => { if (p) { setIncoming(p); setRoute('plugins') } })
+    return window.api.onPluginFile((p) => { setIncoming(p); setRoute('plugins') })
+  }, [])
+
+  // Un onglet masqué (ou un compte de plugin supprimé) ramène à la vue d'ensemble.
+  const pluginId = pluginAccountOfRoute(route)
+  const known = route === 'settings' || route === 'plugins' || (pluginId !== null && pluginAccounts.some((a) => a.id === pluginId))
+  const current = known || visibleNav(settings.navOrder, settings.navHidden).includes(route) ? route : 'overview'
   const bg = backgroundStyle(settings, bgUrl)
 
   const page = current === 'overview' ? <Overview onAdd={openAdd} />
     : current === 'goals' ? <Goals />
+    : current === 'plugins' ? <PluginsPage openPath={incoming} onOpenHandled={() => setIncoming(null)} />
+    : pluginAccountOfRoute(current) !== null ? <PluginPage accountId={pluginAccountOfRoute(current)!} />
     : current === 'settings' ? <Settings />
     : <PlatformPage platform={current as Platform} onAdd={openAdd} />
 

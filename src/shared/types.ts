@@ -199,6 +199,11 @@ export interface AppInfo { version: string; nativeGlass: boolean; encryptionAvai
 
 export type SecretKey = 'youtube.apiKey' | 'brawlhalla.apiKey'
 
+import type { InstalledPlugin, PluginAccount, PluginInspect, PluginItem } from './plugin'
+
+/** Valeurs de métriques par clé : les plugins définissent leurs propres clés. */
+export type RawMetrics = Record<string, number>
+
 export interface AddAccountInput {
   platform: Platform
   input: string
@@ -216,8 +221,8 @@ export interface WaveApi {
   listAccounts(): Promise<Account[]>
   addAccount(input: AddAccountInput): Promise<AddAccountResult>
   removeAccount(id: number): Promise<void>
-  getSeries(accountId: number, metric: MetricKey, sinceMs: number): Promise<Point[]>
-  getLatest(accountId: number): Promise<LatestMetrics>
+  getSeries(accountId: number, metric: string, sinceMs: number): Promise<Point[]>
+  getLatest(accountId: number): Promise<RawMetrics>
   getItems(accountId: number): Promise<ItemStat[]>
   getLegends(accountId: number): Promise<LegendStat[]>
   refreshNow(): Promise<void>
@@ -227,6 +232,25 @@ export interface WaveApi {
   onDataUpdated(cb: () => void): () => void
   /** Zoom de l'interface (1 = 100 %). */
   setZoom(factor: number): void
+  /* --- Plugins .wdsh --- */
+  pluginsList(): Promise<InstalledPlugin[]>
+  pluginAccountsList(): Promise<PluginAccount[]>
+  pluginsPickPackage(): Promise<string | null>
+  pluginsInspect(path: string): Promise<{ ok: true; inspect: PluginInspect } | { ok: false; error: string }>
+  pluginsInstall(token: string): Promise<{ ok: boolean; error?: string }>
+  pluginsSetEnabled(id: string, enabled: boolean): Promise<void>
+  pluginsUninstall(id: string): Promise<void>
+  pluginAccountAdd(pluginId: string, inputs: Record<string, string>): Promise<{ ok: boolean; error?: string; detail?: string }>
+  pluginAccountRemove(accountId: number): Promise<void>
+  pluginAccountRefresh(accountId: number): Promise<void>
+  pluginAccountData(accountId: number): Promise<{ items: PluginItem[]; logs: string[]; error: string | null }>
+  pluginSecretSet(pluginId: string, key: string, value: string): Promise<boolean>
+  pluginSecretDelete(pluginId: string, key: string): Promise<void>
+  pickFolder(): Promise<string | null>
+  /** Chemin d'un fichier déposé dans la fenêtre (glisser-déposer). */
+  pathForFile(file: File): string
+  takePendingPluginFile(): Promise<string | null>
+  onPluginFile(cb: (path: string) => void): () => void
   reloadSettings(): Promise<Settings>
   getMilestoneEvents(limit?: number): Promise<MilestoneEvent[]>
   testNotification(): Promise<void>

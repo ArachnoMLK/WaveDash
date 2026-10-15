@@ -1,6 +1,7 @@
 // État global : réglages, comptes, langue, mises à jour. Applique thème, verre, fond, couleur et police au document.
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Account, AppInfo, DEFAULT_SETTINGS, MilestoneEvent, Settings, UpdateStatus } from '@shared/types'
+import type { InstalledPlugin, PluginAccount } from '@shared/plugin'
 import { translate } from '../i18n'
 import { playSound } from './sound'
 
@@ -18,8 +19,11 @@ interface Ctx {
   update: UpdateStatus
   /** Palier à célébrer (null = rien à afficher). */
   celebration: MilestoneEvent | null
+  plugins: InstalledPlugin[]
+  pluginAccounts: PluginAccount[]
   dismissCelebration: () => void
   reloadSettings: () => Promise<void>
+  reloadPlugins: () => Promise<void>
   updateSettings: (patch: Partial<Settings>) => Promise<void>
   reloadAccounts: () => Promise<void>
 }
@@ -51,18 +55,24 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
   const [bgUrl, setBgUrl] = useState<string | null>(null)
   const [update, setUpdate] = useState<UpdateStatus>({ state: 'idle' })
   const [celebration, setCelebration] = useState<MilestoneEvent | null>(null)
+  const [plugins, setPlugins] = useState<InstalledPlugin[]>([])
+  const [pluginAccounts, setPluginAccounts] = useState<PluginAccount[]>([])
   const settingsRef = useRef(settings)
   settingsRef.current = settings
 
   const reloadAccounts = useCallback(async () => { setAccounts(await window.api.listAccounts()) }, [])
+  const reloadPlugins = useCallback(async () => {
+    const [p, a] = await Promise.all([window.api.pluginsList(), window.api.pluginAccountsList()])
+    setPlugins(p); setPluginAccounts(a)
+  }, [])
 
   useEffect(() => {
     void (async () => {
       const [s, i] = await Promise.all([window.api.getSettings(), window.api.appInfo()])
-      setSettings(s); setInfo(i); await reloadAccounts(); setReady(true)
+      setSettings(s); setInfo(i); await Promise.all([reloadAccounts(), reloadPlugins()]); setReady(true)
     })()
-    return window.api.onDataUpdated(() => { void reloadAccounts(); setVersion((v) => v + 1) })
-  }, [reloadAccounts])
+    return window.api.onDataUpdated(() => { void reloadAccounts(); void reloadPlugins(); setVersion((v) => v + 1) })
+  }, [reloadAccounts, reloadPlugins])
 
   useEffect(() => {
     void window.api.getUpdateStatus().then(setUpdate)
@@ -127,8 +137,8 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
   const reloadSettings = useCallback(async () => { setSettings(await window.api.reloadSettings()) }, [])
   const updateSettings = useCallback(async (patch: Partial<Settings>) => { setSettings(await window.api.setSettings(patch)) }, [])
   const t = useCallback((k: string, v?: Record<string, string | number>) => translate(settings.lang, k, v), [settings.lang])
-  const value = useMemo(() => ({ settings, info, accounts, dataVersion, t, dur, bgUrl, update, celebration, dismissCelebration, reloadSettings, updateSettings, reloadAccounts }),
-    [settings, info, accounts, dataVersion, t, dur, bgUrl, update, celebration, dismissCelebration, reloadSettings, updateSettings, reloadAccounts])
+  const value = useMemo(() => ({ settings, info, accounts, dataVersion, t, dur, bgUrl, update, celebration, plugins, pluginAccounts, dismissCelebration, reloadSettings, reloadPlugins, updateSettings, reloadAccounts }),
+    [settings, info, accounts, dataVersion, t, dur, bgUrl, update, celebration, plugins, pluginAccounts, dismissCelebration, reloadSettings, reloadPlugins, updateSettings, reloadAccounts])
 
   return ready ? <AppCtx.Provider value={value}>{children}</AppCtx.Provider> : null
 }

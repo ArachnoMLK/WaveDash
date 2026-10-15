@@ -3,6 +3,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { readFileSync, statSync, writeFileSync } from 'fs'
 import { METRIC_NAMES, PLATFORM_NAMES } from '@shared/labels'
 import { BACKUP_KEYS, sanitizeBackup } from '@shared/backup'
+import { validateManifest } from '@shared/plugin'
 import { MetricKey, METRICS_BY_PLATFORM, Settings } from '@shared/types'
 import * as db from './db'
 
@@ -38,7 +39,18 @@ function buildJson(): string {
     }
     return { platform: a.platform, displayName: a.displayName, externalId: a.externalId, demo: a.demo, metrics, items: db.getItems(a.id), legends: db.getLegends(a.id) }
   })
-  return JSON.stringify({ wavedashExport: 1, appVersion: app.getVersion(), exportedAt: new Date().toISOString(), accounts, events: db.listEvents(500) }, null, 2)
+  // Comptes de plugins : séries des métriques déclarées dans le manifeste du plugin.
+  const pluginAccounts = db.listPluginAccountRows().map((pa) => {
+    const row = db.getPluginRow(pa.plugin_id)
+    const v = row ? validateManifest(JSON.parse(row.manifest)) : null
+    const metrics: Record<string, [number, number][]> = {}
+    for (const m of v && v.ok ? v.manifest.metrics : []) {
+      const pts = db.getSeries(pa.account_id, m.key as MetricKey, 0)
+      if (pts.length) metrics[m.key] = pts.map((p) => [p.ts, p.value])
+    }
+    return { plugin: pa.plugin_id, displayName: pa.display_name, metrics }
+  })
+  return JSON.stringify({ wavedashExport: 1, appVersion: app.getVersion(), exportedAt: new Date().toISOString(), accounts, pluginAccounts, events: db.listEvents(500) }, null, 2)
 }
 
 /* ---------- Rapport PDF : une page HTML sobre, imprimée par Chromium ---------- */

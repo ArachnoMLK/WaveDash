@@ -2,6 +2,7 @@
 import { Account } from '@shared/types'
 import * as db from './db'
 import { processRefresh } from './milestones'
+import { refreshAllPlugins } from './plugins/manager'
 import { nextMetrics } from './providers/mock'
 import { getProvider } from './providers'
 import { ProviderError } from './providers/types'
@@ -28,6 +29,7 @@ export async function refreshAccount(a: Account): Promise<void> {
 
 export async function refreshAll(): Promise<void> {
   await Promise.all(db.listAccounts().map(refreshAccount))
+  try { await refreshAllPlugins() } catch (e) { console.error('Plugins :', e) }
   onUpdate()
 }
 

@@ -1,5 +1,5 @@
 // Pont sécurisé : expose uniquement les fonctions nécessaires à l'interface.
-import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { MilestoneEvent, UpdateStatus } from '@shared/types'
 import type { WaveApi } from '@shared/types'
 
@@ -19,6 +19,27 @@ const api: WaveApi = {
   setSecret: (k, v) => ipcRenderer.invoke('secret:set', k, v),
   deleteSecret: (k) => ipcRenderer.invoke('secret:delete', k),
   setZoom: (f) => webFrame.setZoomFactor(f),
+  pluginsList: () => ipcRenderer.invoke('plugins:list'),
+  pluginAccountsList: () => ipcRenderer.invoke('plugins:accounts'),
+  pluginsPickPackage: () => ipcRenderer.invoke('plugins:pickPackage'),
+  pluginsInspect: (path) => ipcRenderer.invoke('plugins:inspect', path),
+  pluginsInstall: (token) => ipcRenderer.invoke('plugins:install', token),
+  pluginsSetEnabled: (id, enabled) => ipcRenderer.invoke('plugins:setEnabled', id, enabled),
+  pluginsUninstall: (id) => ipcRenderer.invoke('plugins:uninstall', id),
+  pluginAccountAdd: (id, inputs) => ipcRenderer.invoke('plugins:accountAdd', id, inputs),
+  pluginAccountRemove: (id) => ipcRenderer.invoke('plugins:accountRemove', id),
+  pluginAccountRefresh: (id) => ipcRenderer.invoke('plugins:accountRefresh', id),
+  pluginAccountData: (id) => ipcRenderer.invoke('plugins:accountData', id),
+  pluginSecretSet: (id, key, value) => ipcRenderer.invoke('plugins:secretSet', id, key, value),
+  pluginSecretDelete: (id, key) => ipcRenderer.invoke('plugins:secretDelete', id, key),
+  pickFolder: () => ipcRenderer.invoke('plugins:pickFolder'),
+  pathForFile: (file) => webUtils.getPathForFile(file),
+  takePendingPluginFile: () => ipcRenderer.invoke('plugins:takePendingFile'),
+  onPluginFile: (cb) => {
+    const h = (_e: unknown, p: string): void => cb(p)
+    ipcRenderer.on('plugin:file', h)
+    return () => ipcRenderer.removeListener('plugin:file', h)
+  },
   reloadSettings: () => ipcRenderer.invoke('settings:get'),
   getMilestoneEvents: (limit) => ipcRenderer.invoke('milestones:events', limit),
   testNotification: () => ipcRenderer.invoke('notify:test'),

@@ -12,6 +12,7 @@ import { refreshAccount, refreshAll, startScheduler } from './scheduler'
 import * as secrets from './secrets'
 import { applySystemSettings, hasNativeGlass } from './system'
 import { exportBackup, exportData, importBackup } from './export'
+import * as plugins from './plugins/manager'
 import { fireTest, initMilestones } from './milestones'
 import { checkUpdate, getUpdateStatus, installUpdate } from './updater'
 
@@ -125,6 +126,33 @@ export function registerIpc(win: () => BrowserWindow | null): void {
     startScheduler()
     return { ok: true }
   })
+
+  /* ---------- Plugins .wdsh ---------- */
+  ipcMain.handle('plugins:list', () => plugins.listPlugins())
+  ipcMain.handle('plugins:accounts', () => plugins.listPluginAccounts())
+  ipcMain.handle('plugins:pickPackage', async () => {
+    const opts = { properties: ['openFile' as const], filters: [{ name: 'WaveDash plugin', extensions: ['wdsh'] }] }
+    const w = win()
+    const r = w ? await dialog.showOpenDialog(w, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled ? null : r.filePaths[0] ?? null
+  })
+  ipcMain.handle('plugins:pickFolder', async () => {
+    const opts = { properties: ['openDirectory' as const] }
+    const w = win()
+    const r = w ? await dialog.showOpenDialog(w, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled ? null : r.filePaths[0] ?? null
+  })
+  ipcMain.handle('plugins:inspect', (_e, path: string) => plugins.inspectPackage(String(path)))
+  ipcMain.handle('plugins:install', (_e, token: string) => { const r = plugins.installPending(String(token)); notifyUpdated(); return r })
+  ipcMain.handle('plugins:setEnabled', (_e, id: string, enabled: boolean) => { db.setPluginEnabled(String(id), !!enabled); notifyUpdated() })
+  ipcMain.handle('plugins:uninstall', (_e, id: string) => { plugins.uninstallPlugin(String(id)); notifyUpdated() })
+  ipcMain.handle('plugins:accountAdd', async (_e, id: string, inputs: Record<string, string>) => { const r = await plugins.addPluginAccount(String(id), inputs ?? {}); notifyUpdated(); return r })
+  ipcMain.handle('plugins:accountRemove', (_e, id: number) => { plugins.removePluginAccount(Number(id)); notifyUpdated() })
+  ipcMain.handle('plugins:accountRefresh', async (_e, id: number) => { await plugins.refreshPluginAccount(Number(id)); notifyUpdated() })
+  ipcMain.handle('plugins:accountData', (_e, id: number) => plugins.pluginAccountData(Number(id)))
+  ipcMain.handle('plugins:secretSet', (_e, id: string, key: string, value: string) => { const ok = plugins.setPluginSecret(String(id), String(key), String(value)); notifyUpdated(); return ok })
+  ipcMain.handle('plugins:secretDelete', (_e, id: string, key: string) => { plugins.deletePluginSecret(String(id), String(key)); notifyUpdated() })
+  ipcMain.handle('plugins:takePendingFile', () => plugins.takePendingFile())
 
   /* ---------- Mises à jour ---------- */
   ipcMain.handle('update:check', () => checkUpdate())
