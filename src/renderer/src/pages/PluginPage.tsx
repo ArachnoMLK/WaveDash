@@ -124,14 +124,14 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
           </div>
         </div>
       )}
-      <div className="glass pad sect top-search">
+      {m.search && <div className="glass pad sect top-search">
         <input type="search" className="search" value={topQ} onChange={(e) => setTopQ(e.target.value)} placeholder={t('pp.topSearch')} aria-label={t('pp.topSearch')} />
         {found && (found.busy ? <p className="muted small" style={{ marginTop: 8 }}>{t('pp.searching')}</p>
           : found.unsupported ? <p className="muted small" style={{ marginTop: 8 }}>{t('pp.topUnsupported')}</p>
           : found.error ? <div className="err" style={{ marginTop: 8 }}>{found.error}</div>
           : found.detail ? <div style={{ marginTop: 8 }}><DetailView detail={found.detail} th={th} t={t} /></div>
           : <p className="muted small" style={{ marginTop: 8 }}>{t('pp.noResult')}</p>)}
-      </div>
+      </div>}
       {note && <div className="glass pad small" style={{ marginBottom: 16 }} role="status">{note}</div>}
       {extra.backlog > 0 && <div className="glass pad small muted" style={{ marginBottom: 16 }}>{t('pp.backlog', { count: extra.backlog })}</div>}
       {account.lastError && <div className="err" style={{ marginBottom: 16 }}>{t('pp.error', { error: `${t(`plugin.run.${account.lastError}`)}${extra.error ? ` — ${extra.error}` : ''}` })}</div>}
@@ -187,14 +187,15 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
               </>}
             </div>
           </div>
-          <div className="row" style={{ gap: 8, margin: '4px 0 8px' }}>
+          {/* Recherche dans la liste : seulement pour les plugins qui gardent un historique d'éléments (itemsMode « keep »). */}
+          {m.itemsMode === 'keep' && <div className="row" style={{ gap: 8, margin: '4px 0 8px' }}>
             <select value={scope} style={{ width: 'auto' }} aria-label={t('pp.scope')} onChange={(e) => { setScope(e.target.value); setPage(0); setOpenId(null) }}>
               <option value="all">{t('pp.scopeAll')}</option>
               <option value="title">{t('pp.name')}</option>
               {m.itemColumns.map((c) => <option key={c.key} value={c.key}>{loc(c.label, settings.lang)}</option>)}
             </select>
             <input type="text" className="search grow" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('pp.search')} aria-label={t('pp.search')} />
-          </div>
+          </div>}
           {query && list.stats && list.stats.length > 0 && <SearchStats stats={list.stats} total={list.total} columns={m.itemColumns} lang={settings.lang} t={t} />}
           {query && list.total === 0 && <p className="muted small">{t('pp.noResult')}</p>}
           {hasDetail && <p className="muted small" style={{ marginBottom: 6 }}>{t('pp.clickHint')}</p>}

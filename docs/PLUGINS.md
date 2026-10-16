@@ -44,6 +44,7 @@ Puis dans WaveDash : **Plugins › Installer un plugin** (ou glisse le fichier d
 | `secrets` | jusqu'à 4 valeurs (clés API…) enregistrées **chiffrées** par WaveDash, jamais en clair. |
 | `metrics` | de 1 à 20. `format` : `number` (défaut), `percent`, `rank`, `duration` (secondes → mm:ss). `decimals` de 0 à 4. `primary` : métrique affichée d'abord. |
 | `itemColumns` | colonnes du tableau d'éléments (facultatif). |
+| `search` | `true` si le script définit `search` : la page du compte affiche alors la barre de recherche du haut. |
 | `itemsMode` | `replace` (défaut) : chaque actualisation remplace la liste d'éléments. `keep` : les éléments renvoyés s'ajoutent à ceux déjà enregistrés (même `id` = mis à jour), jusqu'à 20 000 par compte ; la page les affiche par 50, avec un filtre par mois. Utile pour un historique (une partie par fichier, par exemple). |
 | `refreshMinutes` | délai minimal entre deux actualisations (5 à 1440, 30 par défaut). |
 
@@ -155,7 +156,7 @@ La page d'un compte de plugin affiche l'erreur de la dernière actualisation et 
 
 ## Plugin fourni : Brawlhalla Replays
 
-`examples/brawlhalla-replays-1.5.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
+`examples/brawlhalla-replays-1.5.1.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
 
 - **Courbe et cartes** : parties, victoires, défaites, taux de victoire, stocks pris et perdus, durée moyenne, appuis par minute.
 - **Bilan** : chiffres clés, tableaux par légende, carte, mode, coéquipier, adversaire, jour et heure, direction de tes esquives, répartition de tes attaques.

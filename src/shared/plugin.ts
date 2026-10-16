@@ -37,6 +37,8 @@ export interface PluginManifest {
   /** `replace` (défaut) : chaque actualisation remplace la liste d'éléments. `keep` : les éléments s'ajoutent et sont
    *  conservés (même `id` = mis à jour), pour garder un historique, par exemple une partie par fichier lu. */
   itemsMode: 'replace' | 'keep'
+  /** Le script définit `search` : WaveDash affiche la barre de recherche en haut de la page du compte. */
+  search: boolean
   refreshMinutes: number
 }
 
@@ -143,7 +145,7 @@ export function validateManifest(raw: unknown): Result {
   const refresh = typeof m.refreshMinutes === 'number' && Number.isFinite(m.refreshMinutes) ? Math.min(1440, Math.max(5, Math.round(m.refreshMinutes))) : 30
   return { ok: true, manifest: { wdsh: 1, id: m.id, name: m.name.trim(), version: m.version, author, description, minAppVersion: m.minAppVersion as string | undefined, entry,
     permissions: { network: network as string[], folder, folderExtensions: (exts as string[]).map((e) => e.toLowerCase()) },
-    inputs, secrets, metrics, itemColumns, itemsMode, refreshMinutes: refresh } }
+    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, refreshMinutes: refresh } }
 }
 
 /* ---------- Résultats renvoyés par un plugin ---------- */
