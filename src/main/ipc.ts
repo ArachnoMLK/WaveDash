@@ -160,7 +160,10 @@ export function registerIpc(win: () => BrowserWindow | null): void {
     try { return { ok: true, path: await fetchPackage(String(id)) } } catch (e) { return { ok: false, error: (e as Error).message } }
   })
   // Au démarrage (après coup, sans bloquer) : mises à jour silencieuses depuis le catalogue quand les permissions sont identiques.
-  setTimeout(() => { void plugins.syncCatalogUpdates().then((up) => { if (up.length) { console.log('Catalogue :', up.join(', ')); notifyUpdated() } }).catch(() => {}) }, 20_000)
+  // Puis toutes les 3 h : un plugin publié sur le catalogue arrive sans relancer l'appli.
+  const syncCatalog = (): void => { void plugins.syncCatalogUpdates().then((up) => { if (up.length) { console.log('Catalogue :', up.join(', ')); notifyUpdated() } }).catch(() => {}) }
+  setTimeout(syncCatalog, 20_000)
+  setInterval(syncCatalog, 3 * 3_600_000)
   // Fichiers glissés-déposés dans la fenêtre d'import : mêmes contrôles que le sélecteur (extensions, taille), copie puis lecture.
   ipcMain.handle('plugins:importPaths', async (_e, id: number, paths: string[]) => {
     const list = Array.isArray(paths) ? paths.filter((p) => typeof p === 'string' && p.length < 1000).slice(0, 5000) : []

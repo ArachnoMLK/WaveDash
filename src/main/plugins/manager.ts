@@ -343,7 +343,11 @@ export async function syncCatalogUpdates(): Promise<string[]> {
     try {
       const path = await fetchPackage(e.id), row = db.getPluginRow(e.id), r = inspectPackage(path)
       if (!row || !r.ok || !r.inspect || !samePermissions(loadManifest(row), r.inspect.manifest)) continue
-      if (installPending(r.inspect.token).ok) updated.push(`${e.name} ${e.version}`)
+      if (installPending(r.inspect.token).ok) {
+        updated.push(`${e.name} ${e.version}`)
+        // Les comptes du plugin profitent de la nouvelle version tout de suite, sans attendre leur prochaine actualisation.
+        for (const pa of db.listPluginAccountRows()) if (pa.plugin_id === e.id) await refreshPluginAccount(pa.account_id)
+      }
     } catch (err) { console.error('Catalogue :', e.id, err) }
   }
   return updated

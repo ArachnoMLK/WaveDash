@@ -104,7 +104,7 @@ Si le plugin lit un dossier (`permissions.folder`), la page du compte propose **
 |---|---|
 | `await host.http(url, { method, headers, body })` | Requête HTTPS vers un domaine déclaré. Renvoie `{ status, ok, headers, text, json() }`. |
 | `host.log(...)` / `console.log(...)` | Journal visible dans la page du plugin (100 lignes max). |
-| `host.storage.get(clé)` / `.set(clé, texte)` | Mémoire persistante par compte (100 clés, 64 Ko par valeur) : utile pour ne retraiter que les nouveautés. |
+| `host.storage.get(clé)` / `.set(clé, texte)` | Mémoire persistante par compte (100 clés, 64 Ko par valeur) : utile pour ne retraiter que les nouveautés. Une clé ne contient que lettres, chiffres, `.`, `_` et `-` (1 à 64 caractères) : pas de `:` ni d'espace. |
 | `host.files.list()` | Les 20 000 fichiers les plus récents du dossier choisi, du plus récent au plus ancien : `[{ name, size, mtime }]` (permission `folder`). |
 | `host.files.readText(nom)` / `.readBytes(nom)` | Contenu d'un fichier (texte, ou `Uint8Array`). 8 Mo max par fichier. |
 
@@ -125,7 +125,7 @@ Après **5 échecs consécutifs**, le plugin est désactivé automatiquement. À
 
 ## Catalogue en ligne
 
-La page **Plugins › Catalogue** liste les plugins publiés sur le dépôt [ArachnoMLK/WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins). WaveDash lit son `index.json` (adresse écrite dans l'application, cache de 3 h, dernière copie gardée pour le mode hors ligne). Avant toute installation, le paquet téléchargé est vérifié : taille et empreinte SHA-256 identiques à celles de l'index, sinon il est refusé. L'installation passe ensuite par l'écran de confirmation habituel, avec les permissions. Au démarrage, un plugin installé est mis à jour en silence depuis le catalogue si sa nouvelle version demande exactement les mêmes permissions. Le catalogue ne fait jamais revenir un plugin à une version plus ancienne.
+La page **Plugins › Catalogue** liste les plugins publiés sur le dépôt [ArachnoMLK/WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins). WaveDash lit son `index.json` (adresse écrite dans l'application, cache de 3 h, dernière copie gardée pour le mode hors ligne). Avant toute installation, le paquet téléchargé est vérifié : taille et empreinte SHA-256 identiques à celles de l'index, sinon il est refusé. L'installation passe ensuite par l'écran de confirmation habituel, avec les permissions. Au démarrage puis toutes les 3 heures, un plugin installé est mis à jour en silence depuis le catalogue si sa nouvelle version demande exactement les mêmes permissions ; ses comptes sont alors actualisés aussitôt. L'index est lu en contournant le cache de GitHub : une publication est visible tout de suite. Le catalogue ne fait jamais revenir un plugin à une version plus ancienne.
 
 Pour publier un plugin : pull request sur WaveDash-Plugins (voir son README). Le propriétaire du dépôt relit chaque contribution ; l'action **Check** vérifie que paquets, empreintes et sources correspondent.
 

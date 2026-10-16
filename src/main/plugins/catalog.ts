@@ -59,7 +59,8 @@ export async function getCatalog(force = false): Promise<CatalogView> {
   let offline = false
   if (force || !cache || Date.now() - cache.at > TTL) {
     try {
-      const buf = await download(BASE + 'index.json', MAX_INDEX)
+      // Paramètre unique : contourne le cache de GitHub (jusqu'à 5 min), pour voir une publication tout de suite.
+      const buf = await download(BASE + 'index.json?v=' + Date.now(), MAX_INDEX)
       cache = { entries: parseIndex(JSON.parse(buf.toString('utf8'))), at: Date.now() }
       writeFileSync(join(dir(), 'index.json'), buf)
     } catch {
