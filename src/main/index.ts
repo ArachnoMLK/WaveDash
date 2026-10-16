@@ -5,7 +5,7 @@ import { getSettings, initDb } from './db'
 import { registerIpc } from './ipc'
 import { refreshAll } from './scheduler'
 import { applySystemSettings, materialFor, solidBackground } from './system'
-import { setPendingFile } from './plugins/manager'
+import { setPendingFile, syncBundledPlugins } from './plugins/manager'
 import { initUpdater } from './updater'
 
 let win: BrowserWindow | null = null
@@ -68,6 +68,7 @@ else {
   app.whenReady().then(() => {
     app.setAppUserModelId('app.wavedash.desktop')   // requis pour les notifications Windows
     initDb()
+    try { const up = syncBundledPlugins(); if (up.length) console.log('Plugins mis à jour :', up.join(', ')) } catch (e) { console.error('Plugins fournis :', e) }
     createWindow()
     createTray()
     registerIpc(() => win)

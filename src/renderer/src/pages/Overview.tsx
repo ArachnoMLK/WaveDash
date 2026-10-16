@@ -7,6 +7,8 @@ import { categoryOption, NamedSeries, timeOption } from '../lib/charts'
 import { PRIMARY_METRICS } from '../lib/constants'
 import { fmtDelta, fmtMetric } from '../lib/format'
 import { useAccountData } from '../lib/hooks'
+import { loc, PluginAccount } from '@shared/plugin'
+import { fmtPluginMetric, pluginRoute } from '../lib/plugin'
 import { useChartTheme } from '../lib/useChartTheme'
 
 const SOCIAL: Platform[] = ['youtube', 'instagram', 'tiktok']
@@ -35,8 +37,30 @@ function AccountSummary({ account }: { account: Account }): JSX.Element {
   )
 }
 
-export function Overview({ onAdd }: { onAdd: (p: Platform, replace?: boolean) => void }): JSX.Element {
-  const { t, accounts, settings, dataVersion } = useApp()
+/** Comptes de plugins : jusqu'à 4 métriques chacun (la principale d'abord) ; un clic ouvre la page du compte. */
+function PluginSummary({ account, onOpen }: { account: PluginAccount; onOpen: (route: string) => void }): JSX.Element | null {
+  const { settings, plugins, dataVersion } = useApp()
+  const plugin = plugins.find((p) => p.id === account.pluginId)
+  const [latest, setLatest] = useState<Record<string, number>>({})
+  useEffect(() => { void window.api.getLatest(account.id).then(setLatest) }, [account.id, dataVersion])
+  if (!plugin) return null
+  const ms = [...plugin.manifest.metrics].sort((a, b) => Number(b.primary) - Number(a.primary)).filter((m) => latest[m.key] !== undefined).slice(0, 4)
+  return (
+    <section className="sect">
+      <h2>{plugin.manifest.name} · {account.displayName}</h2>
+      <div className="grid cards">
+        {ms.map((m, i) => (
+          <Reveal key={m.key} delay={i * 0.06}>
+            <StatCard label={loc(m.label, settings.lang)} value={fmtPluginMetric(m, latest[m.key], settings.lang)} onClick={() => onOpen(pluginRoute(account.id))} />
+          </Reveal>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+export function Overview({ onAdd, onOpen }: { onAdd: (p: Platform, replace?: boolean) => void; onOpen: (route: string) => void }): JSX.Element {
+  const { t, accounts, settings, dataVersion, pluginAccounts } = useApp()
   const th = useChartTheme()
   const socials = accounts.filter((a) => SOCIAL.includes(a.platform))
   const [subs, setSubs] = useState<NamedSeries[]>([])
@@ -56,7 +80,7 @@ export function Overview({ onAdd }: { onAdd: (p: Platform, replace?: boolean) =>
 
   const share = useMemo(() => subs.filter((s) => s.points.length).map((s) => ({ name: s.name, value: s.points[s.points.length - 1].value })), [subs])
 
-  if (accounts.length === 0) {
+  if (accounts.length === 0 && pluginAccounts.length === 0) {
     return (
       <Reveal>
         <div className="page-head"><h1>{t('overview.title')}</h1></div>
@@ -74,6 +98,7 @@ export function Overview({ onAdd }: { onAdd: (p: Platform, replace?: boolean) =>
     <div>
       <div className="page-head"><h1>{t('overview.title')}</h1></div>
       {accounts.map((a) => <AccountSummary key={a.id} account={a} />)}
+      {pluginAccounts.map((a) => <PluginSummary key={`p${a.id}`} account={a} onOpen={onOpen} />)}
       {socials.length > 0 && subs.some((s) => s.points.length > 1) && (
         <div className="grid two sect">
           <Reveal className="glass pad"><h2 style={{ marginBottom: 8 }}>{t('metric.subscribers')}</h2><Chart option={timeOption('area', subs, th)} height={280} /></Reveal>

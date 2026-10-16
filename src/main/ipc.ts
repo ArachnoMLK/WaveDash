@@ -153,6 +153,7 @@ export function registerIpc(win: () => BrowserWindow | null): void {
     if (res.imported) { await plugins.refreshPluginAccount(Number(id)); notifyUpdated() }
     return res
   })
+  ipcMain.handle('plugins:bundled', () => plugins.listBundled())
   ipcMain.handle('plugins:inspect', (_e, path: string) => plugins.inspectPackage(String(path)))
   ipcMain.handle('plugins:install', (_e, token: string) => { const r = plugins.installPending(String(token)); notifyUpdated(); return r })
   ipcMain.handle('plugins:setEnabled', (_e, id: string, enabled: boolean) => { db.setPluginEnabled(String(id), !!enabled); notifyUpdated() })

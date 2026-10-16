@@ -2,7 +2,9 @@ appId: app.wavedash.desktop
 productName: WaveDash
 directories: { buildResources: resources, output: dist }
 files: ["out/**/*", "package.json"]
-extraResources: [{ from: resources, to: resources }]   # icônes lues à l'exécution (barre système)
+extraResources:
+  - { from: resources, to: resources }                         # icônes lues à l'exécution (barre système)
+  - { from: examples, to: plugins, filter: ['*.wdsh'] }        # plugins fournis avec l'appli
 fileAssociations:
   - ext: wdsh
     name: Plugin WaveDash

@@ -20,6 +20,7 @@ const api: WaveApi = {
   deleteSecret: (k) => ipcRenderer.invoke('secret:delete', k),
   setZoom: (f) => webFrame.setZoomFactor(f),
   pluginsList: () => ipcRenderer.invoke('plugins:list'),
+  pluginsBundled: () => ipcRenderer.invoke('plugins:bundled'),
   pluginAccountsList: () => ipcRenderer.invoke('plugins:accounts'),
   pluginsPickPackage: () => ipcRenderer.invoke('plugins:pickPackage'),
   pluginsInspect: (path) => ipcRenderer.invoke('plugins:inspect', path),

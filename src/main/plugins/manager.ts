@@ -1,12 +1,13 @@
 // Gestion des plugins : installation (avec validation), comptes, actualisation, clés.
 import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, utimesSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, utimesSync } from 'fs'
 import { basename, extname, join } from 'path'
 import {
   compareVersions, InstalledPlugin, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
 } from '@shared/plugin'
 import * as db from '../db'
+import { processPluginRefresh } from '../milestones'
 import * as secrets from '../secrets'
 import { FolderAccess } from './files'
 import { PluginError, RunRequest, runPlugin } from './sandbox'
@@ -232,6 +233,8 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
     const run = await runPlugin(buildRequest(row, 'refresh', inputs, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }))
     const result = sanitizeRunResult(run.value, manifest)
     if (!Object.keys(result.metrics).length && !result.history.length) throw new PluginError('invalid_result', 'Aucune métrique déclarée n’a été renvoyée')
+    // Paliers : comparés au relevé précédent, avant d'enregistrer le nouveau ; une erreur de notification ne bloque rien.
+    try { processPluginRefresh(accountId, pa.display_name, manifest, db.getLatest(accountId) as Record<string, number>, result.metrics) } catch (e) { console.error('Paliers plugin :', e) }
     db.insertHistory(accountId, result.history)
     db.insertSnapshots(accountId, result.metrics)
     db.savePluginItems(accountId, result.items, manifest.itemsMode)
@@ -284,3 +287,38 @@ export function pluginAccountItems(accountId: number, offset: number, limit: num
 let pendingFile: string | null = null
 export const setPendingFile = (p: string | null): void => { pendingFile = p }
 export const takePendingFile = (): string | null => { const p = pendingFile; pendingFile = null; return p }
+
+/* ---------- Plugins fournis avec l'appli ---------- */
+const bundledDir = (): string => (app.isPackaged ? join(process.resourcesPath, 'plugins') : join(app.getAppPath(), 'examples'))
+const samePermissions = (a: PluginManifest, b: PluginManifest): boolean =>
+  JSON.stringify([...a.permissions.network].sort()) === JSON.stringify([...b.permissions.network].sort()) &&
+  a.permissions.folder === b.permissions.folder && JSON.stringify([...a.permissions.folderExtensions].sort()) === JSON.stringify([...b.permissions.folderExtensions].sort())
+
+export interface BundledPlugin { path: string; id: string; name: string; version: string; description: PluginManifest['description']; installedVersion: string | null }
+
+/** Plugins livrés avec l'appli (une version par plugin, la plus récente). */
+export function listBundled(): BundledPlugin[] {
+  let names: string[] = []
+  try { names = readdirSync(bundledDir()).filter((n) => n.toLowerCase().endsWith('.wdsh')) } catch { return [] }
+  const best = new Map<string, BundledPlugin>()
+  for (const n of names) {
+    const path = join(bundledDir(), n), r = inspectPackage(path)
+    if (!r.ok || !r.inspect) continue
+    const m = r.inspect.manifest, cur = best.get(m.id)
+    if (!cur || compareVersions(m.version, cur.version) > 0) best.set(m.id, { path, id: m.id, name: m.name, version: m.version, description: m.description, installedVersion: r.inspect.installedVersion })
+  }
+  return [...best.values()]
+}
+
+/** Au démarrage : met à jour en silence les plugins installés dont l'appli fournit une version plus récente,
+ *  seulement si les permissions sont identiques (sinon l'utilisateur confirme depuis la page Plugins). */
+export function syncBundledPlugins(): string[] {
+  const updated: string[] = []
+  for (const b of listBundled()) {
+    if (!b.installedVersion || compareVersions(b.version, b.installedVersion) <= 0) continue
+    const row = db.getPluginRow(b.id), r = inspectPackage(b.path)
+    if (!row || !r.ok || !r.inspect || !samePermissions(loadManifest(row), r.inspect.manifest)) continue
+    if (installPending(r.inspect.token).ok) updated.push(`${b.name} ${b.version}`)
+  }
+  return updated
+}

@@ -24,7 +24,7 @@ export function Celebration(): JSX.Element | null {
     <div className="celebrate" key={e.ts + e.metric} onClick={dismissCelebration} role="alertdialog" aria-label={t(`celebrate.${kind}`)}>
       <div className="rings"><i /><i /><i /></div>
       <div className="glass card">
-        <div className="muted small">{t(`platform.${e.platform}`)} · {e.account}</div>
+        <div className="muted small">{e.platform === 'plugin' ? e.source : t(`platform.${e.platform}`)} · {e.account}</div>
         <div className="big">{isRank ? e.toRank : fmt(e.threshold, settings.lang)}</div>
         <h2 style={{ marginTop: 10 }}>{t(`celebrate.${kind}`)}{!isRank && ` · ${t(`metric.${e.metric}`)}`}</h2>
         <p className="muted" style={{ marginTop: 8, maxWidth: 360 }}>{e.message}</p>

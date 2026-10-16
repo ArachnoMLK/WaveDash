@@ -142,7 +142,7 @@ export function Goals(): JSX.Element {
         {events.length === 0 && <p className="muted small">{t('goals.noHistory')}</p>}
         {events.map((e) => (
           <div className="list-item" key={e.id}>
-            <span>{e.direction === 'up' ? '▲' : '▼'} {t(`platform.${e.platform}`)} · {e.message}{e.demo && <span className="badge" style={{ marginLeft: 8 }}>{t('platform.demo')}</span>}</span>
+            <span>{e.direction === 'up' ? '▲' : '▼'} {e.platform === 'plugin' ? e.source : t(`platform.${e.platform}`)} · {e.message}{e.demo && <span className="badge" style={{ marginLeft: 8 }}>{t('platform.demo')}</span>}</span>
             <span className="muted small">{new Date(e.ts).toLocaleString(settings.lang === 'fr' ? 'fr-FR' : 'en-US')}</span>
           </div>
         ))}

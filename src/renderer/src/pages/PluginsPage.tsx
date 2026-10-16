@@ -1,5 +1,5 @@
 // Gestion des plugins : installation (bouton ou glisser-déposer), comptes, clés, activation, désinstallation.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { InstalledPlugin, loc } from '@shared/plugin'
 import { PermissionList, PluginInstallDialog } from '../components/PluginInstallDialog'
 import { PluginAccountDialog } from '../components/PluginAccountDialog'
@@ -69,11 +69,14 @@ function PluginCard({ plugin, onAddAccount }: { plugin: InstalledPlugin; onAddAc
 
 /** `openPath` : fichier reçu par double-clic ; `onOpenHandled` le consomme. */
 export function PluginsPage({ openPath, onOpenHandled }: { openPath: string | null; onOpenHandled: () => void }): JSX.Element {
-  const { t, plugins } = useApp()
+  const { t, plugins, settings } = useApp()
   const [installPath, setInstallPath] = useState<string | null>(null)
   const [accountFor, setAccountFor] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const path = installPath ?? openPath
+  const [bundled, setBundled] = useState<Awaited<ReturnType<typeof window.api.pluginsBundled>>>([])
+  useEffect(() => { void window.api.pluginsBundled().then(setBundled) }, [plugins])
+  const offered = bundled.filter((b) => !b.installedVersion || b.installedVersion !== b.version)
 
   const pick = async (): Promise<void> => { const p = await window.api.pluginsPickPackage(); if (p) setInstallPath(p) }
   const close = (): void => { setInstallPath(null); onOpenHandled() }
@@ -90,6 +93,19 @@ export function PluginsPage({ openPath, onOpenHandled }: { openPath: string | nu
       {plugins.length === 0
         ? <div className="glass empty sect"><p>{t('plugins.empty')}</p></div>
         : <div className="grid two sect">{plugins.map((p, i) => <Reveal key={p.id} delay={i * 0.05}><PluginCard plugin={p} onAddAccount={() => setAccountFor(p.id)} /></Reveal>)}</div>}
+
+      {offered.length > 0 && (
+        <Reveal className="glass pad sect">
+          <h2 style={{ marginBottom: 8 }}>{t('plugins.bundled')}</h2>
+          {offered.map((b) => (
+            <div key={b.id} className="row between" style={{ padding: '8px 0', borderTop: '1px solid var(--line)', gap: 12 }}>
+              <div className="grow"><b>{b.name}</b> <span className="muted small">{b.version}{b.installedVersion ? ` (${t('plugins.installedV', { v: b.installedVersion })})` : ''}</span>
+                <div className="muted small">{loc(b.description, settings.lang)}</div></div>
+              <button className="btn" onClick={() => setInstallPath(b.path)}>{b.installedVersion ? t('plugins.updateBtn') : t('plugins.install')}</button>
+            </div>
+          ))}
+        </Reveal>
+      )}
 
       {dragging && <div className="overlay" style={{ pointerEvents: 'none' }}><div className="glass modal"><h2>{t('plugins.dropNow')}</h2></div></div>}
       {path && <PluginInstallDialog path={path} onClose={close} />}

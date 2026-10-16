@@ -123,6 +123,14 @@ Après **5 échecs consécutifs**, le plugin est désactivé automatiquement. À
 
 > Cette isolation réduit fortement le risque mais ne le supprime pas, et WaveDash n'est pas signé numériquement : **n'installe que des plugins dont tu connais l'auteur.**
 
+## Plugins fournis avec WaveDash
+
+Les plugins du dossier `examples/` sont livrés dans l'installateur. La page **Plugins** propose ceux qui ne sont pas installés (ou dont une version plus récente est fournie), en un clic, avec l'écran de confirmation habituel. Au démarrage, WaveDash met à jour **en silence** un plugin installé dont il fournit une version plus récente, **seulement si ses permissions sont identiques** ; sinon, la mise à jour attend ta confirmation depuis la page Plugins.
+
+## Paliers et vue d'ensemble
+
+Les comptes de plugins apparaissent dans la **vue d'ensemble** (jusqu'à 4 métriques, la principale d'abord ; un clic ouvre le compte). Les **paliers** (10, 20, 50, 100…) sont surveillés sur la métrique principale de chaque plugin lorsqu'elle est un simple nombre : notification Windows, son et célébration, comme pour les plateformes intégrées. Une règle enregistrée sous la clé `plugin:<id>.<métrique>` dans les réglages des paliers la remplace.
+
 ## Mises à jour d'un plugin
 
 Réinstaller un `.wdsh` de même `id` met le plugin à jour en conservant ses comptes, ses clés et son stockage. L'écran de confirmation affiche à nouveau les permissions.
@@ -179,4 +187,4 @@ Le plugin ne lit jamais l'application Discord de l'ordinateur ni un compte perso
 
 ## Pas encore disponible
 
-Paliers et notifications pour les métriques de plugins, intégration à la vue d'ensemble, rapport PDF.
+Réglage des paliers des plugins dans l'interface (la règle par défaut s'applique), rapport PDF.

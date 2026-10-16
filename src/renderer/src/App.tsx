@@ -41,7 +41,7 @@ export function App(): JSX.Element {
   const current = known || visibleNav(settings.navOrder, settings.navHidden).includes(route) ? route : 'overview'
   const bg = backgroundStyle(settings, bgUrl)
 
-  const page = current === 'overview' ? <Overview onAdd={openAdd} />
+  const page = current === 'overview' ? <Overview onAdd={openAdd} onOpen={setRoute} />
     : current === 'goals' ? <Goals />
     : current === 'plugins' ? <PluginsPage openPath={incoming} onOpenHandled={() => setIncoming(null)} />
     : pluginAccountOfRoute(current) !== null ? <PluginPage accountId={pluginAccountOfRoute(current)!} />

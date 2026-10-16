@@ -87,7 +87,9 @@ export interface MilestoneRule {
 export interface MilestoneEvent {
   id: number
   accountId: number
-  platform: Platform
+  /** Plateforme intégrée, ou 'plugin' (alors `source` donne le nom du plugin). */
+  platform: Platform | 'plugin'
+  source?: string
   account: string
   /** Une métrique, ou 'rank' pour un changement de rang. */
   metric: string
@@ -244,6 +246,7 @@ export interface WaveApi {
   pluginAccountRemove(accountId: number): Promise<void>
   pluginAccountRefresh(accountId: number): Promise<void>
   pluginAccountData(accountId: number): Promise<{ logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null }>
+  pluginsBundled(): Promise<{ path: string; id: string; name: string; version: string; description: import('./plugin').LocalText; installedVersion: string | null }[]>
   pluginAccountItems(accountId: number, offset: number, limit: number, month?: string): Promise<PluginItemsPage>
   /** Ouvre le sélecteur de fichiers et importe les fichiers choisis pour ce compte ; null si annulé. */
   pluginImportFiles(accountId: number, extensions: string[]): Promise<{ imported: number; skipped: number } | null>
