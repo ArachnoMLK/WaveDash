@@ -1,4 +1,4 @@
-// Brawlhalla Replays — lit des fichiers .replay (format du patch 10.09+ et versions antérieures récentes).
+// Brawlhalla Replays — lit des fichiers .replay (versions 261 à 271, patchs 10.02 à 11.00).
 // Format : zlib → XOR avec une clé de 64 octets → flux de bits (MSB en premier).
 // Crédit : structure du format d'après BrawlhallaReplayLibrary (allhailcheese, MIT) et brawlhalla-replay-reader (itselectroz, MIT).
 // Aucun accès réseau : tout se passe dans le bac à sable de WaveDash, sur le dossier que tu as choisi.
@@ -6,7 +6,14 @@
 var KEY = [107,16,222,60,68,75,209,70,160,16,82,193,178,49,211,106,251,172,17,222,6,104,8,120,140,213,179,249,106,64,214,19,12,174,157,197,212,107,84,114,252,87,93,26,6,115,194,81,75,176,201,140,120,4,17,122,239,116,62,70,57,160,199,166]
 var MAX_FILES = 400        // fichiers les plus récents pris en compte
 var MAX_NEW = 60           // nouveaux replays lus par actualisation (~65 ms chacun ; le reste suit à la suivante)
+var BUDGET_MS = 4000       // au-delà, on s'arrête et on garde le reste pour la suivante (le bac à sable coupe à 8 s)
 var BUCKETS = 64
+var CACHE_V = 2             // version du contenu du cache : une entrée plus ancienne est relue (même clé, donc jamais comptée deux fois)
+
+// Légendes : identifiant du replay = legend_id de l'API officielle = HeroID du jeu (table HeroTypes du patch 11.00).
+// Une légende plus récente que cette table s'affiche « #id ».
+var LEGENDS = { 3: 'Bödvar', 4: 'Cassidy', 5: 'Orion', 6: 'Lord Vraxx', 7: 'Gnash', 8: 'Queen Nai', 9: 'Lucien', 10: 'Hattori', 11: 'Sir Roland', 12: 'Scarlet', 13: 'Thatch', 14: 'Ada', 15: 'Sentinel', 16: 'Teros', 17: 'Red Raptor', 18: 'Ember', 19: 'Brynn', 20: 'Asuri', 21: 'Barraza', 22: 'Ulgrim', 23: 'Azoth', 24: 'Koji', 25: 'Diana', 26: 'Jhala', 27: 'Loki', 28: 'Kor', 29: 'Wu Shang', 30: 'Val', 31: 'Ragnir', 32: 'Cross', 33: 'Mirage', 34: 'Nix', 35: 'Mordex', 36: 'Yumiko', 37: 'Artemis', 38: 'Caspian', 39: 'Sidra', 40: 'Xull', 41: 'Isaiah', 42: 'Kaya', 43: 'Jiro', 44: 'Lin Fei', 45: 'Zariel', 46: 'Rayman', 47: 'Dusk', 48: 'Fait', 49: 'Thor', 50: 'Petra', 51: 'Vector', 52: 'Volkov', 53: 'Onyx', 54: 'Jaeyun', 55: 'Mako', 56: 'Magyar', 57: 'Reno', 58: 'Munin', 59: 'Arcadia', 60: 'Ezio', 61: 'Seven', 62: 'Thea', 63: 'Tezca', 64: 'Vivi', 65: 'Imugi', 66: 'King Zuva', 67: 'Priya', 68: 'Ransom', 69: 'Lady Vera', 70: 'Rupture', 71: 'Aurus', 72: 'Qinghua & Baobao' }
+function legendName(id) { return LEGENDS[id] || '#' + id }
 
 /* ───────── inflate (zlib), sortie plafonnée à `limit` octets ───────── */
 var LBASE = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258]
@@ -96,15 +103,26 @@ function inflate(src, limit) {
 }
 
 /* ───────── lecture du flux de bits ───────── */
-function Reader(buf) { this.b = buf; this.p = 0 }
+function Reader(buf) {                                               // le XOR est appliqué une fois pour toutes, puis on lit octet par octet
+  for (var i = 0; i < buf.length; i++) buf[i] ^= KEY[i & 63]
+  this.b = buf; this.p = 0; this.end = buf.length * 8
+}
 Reader.prototype.bit = function () {
-  var i = this.p >> 3
-  if (i >= this.b.length) throw new Error('EOF')
-  var v = ((this.b[i] ^ KEY[i % 64]) >> (7 - (this.p & 7))) & 1
+  if (this.p >= this.end) throw new Error('EOF')
+  var v = (this.b[this.p >> 3] >> (7 - (this.p & 7))) & 1
   this.p++; return v
 }
 Reader.prototype.skip = function (n) { this.p += n }
-Reader.prototype.bits = function (n) { var r = 0; while (n--) r = r * 2 + this.bit(); return r }
+Reader.prototype.bits = function (n) {
+  if (this.p + n > this.end) throw new Error('EOF')
+  var r = 0
+  while (n > 0) {
+    var off = this.p & 7, avail = 8 - off, take = avail < n ? avail : n
+    r = r * (1 << take) + ((this.b[this.p >> 3] >> (avail - take)) & ((1 << take) - 1))
+    this.p += take; n -= take
+  }
+  return r
+}
 Reader.prototype.u32 = function () { return this.bits(32) }
 Reader.prototype.i32 = function () { return this.bits(32) | 0 }
 Reader.prototype.str = function () {
@@ -124,9 +142,15 @@ function utf8(b) {
   return s
 }
 
+/* ───────── checksum des données de partie (d'après BrawlhallaReplayLibrary, ReplayGameData.CalculateChecksum) ───────── */
+function add() { var s = 0; for (var i = 0; i < arguments.length; i++) s = (s + arguments[i] % 4294967296) % 4294967296; return s }
+function popcount(v) { var n = 0; while (v) { n += v & 1; v >>>= 1 } return n }
+function roundEven(x) { var f = Math.floor(x), d = x - f; return d > 0.5 || (d === 0.5 && f % 2) ? f + 1 : f }   // arrondi de Math.Round en C#
+function FormatError(version) { this.message = 'format non reconnu (version ' + version + ')'; this.unknownFormat = true }
+
 /* ───────── analyse d'un replay (s'arrête avant les « inputs ») ───────── */
 function parseBuffer(buf) {
-  var r = new Reader(buf), rep = { version: r.u32(), online: false, playlist: '', levelId: 0, lives: 0, ents: [], scores: {}, length: 0, kos: [] }
+  var r = new Reader(buf), rep = { version: r.u32(), online: false, playlist: '', levelId: 0, lives: 0, ents: [], scores: {}, length: 0, kos: [], inputs: {} }
   var haveGame = false
   for (;;) {
     var t = r.bits(4)
@@ -139,23 +163,37 @@ function parseBuffer(buf) {
       rep.lives = st[4]; rep.maxPlayers = st[1]; rep.levelId = r.u32()
       var hc = r.bits(16)
       if (hc < 1 || hc > 5) throw new Error('nombre de légendes invalide')
+      var sum = 0                                                       // checksum des joueurs (voir checksumOf)
       while (r.bit()) {
         var e = { id: r.i32() }
-        if (rep.version >= 262) r.i32()                                // identifiant de joueur (ajouté après la v261)
+        if (rep.version >= 268) r.i32()                                // identifiant de joueur (ajouté en v268, patch 10.09)
         e.name = r.str()
-        for (i = 0; i < 6; i++) r.u32()
-        for (i = 0; i < 8; i++) r.u32()
-        r.bits(16); r.bits(16)
-        while (r.bit()) r.u32()
+        var cs = 0, cos = []
+        for (i = 0; i < 6; i++) cos.push(r.u32())                      // couleurs, robot d'apparition, compagnon, émetteur, traînée, thème
+        cs = add(cs, cos[0] * 5, cos[1] * 93, cos[3] * 97, cos[5] * 53)
+        for (i = 0; i < 8; i++) cs = add(cs, r.u32() * (13 + i))       // provocations équipées
+        cs = add(cs, r.bits(16) * 37, r.bits(16) * 41)                 // provocations de victoire / défaite
+        for (i = 0; r.bit(); i++) cs = add(cs, popcount(r.u32()) * (11 + i))   // provocations possédées (champ de bits)
         r.bits(16); e.team = r.i32(); r.i32()
+        cs = add(cs, (e.team >>> 0) * 43)
         e.heroes = []
-        for (i = 0; i < hc; i++) { var h = r.u32(); r.u32(); r.u32(); r.bit(); r.bits(15); r.bit(); r.bits(15); e.heroes.push(h) }
+        for (i = 0; i < hc; i++) {
+          var h = r.u32(), costume = r.u32(), stance = r.u32()
+          var top = r.bit(), skin2 = r.bits(15), morph = r.bit(), skin1 = r.bits(15)
+          // Le bit de tête compte comme bit 31 de la valeur combinée (vérifié sur les replays à plusieurs légendes).
+          cs = add(cs, h * (17 + i), costume * (7 + i), stance * (3 + i), ((top * 32768 + skin2) * 65536 + skin1 + morph * 32768) % 4294967296 * (2 + i))
+          e.heroes.push(h)
+        }
         e.bot = !!r.bit()
-        if (r.bit()) { r.u32(); r.u32(); r.u32() }
+        if (r.bit()) cs = add(cs, r.u32() * 31, roundEven(r.u32() / 10) * 3, roundEven(r.u32() / 10) * 23)   // handicaps
+        else cs = add(cs, 29)
+        sum = add(sum, cs)
         rep.ents.push(e)
         if (rep.ents.length > 16) throw new Error('trop de joueurs')
       }
-      r.u32(); haveGame = true
+      // Le jeu écrit un checksum des données de partie : s'il ne correspond pas, le format a changé et on ne lit rien de faux.
+      if (r.u32() !== add(sum, rep.levelId * 47) % 173) throw new FormatError(rep.version)
+      haveGame = true
     } else if (t === 6) {                                             // résultats
       var len = r.u32(), sc = {}
       if (r.bit()) while (r.bit()) { var id = r.bits(5), s = r.bits(16); sc[id] = s > 32767 ? s - 65536 : s }
@@ -166,12 +204,25 @@ function parseBuffer(buf) {
       var list = []
       while (r.bit()) { var ent = r.bits(5), ts = r.i32(); list.push([ent, ts]) }
       if (t === 5) rep.kos = list
-    } else if (t === 1) {                                              // inputs : on les traverse sans les décoder
+    } else if (t === 1) {                                              // inputs : état des touches à chaque changement
+      // On compte les appuis (passage de relâché à appuyé) ; l'horodatage de chaque changement est sauté.
       while (r.bit()) {
-        r.skip(5)
-        var cnt = r.i32()
+        var who = r.bits(5), cnt = r.i32()
         if (cnt < 0 || cnt > 2000000) throw new Error('inputs invalides')
-        for (var q = 0; q < cnt; q++) { r.skip(32); if (r.bit()) r.skip(14) }
+        var acc = rep.inputs[who] || (rep.inputs[who] = [0, 0, 0, 0, 0, 0]), prev = 0
+        for (var q = 0; q < cnt; q++) {
+          r.skip(32)
+          var flags = r.bit() ? r.bits(14) : 0, down = flags & ~prev
+          if (down) {
+            if (down & 128) acc[0]++                                    // attaque légère
+            if (down & 64) acc[1]++                                     // attaque lourde
+            if (down & 256) acc[2]++                                    // esquive / dash
+            if (down & 16) acc[3]++                                     // saut
+            if (down & 512) acc[4]++                                    // ramasser / lancer
+            if (down & 15360) acc[5]++                                  // provocation
+          }
+          prev = flags
+        }
       }
     } else if (t === 2) break
     else throw new Error('type d\'objet inconnu ' + t)
@@ -205,7 +256,7 @@ function saveCache(entries) {
   }
 }
 function compact(rep) {
-  return { n: rep.ents.map(function (e) { return [e.name, e.team, e.heroes[0], e.bot ? 1 : 0, e.id] }), s: rep.scores, k: rep.kos, l: rep.length, m: rep.levelId, p: rep.playlist, pid: rep.playlistId, o: rep.online ? 1 : 0, lv: rep.lives }
+  return { n: rep.ents.map(function (e) { return [e.name, e.team, e.heroes[0], e.bot ? 1 : 0, e.id] }), s: rep.scores, k: rep.kos, l: rep.length, m: rep.levelId, p: rep.playlist, pid: rep.playlistId, o: rep.online ? 1 : 0, lv: rep.lives, i: rep.inputs, v: CACHE_V }
 }
 
 /* ───────── calculs ───────── */
@@ -217,12 +268,18 @@ function modeLabel(c, lang) {
   }
   return c.o ? (lang === 'fr' ? 'Salon en ligne' : 'Online room') : (lang === 'fr' ? 'Hors ligne' : 'Offline')
 }
+/** Le jeu nomme ses fichiers « [11.00] SmallBrawlhaven (42).replay » : la carte est dans le nom, sans table à tenir. */
+function mapFromFile(name) {
+  var m = /^(?:\[[^\]]*\]\s*)?(.+?)(?:\s*\(\d+\))?\.replay$/i.exec(name)
+  return m ? m[1].replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z])([A-Z][a-z])/g, '$1 $2').replace(/_/g, ' ').trim() : ''
+}
 function fmtDur(sec) { sec = Math.round(sec); var m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s }
+/** Pseudos recherchés : plusieurs possibles, séparés par des virgules (ex. après un changement de pseudo). */
+function wantedList(raw) { return (raw || '').split(/[,;]/).map(function (w) { return w.toLowerCase().trim() }).filter(Boolean) }
 function matches(name, wanted) {
-  var a = name.toLowerCase(), w = wanted.toLowerCase().trim()
-  if (!w) return false
+  var a = name.toLowerCase()
   var tagless = a.indexOf('|') >= 0 ? a.slice(a.indexOf('|') + 1).trim() : a
-  return a === w || tagless === w || a.indexOf(w) >= 0
+  return wanted.some(function (w) { return a === w || tagless === w || a.indexOf(w) >= 0 })
 }
 
 function analyse(c, wanted, lang) {
@@ -237,7 +294,14 @@ function analyse(c, wanted, lang) {
   if (me && c.s[me.id] !== undefined && best !== null) won = c.s[me.id] === best && scoreVals.some(function (v) { return v !== best })
   var taken = 0, lost = 0
   if (me) ents.forEach(function (e) { if (e.id === me.id) lost += deaths[e.id].length; else if (e.team !== me.team || me.team === 0) taken += deaths[e.id].length })
-  return { ents: ents, me: me, deaths: deaths, won: won, taken: taken, lost: lost, dur: c.l / 1000 }
+  return { ents: ents, me: me, deaths: deaths, won: won, taken: taken, lost: lost, dur: c.l / 1000, apm: me ? apmOf(c, me.id) : null }
+}
+
+/** Appuis par minute (attaques, esquives, sauts, lancers ; sans les provocations), d'après les inputs du replay. */
+function presses(c, id) { return (c.i && c.i[id]) || null }
+function apmOf(c, id) {
+  var p = presses(c, id), min = c.l / 60000
+  return p && min > 0 ? (p[0] + p[1] + p[2] + p[3] + p[4]) / min : null
 }
 
 function teamsTitle(ents) {
@@ -251,7 +315,9 @@ function buildItem(file, c, a, lang) {
   var fr = lang === 'fr'
   var rows = a.ents.map(function (e) {
     var place = c.s[e.id]
-    return [e.name, e.team, '#' + e.hero, place === undefined ? '—' : (place === 1 ? '1' : String(place)), a.deaths[e.id].length]
+    var p = presses(c, e.id), apm = apmOf(c, e.id)
+    return [e.name, e.team, legendName(e.hero), place === undefined ? '—' : (place === 1 ? '1' : String(place)), a.deaths[e.id].length,
+      p ? p[0] + ' / ' + p[1] : '—', p ? p[2] : '—', apm === null ? '—' : Math.round(apm)]
   })
   var kos = c.k.length
   return {
@@ -263,11 +329,12 @@ function buildItem(file, c, a, lang) {
       result: a.won === null ? '—' : a.won ? (fr ? 'Victoire' : 'Win') : (fr ? 'Défaite' : 'Loss'),
       duration: fmtDur(a.dur),
       kos: kos,
-      map: (fr ? 'Carte #' : 'Map #') + c.m
+      apm: a.apm === null ? '—' : Math.round(a.apm),
+      map: mapFromFile(file.name) || (fr ? 'Carte #' : 'Map #') + c.m
     },
     detail: {
       table: {
-        columns: fr ? ['Joueur', 'Équipe', 'Légende', 'Place', 'Stocks perdus'] : ['Player', 'Team', 'Legend', 'Place', 'Stocks lost'],
+        columns: fr ? ['Joueur', 'Équipe', 'Légende', 'Place', 'Stocks perdus', 'Attaques légères / lourdes', 'Esquives', 'Appuis/min'] : ['Player', 'Team', 'Legend', 'Place', 'Stocks lost', 'Light / heavy attacks', 'Dodges', 'Presses/min'],
         rows: rows
       },
       timeline: {
@@ -285,45 +352,67 @@ function buildItem(file, c, a, lang) {
 var plugin = {
   resolve: async function (ctx) {
     var parts = ctx.inputs.folder.split(/[\\/]/).filter(Boolean)
-    var name = (ctx.inputs.playerName || '').trim()
+    var name = wantedList(ctx.inputs.playerName).length ? ctx.inputs.playerName.trim() : ''
     if (!name) throw new Error(ctx.lang === 'fr' ? 'Indique ton pseudo en jeu.' : 'Enter your in-game name.')
     return { externalId: ctx.inputs.folder, displayName: 'Replays · ' + name + (parts.length ? ' (' + parts[parts.length - 1] + ')' : '') }
   },
 
   refresh: async function (ctx) {
-    var lang = ctx.lang, wanted = (ctx.inputs.playerName || '').trim()
+    var lang = ctx.lang, wanted = wantedList(ctx.inputs.playerName), started = Date.now()
     var files = host.files.list().slice(0, MAX_FILES)               // du plus récent au plus ancien
     var cache = loadCache(), next = {}, fresh = 0, skipped = 0, failed = 0
     var parsed = []
     for (var i = 0; i < files.length; i++) {
       var f = files[i], key = f.name + '|' + f.size + '|' + f.mtime
       var c = cache[key]
-      if (!c) {
-        if (fresh >= MAX_NEW) { skipped++; continue }
+      if (!c || c.v !== CACHE_V) {
+        if (fresh >= MAX_NEW || Date.now() - started > BUDGET_MS) {
+          skipped++
+          if (c) { next[key] = c; if (!c.bad) parsed.push({ file: f, c: c }) }   // ancienne entrée gardée telle quelle en attendant
+          continue
+        }
         fresh++
-        try { c = compact(parseReplay(host.files.readBytes(f.name))) } catch (e) { failed++; host.log('Illisible : ' + f.name + ' — ' + (e && e.message ? e.message : e)); next[key] = { bad: 1 }; continue }
+        try { c = compact(parseReplay(host.files.readBytes(f.name))) } catch (e) { failed++; host.log('Illisible : ' + f.name + ' — ' + (e && e.message ? e.message : e)); next[key] = { bad: 1, v: CACHE_V }; continue }
       }
       next[key] = c
       if (!c.bad) parsed.push({ file: f, c: c })
     }
     parsed = parsed.filter(function (x) { return !x.c.bad })
-    saveCache(next)
+    // Parties sorties de la fenêtre des MAX_FILES derniers fichiers : leur bilan rejoint une base cumulée,
+    // pour que les totaux et la courbe continuent de monter au lieu de chuter.
+    var base = { games: 0, wins: 0, losses: 0, taken: 0, lost: 0, dur: 0 }
+    try { var b = JSON.parse(host.storage.get('base') || 'null'); if (b && typeof b.games === 'number') base = b } catch (e) { /* base illisible : repart de zéro */ }
+    var baseChanged = false
+    for (var old in cache) {
+      if (next[old] || cache[old].bad) continue
+      var gone = analyse(cache[old], wanted, lang)
+      if (!gone.me) continue
+      base.games++; base.dur += gone.dur; base.taken += gone.taken; base.lost += gone.lost
+      if (gone.won === true) base.wins++; else if (gone.won === false) base.losses++
+      baseChanged = true
+    }
+    saveCache(next)                                                     // le cache d'abord : une coupure ici ne compte jamais deux fois
+    if (baseChanged) host.storage.set('base', JSON.stringify(base))
     host.log(files.length + ' fichiers, ' + fresh + ' lus, ' + failed + ' illisibles' + (skipped ? ', ' + skipped + ' reportés à la prochaine actualisation' : ''))
 
-    var totals = { games: 0, wins: 0, losses: 0, taken: 0, lost: 0, dur: 0 }, items = [], history = []
+    var totals = { games: base.games, wins: base.wins, losses: base.losses, taken: base.taken, lost: base.lost, dur: base.dur }, items = [], history = []
     var chrono = parsed.slice().sort(function (a, b) { return a.file.mtime - b.file.mtime })
-    var unnamed = 0
+    var unnamed = 0, apmSum = 0, apmN = 0, unknown = {}
     chrono.forEach(function (x) {
+      x.c.n.forEach(function (n) { if (!LEGENDS[n[2]]) unknown[n[2]] = true })
       var a = analyse(x.c, wanted, lang)
       if (!a.me) { unnamed++; return }                                 // partie où tu n'apparais pas : ignorée
       totals.games++; totals.dur += a.dur; totals.taken += a.taken; totals.lost += a.lost
       if (a.won === true) totals.wins++; else if (a.won === false) totals.losses++
+      if (a.apm !== null) { apmSum += a.apm; apmN++ }
       var decided = totals.wins + totals.losses
       history.push({ ts: x.file.mtime, metrics: {
         games: totals.games, wins: totals.wins, losses: totals.losses, winrate: decided ? totals.wins * 100 / decided : 0,
         stocks_taken: totals.taken, stocks_lost: totals.lost, avg_duration: totals.dur / totals.games } })
     })
-    if (unnamed) host.log(unnamed + ' parties sans ton pseudo (« ' + wanted + ' ») ignorées')
+    var unknownIds = Object.keys(unknown)
+    if (unknownIds.length) host.log('Légende inconnue (' + unknownIds.map(function (k) { return '#' + k }).join(', ') + ') : nouvelle légende ? Mets à jour le plugin.')
+    if (unnamed) host.log(unnamed + ' parties sans ton pseudo (« ' + wanted.join(', ') + ' ») ignorées')
     parsed.forEach(function (x) {                                       // du plus récent au plus ancien
       if (items.length >= 200) return
       var a = analyse(x.c, wanted, lang)
@@ -333,6 +422,7 @@ var plugin = {
     var metrics = { games: totals.games, wins: totals.wins, losses: totals.losses, stocks_taken: totals.taken, stocks_lost: totals.lost }
     if (decided) metrics.winrate = totals.wins * 100 / decided
     if (totals.games) metrics.avg_duration = totals.dur / totals.games
+    if (apmN) metrics.apm = apmSum / apmN                                // moyenne sur les parties lues (la base cumulée n'a pas d'inputs)
     return { metrics: metrics, items: items, history: history.slice(-5000) }
   }
 }

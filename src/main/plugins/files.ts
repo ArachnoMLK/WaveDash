@@ -8,17 +8,20 @@ export interface FileEntry { name: string; size: number; mtime: number }
 
 const extOk = (name: string, exts: string[]): boolean => exts.length === 0 || exts.includes(extname(name).toLowerCase())
 
-export function listFiles(a: FolderAccess, max = 2000): FileEntry[] {
+/** Les `max` fichiers les plus récents. Le tri se fait sur tout le dossier (jusqu'à `scan` fichiers examinés) :
+ *  couper avant de trier rendrait des fichiers pris au hasard de l'ordre alphabétique, pas les derniers. */
+export function listFiles(a: FolderAccess, max = 2000, scan = 50_000): FileEntry[] {
   const out: FileEntry[] = []
+  let seen = 0
   for (const name of readdirSync(a.dir)) {
-    if (out.length >= max) break
     if (!extOk(name, a.extensions)) continue
+    if (++seen > scan) break
     try {
       const st = lstatSync(join(a.dir, name))
       if (st.isFile() && !st.isSymbolicLink()) out.push({ name, size: st.size, mtime: Math.round(st.mtimeMs) })
     } catch { /* fichier disparu ou illisible : ignoré */ }
   }
-  return out.sort((x, y) => y.mtime - x.mtime)
+  return out.sort((x, y) => y.mtime - x.mtime).slice(0, max)
 }
 
 /** Lit un fichier du dossier autorisé ; refuse tout nom qui n'est pas un simple nom de fichier. */

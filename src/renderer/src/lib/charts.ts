@@ -110,17 +110,20 @@ export function timelineOption(tl: { duration: number; lanes: string[]; events: 
   const ax = axisStyle(th)
   const mmss = (v: number): string => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`
   const pal = palette(th)
-  const h = Math.max(160, 54 + tl.lanes.length * 38)
+  // Graduations rondes (10 s, 30 s, 1 min…) ; la fin exacte de la partie n'a pas d'étiquette, pour ne pas chevaucher la dernière.
+  const step = [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600].find((s) => tl.duration / s <= 7) ?? 3600
   return {
     ...base(th),
-    grid: { left: 8, right: 22, top: 12, bottom: 6, containLabel: true, height: h - 60 },
-    xAxis: { type: 'value', min: 0, max: Math.ceil(tl.duration), axisLabel: { ...ax.axisLabel, formatter: (v: number) => mmss(v) }, axisLine: ax.axisLine, splitLine: ax.splitLine },
+    grid: { left: 8, right: 22, top: 10, bottom: 4, containLabel: true },
+    xAxis: { type: 'value', min: 0, max: tl.duration, interval: step,
+      axisLabel: { ...ax.axisLabel, formatter: (v: number) => mmss(v), showMaxLabel: false }, axisLine: ax.axisLine, splitLine: ax.splitLine },
     yAxis: { type: 'category', data: tl.lanes, inverse: true, axisLabel: { ...ax.axisLabel, width: 120, overflow: 'truncate' }, axisLine: ax.axisLine, splitLine: { show: true, lineStyle: ax.splitLine.lineStyle } },
-    tooltip: { ...(base(th).tooltip as object), trigger: 'item', formatter: (p: any) => `${tl.lanes[p.value[1]] ?? ''}<br/>${p.data.label ?? 'KO'} · ${mmss(p.value[0])}` },
+    tooltip: { ...(base(th).tooltip as object), trigger: 'item', formatter: (p: any) => `${tl.lanes[p.value[1]] ?? ''}<br/>${p.name || 'KO'} · ${mmss(p.value[0])}` },
     series: [{
       type: 'scatter', symbol: 'diamond', symbolSize: 16,
       itemStyle: { color: (p: any) => pal[p.value[1] % pal.length] },
-      data: tl.events.map((e) => ({ value: [e.t, e.lane], label: e.label }))
+      // `name` et non `label` : `label` est une option de style d'ECharts pour chaque point.
+      data: tl.events.map((e) => ({ value: [e.t, e.lane], name: e.label ?? '' }))
     }]
   } as EChartsOption
 }

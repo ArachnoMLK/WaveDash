@@ -39,5 +39,7 @@ export async function checkUpdate(): Promise<void> {
 
 export function installUpdate(): void {
   // quitAndInstall déclenche before-quit : la fermeture dans la barre système est alors désactivée.
-  if (status.state === 'ready') autoUpdater.quitAndInstall()
+  // (true, true) : installation silencieuse (pas d'écran d'installateur) puis relance de l'appli.
+  // Windows peut encore demander l'autorisation administrateur si WaveDash est installé pour tous les utilisateurs.
+  if (status.state === 'ready') autoUpdater.quitAndInstall(true, true)
 }

@@ -261,10 +261,19 @@ export const pluginStorageSet = (pluginId: string, accountId: number, key: strin
 }
 
 /** Ajoute des points d'historique fournis par un plugin, sans doublon (même compte, métrique et instant). */
-export function insertHistory(accountId: number, points: { ts: number; metrics: Record<string, number> }[]): void {
-  const exists = db.prepare('SELECT 1 FROM snapshots WHERE account_id = ? AND metric = ? AND ts = ?')
+/** Historique renvoyé par un plugin : il fait foi de son premier point jusqu'à maintenant. Pour chaque métrique, les points
+ *  déjà enregistrés sur cette période sont remplacés : un plugin qui complète des données passées corrige ainsi les cumuls
+ *  calculés avant, y compris les relevés pris pendant qu'il rattrapait son retard. Les points plus anciens ne sont pas touchés. */
+export function insertHistory(accountId: number, points: { ts: number; metrics: Record<string, number> }[], now = Date.now()): void {
+  const span: Record<string, [number, number]> = {}
+  for (const p of points) for (const m of Object.keys(p.metrics)) {
+    const s = span[m]
+    span[m] = s ? [Math.min(s[0], p.ts), Math.max(s[1], p.ts)] : [p.ts, p.ts]
+  }
+  const del = db.prepare('DELETE FROM snapshots WHERE account_id = ? AND metric = ? AND ts BETWEEN ? AND ?')
   const ins = db.prepare('INSERT INTO snapshots (account_id, metric, ts, value) VALUES (?,?,?,?)')
   db.transaction(() => {
-    for (const p of points) for (const [m, v] of Object.entries(p.metrics)) if (!exists.get(accountId, m, p.ts)) ins.run(accountId, m, p.ts, v)
+    for (const [m, [a, b]] of Object.entries(span)) del.run(accountId, m, a, Math.max(b, now))
+    for (const p of points) for (const [m, v] of Object.entries(p.metrics)) ins.run(accountId, m, p.ts, v)
   })()
 }

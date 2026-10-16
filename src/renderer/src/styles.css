@@ -73,7 +73,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
 .stat { padding: calc(18px * var(--space)) calc(20px * var(--space)); cursor: default; transition: transform 0.45s var(--ease), border-color 0.45s var(--ease), box-shadow 0.45s var(--ease); }
 .stat:hover { border-color: var(--line-strong); }
 .stat.selected { border-color: color-mix(in srgb, var(--accent) 65%, transparent); }
-button.stat { text-align: left; font: inherit; color: inherit; cursor: pointer; }
+button.stat { text-align: left; font: inherit; color: inherit; cursor: pointer; width: 100%; height: 100%; }
 .stat .label { color: var(--muted); font-size: 13px; }
 .stat .value { font-size: 40px; font-weight: 300; letter-spacing: -0.035em; line-height: 1.1; margin-top: 6px; }
 .stat .delta { font-size: 12.5px; margin-top: 6px; color: var(--muted); }
@@ -144,10 +144,14 @@ input[type='color'] { width: 46px; height: 34px; padding: 2px; border-radius: va
 @keyframes bar-in { from { transform: scaleX(0); } }
 .goal-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .tbl-wrap { overflow-x: auto; }
+.tbl-wrap::-webkit-scrollbar { height: 8px; } .tbl-wrap::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; } .tbl-wrap::-webkit-scrollbar-track { background: transparent; }
 .table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .table th { text-align: left; color: var(--muted); font-weight: 500; padding: 8px 8px; white-space: nowrap; }
 .table td { padding: 10px 8px; border-top: 1px solid var(--line); white-space: nowrap; }
 .table tr.click { cursor: pointer; } .table tr.click:hover td { background: var(--ctrl); } .table tr.sel td { background: var(--ctrl); }
+.table td.wrap { white-space: normal; min-width: 200px; }
+.table tr.detail-row > td { white-space: normal; background: var(--ctrl); padding: 4px 12px 16px; cursor: default; }
+.table tr.detail-row .table td { background: transparent; }
 .table .sub { display: block; color: var(--muted); font-size: 11.5px; }
 details.rule { border-top: 1px solid var(--line); padding: 12px 0; } details.rule:first-of-type { border-top: 0; }
 details.rule > summary { cursor: pointer; display: flex; align-items: center; gap: 10px; list-style: none; }
