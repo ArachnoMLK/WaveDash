@@ -163,14 +163,19 @@ Dégâts infligés et subis, arme tenue, positions (air, sol, mur), combos, dash
 
 Le format de fichier a été compris grâce aux projets open source BrawlhallaReplayLibrary (allhailcheese) et brawlhalla-replay-reader (itselectroz), tous deux sous licence MIT.
 
-## Plugin fourni : Discord (serveur)
+## Plugin fourni : Discord (serveurs)
 
-`examples/discord-server-1.0.0.wdsh` suit un serveur Discord avec l'API officielle (permission réseau : `discord.com` seulement).
+`examples/discord-server-1.1.0.wdsh` suit des serveurs Discord avec l'API officielle (permission réseau : `discord.com` seulement). Trois façons de l'utiliser :
 
-- **Avec un lien d'invitation seul** (permanent, sans compte ni clé) : membres, membres en ligne, part en ligne, boosts. Vérifié sur le serveur officiel Brawlhalla.
-- **Avec un bot** (facultatif) : il faut créer une application dans le Discord Developer Portal, copier le jeton du bot (enregistré chiffré par WaveDash) et inviter le bot sur le serveur avec la permission « Lire l'historique des messages », puis saisir l'ID du serveur. Le plugin compte alors les nouveaux messages au fil de l'eau (les 7 derniers jours au premier passage, jamais l'historique plus ancien) : messages du jour et des 7 derniers jours, par salon, membres actifs et les plus actifs, courbe des messages par jour. Le contenu des messages n'est ni lu ni gardé ; les messages des bots ne comptent pas. Au plus 26 requêtes par exécution : les salons sont lus à tour de rôle, et WaveDash relance le plugin tant qu'il reste du retard. Ce mode a été vérifié sur une API Discord simulée, pas encore sur un vrai serveur.
+- **Tous les serveurs d'un bot** : laisse l'invitation et l'ID vides, puis enregistre le jeton du bot dans les clés du plugin. Le compte liste chaque serveur où le bot est présent (membres, en ligne, messages du jour et des 7 jours, dernier message) ; un clic ouvre le détail du serveur (salons, membres les plus actifs, messages par jour). Jusqu'à 45 serveurs suivis en détail.
+- **Un seul serveur** : jeton du bot + ID du serveur ; la liste montre alors ses salons.
+- **Sans bot** : un lien d'invitation permanent donne membres, membres en ligne, part en ligne et boosts. Vérifié sur le serveur officiel Brawlhalla.
 
-Le plugin ne lit jamais l'application Discord de ton ordinateur ni ton compte personnel : un « selfbot » est interdit par Discord.
+Pour le bot : Discord Developer Portal › New Application › Bot › Reset Token, puis l'inviter sur chaque serveur (OAuth2 › URL Generator › `bot`, permissions « Voir les salons » et « Lire l'historique des messages »). Le jeton est enregistré chiffré par WaveDash et partagé par les comptes de ce plugin.
+
+Les messages sont comptés au fil de l'eau : au premier passage, les 100 derniers de chaque salon (dans la limite de 7 jours), ensuite tous les nouveaux. Leur contenu n'est ni lu ni gardé, et les messages des bots ne comptent pas. Au plus 26 requêtes par exécution : salons et serveurs sont lus à tour de rôle, et WaveDash relance le plugin tant qu'il reste du retard. Le mode bot a été vérifié sur une API Discord simulée (3 serveurs, salon interdit, 150 nouveaux messages), pas encore sur un vrai serveur.
+
+Le plugin ne lit jamais l'application Discord de l'ordinateur ni un compte personnel (un « selfbot » est interdit par Discord).
 
 ## Pas encore disponible
 

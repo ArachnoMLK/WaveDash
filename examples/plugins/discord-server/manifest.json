@@ -1,40 +1,169 @@
 {
   "wdsh": 1,
   "id": "wavedash.discord-server",
-  "name": "Discord (serveur)",
-  "version": "1.0.0",
+  "name": "Discord (serveurs)",
+  "version": "1.1.0",
   "author": "WaveDash",
   "description": {
-    "fr": "Suit un serveur Discord. Avec un lien d'invitation seul : membres, membres en ligne, boosts. Avec un bot (facultatif) : salons, messages par jour et par salon, membres les plus actifs. API officielle de Discord uniquement.",
-    "en": "Tracks a Discord server. With an invite link only: members, online members, boosts. With a bot (optional): channels, messages per day and per channel, most active members. Official Discord API only."
+    "fr": "Suit tes serveurs Discord avec l'API officielle. Avec un bot : tous les serveurs où il est présent (membres, en ligne, messages par jour et par salon, membres les plus actifs), ou un seul serveur avec son ID. Sans bot : membres, en ligne et boosts d'après un lien d'invitation.",
+    "en": "Tracks your Discord servers with the official API. With a bot: every server it is in (members, online, messages per day and per channel, most active members), or a single server by ID. Without a bot: members, online and boosts from an invite link."
   },
-  "permissions": { "network": ["discord.com"], "folder": false },
+  "permissions": {
+    "network": [
+      "discord.com"
+    ],
+    "folder": false
+  },
   "inputs": [
-    { "key": "invite", "type": "text", "required": true, "placeholder": "discord.gg/xxxx",
-      "label": { "fr": "Lien d'invitation (permanent)", "en": "Invite link (permanent)" },
-      "help": { "fr": "Un lien qui n'expire pas, créé dans Discord : Inviter des gens › Modifier le lien › Expire : jamais.", "en": "A link that never expires, created in Discord: Invite people › Edit invite link › Expire: never." } },
-    { "key": "guildId", "type": "text", "required": false, "placeholder": "123456789012345678",
-      "label": { "fr": "ID du serveur (seulement avec un bot)", "en": "Server ID (bot only)" } }
+    {
+      "key": "invite",
+      "type": "text",
+      "required": false,
+      "placeholder": "discord.gg/xxxx",
+      "label": {
+        "fr": "Lien d'invitation (sans bot)",
+        "en": "Invite link (without a bot)"
+      },
+      "help": {
+        "fr": "Laisse vide pour suivre tous les serveurs du bot. Sans bot : un lien permanent (Expire : jamais).",
+        "en": "Leave empty to track every server of the bot. Without a bot: a permanent link (Expire: never)."
+      }
+    },
+    {
+      "key": "guildId",
+      "type": "text",
+      "required": false,
+      "placeholder": "123456789012345678",
+      "label": {
+        "fr": "ID d’un seul serveur (facultatif, avec un bot)",
+        "en": "Single server ID (optional, with a bot)"
+      }
+    }
   ],
   "secrets": [
-    { "key": "botToken", "label": { "fr": "Jeton du bot (facultatif)", "en": "Bot token (optional)" },
-      "help": { "fr": "Discord Developer Portal › ton application › Bot › Reset Token. Le bot doit être invité sur le serveur avec la permission « Lire l'historique des messages ».", "en": "Discord Developer Portal › your application › Bot › Reset Token. The bot must be invited to the server with the Read Message History permission." } }
+    {
+      "key": "botToken",
+      "label": {
+        "fr": "Jeton du bot (facultatif)",
+        "en": "Bot token (optional)"
+      },
+      "help": {
+        "fr": "Discord Developer Portal › ton application › Bot › Reset Token. Le bot doit être invité sur le serveur avec la permission « Lire l'historique des messages ».",
+        "en": "Discord Developer Portal › your application › Bot › Reset Token. The bot must be invited to the server with the Read Message History permission."
+      }
+    }
   ],
   "metrics": [
-    { "key": "members", "label": { "fr": "Membres", "en": "Members" }, "primary": true },
-    { "key": "online", "label": { "fr": "En ligne", "en": "Online" } },
-    { "key": "online_pct", "label": { "fr": "Part en ligne", "en": "Online share" }, "format": "percent", "decimals": 1 },
-    { "key": "boosts", "label": { "fr": "Boosts", "en": "Boosts" } },
-    { "key": "channels", "label": { "fr": "Salons textuels", "en": "Text channels" } },
-    { "key": "messages_today", "label": { "fr": "Messages aujourd'hui", "en": "Messages today" } },
-    { "key": "messages_7d", "label": { "fr": "Messages sur 7 jours", "en": "Messages, last 7 days" } },
-    { "key": "authors_7d", "label": { "fr": "Membres actifs sur 7 jours", "en": "Active members, 7 days" } }
+    {
+      "key": "members",
+      "label": {
+        "fr": "Membres",
+        "en": "Members"
+      },
+      "primary": true
+    },
+    {
+      "key": "online",
+      "label": {
+        "fr": "En ligne",
+        "en": "Online"
+      }
+    },
+    {
+      "key": "online_pct",
+      "label": {
+        "fr": "Part en ligne",
+        "en": "Online share"
+      },
+      "format": "percent",
+      "decimals": 1
+    },
+    {
+      "key": "servers",
+      "label": {
+        "fr": "Serveurs",
+        "en": "Servers"
+      }
+    },
+    {
+      "key": "boosts",
+      "label": {
+        "fr": "Boosts",
+        "en": "Boosts"
+      }
+    },
+    {
+      "key": "channels",
+      "label": {
+        "fr": "Salons textuels",
+        "en": "Text channels"
+      }
+    },
+    {
+      "key": "messages_today",
+      "label": {
+        "fr": "Messages aujourd'hui",
+        "en": "Messages today"
+      }
+    },
+    {
+      "key": "messages_7d",
+      "label": {
+        "fr": "Messages sur 7 jours",
+        "en": "Messages, last 7 days"
+      }
+    },
+    {
+      "key": "authors_7d",
+      "label": {
+        "fr": "Membres actifs sur 7 jours",
+        "en": "Active members, 7 days"
+      }
+    }
   ],
   "itemColumns": [
-    { "key": "today", "label": { "fr": "Aujourd'hui", "en": "Today" } },
-    { "key": "week", "label": { "fr": "7 jours", "en": "7 days" } },
-    { "key": "total", "label": { "fr": "Depuis le suivi", "en": "Since tracking" } },
-    { "key": "last", "label": { "fr": "Dernier message", "en": "Last message" } }
+    {
+      "key": "members",
+      "label": {
+        "fr": "Membres",
+        "en": "Members"
+      }
+    },
+    {
+      "key": "online",
+      "label": {
+        "fr": "En ligne",
+        "en": "Online"
+      }
+    },
+    {
+      "key": "today",
+      "label": {
+        "fr": "Aujourd'hui",
+        "en": "Today"
+      }
+    },
+    {
+      "key": "week",
+      "label": {
+        "fr": "7 jours",
+        "en": "7 days"
+      }
+    },
+    {
+      "key": "total",
+      "label": {
+        "fr": "Depuis le suivi",
+        "en": "Since tracking"
+      }
+    },
+    {
+      "key": "last",
+      "label": {
+        "fr": "Dernier message",
+        "en": "Last message"
+      }
+    }
   ],
   "refreshMinutes": 15
 }
