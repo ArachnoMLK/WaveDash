@@ -42,6 +42,7 @@ async function addAccount(a: AddAccountInput): Promise<AddAccountResult> {
 export function registerIpc(win: () => BrowserWindow | null): void {
   const notifyUpdated = (): void => win()?.webContents.send('data:updated')
   startScheduler(notifyUpdated)
+  plugins.setPluginNotifier(notifyUpdated)
   // Un palier franchi : l'interface joue le son et affiche la célébration ; un clic sur la notification ouvre la fenêtre.
   initMilestones((e) => win()?.webContents.send('milestone:fired', e), () => { const w = win(); w?.show(); w?.focus() })
 
@@ -150,6 +151,8 @@ export function registerIpc(win: () => BrowserWindow | null): void {
   ipcMain.handle('plugins:accountRemove', (_e, id: number) => { plugins.removePluginAccount(Number(id)); notifyUpdated() })
   ipcMain.handle('plugins:accountRefresh', async (_e, id: number) => { await plugins.refreshPluginAccount(Number(id)); notifyUpdated() })
   ipcMain.handle('plugins:accountData', (_e, id: number) => plugins.pluginAccountData(Number(id)))
+  ipcMain.handle('plugins:accountItems', (_e, id: number, offset: number, limit: number, month?: string) =>
+    plugins.pluginAccountItems(Number(id), Number(offset), Number(limit), typeof month === 'string' ? month : undefined))
   ipcMain.handle('plugins:secretSet', (_e, id: string, key: string, value: string) => { const ok = plugins.setPluginSecret(String(id), String(key), String(value)); notifyUpdated(); return ok })
   ipcMain.handle('plugins:secretDelete', (_e, id: string, key: string) => { plugins.deletePluginSecret(String(id), String(key)); notifyUpdated() })
   ipcMain.handle('plugins:takePendingFile', () => plugins.takePendingFile())

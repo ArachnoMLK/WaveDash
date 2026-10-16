@@ -1,6 +1,6 @@
 // Page d'un compte de plugin : cartes de métriques, graphique d'évolution, éléments, journal.
 import { Fragment, useEffect, useState } from 'react'
-import { loc, PluginDetail, PluginItem } from '@shared/plugin'
+import { loc, PluginDetail, PluginItemsPage } from '@shared/plugin'
 import { ChartType, Point, RawMetrics } from '@shared/types'
 import { Chart } from '../components/Chart'
 import { Reveal, StatCard, Tabs } from '../components/ui'
@@ -13,6 +13,7 @@ import { fmtPluginMetric } from '../lib/plugin'
 import { useChartTheme } from '../lib/useChartTheme'
 
 const RANGES: RangeKey[] = ['7', '30', '90', 'all']
+const PAGE = 50
 
 export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const { t, settings, plugins, pluginAccounts, dataVersion, updateSettings, reloadPlugins } = useApp()
@@ -24,7 +25,10 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [metric, setMetric] = useState<string>(m?.metrics.find((x) => x.primary)?.key ?? m?.metrics[0]?.key ?? '')
   const [latest, setLatest] = useState<RawMetrics>({})
   const [series, setSeries] = useState<Record<string, Point[]>>({})
-  const [extra, setExtra] = useState<{ items: PluginItem[]; logs: string[]; error: string | null }>({ items: [], logs: [], error: null })
+  const [extra, setExtra] = useState<{ logs: string[]; error: string | null; backlog: number }>({ logs: [], error: null, backlog: 0 })
+  const [list, setList] = useState<PluginItemsPage>({ items: [], total: 0, months: [] })
+  const [page, setPage] = useState(0)
+  const [month, setMonth] = useState('')
   const [busy, setBusy] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
 
@@ -38,14 +42,24 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
     return () => { alive = false }
   }, [accountId, range, dataVersion, m])
 
+  // Éléments lus page par page (un plugin peut en garder des milliers), éventuellement pour un seul mois.
+  useEffect(() => {
+    let alive = true
+    void window.api.pluginAccountItems(accountId, page * PAGE, PAGE, month || undefined).then((r) => { if (alive) setList(r) })
+    return () => { alive = false }
+  }, [accountId, page, month, dataVersion])
+  useEffect(() => { setPage(0); setMonth(''); setOpenId(null) }, [accountId])
+
   if (!account || !plugin || !m) return <div className="glass empty"><p>{t('goals.noAccounts')}</p></div>
 
   const def = m.metrics.find((x) => x.key === metric) ?? m.metrics[0]
   const ckey = `plugin:${plugin.id}.${def.key}`
   const type: ChartType = settings.chartTypes[ckey] ?? 'line'
   const refresh = async (): Promise<void> => { setBusy(true); await window.api.pluginAccountRefresh(accountId); await reloadPlugins(); setBusy(false) }
-  const hasDates = extra.items.some((i) => i.ts)
-  const hasDetail = extra.items.some((i) => i.detail)
+  const hasDates = list.items.some((i) => i.ts)
+  const hasDetail = list.items.some((i) => i.detail)
+  const pages = Math.max(1, Math.ceil(list.total / PAGE))
+  const monthLabel = (ym: string): string => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)) - 1, 1).toLocaleDateString(settings.lang === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })
   const lang = settings.lang === 'fr' ? 'fr-FR' : 'en-US'
 
   return (
@@ -56,6 +70,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
         <button className="btn" disabled={busy} onClick={() => void refresh()}>{t('platform.refresh')}</button>
         <button className="btn" onClick={() => void window.api.pluginAccountRemove(accountId).then(reloadPlugins)}>{t('pp.removeAccount')}</button>
       </div>
+      {extra.backlog > 0 && <div className="glass pad small muted" style={{ marginBottom: 16 }}>{t('pp.backlog', { count: extra.backlog })}</div>}
       {account.lastError && <div className="err" style={{ marginBottom: 16 }}>{t('pp.error', { error: `${t(`plugin.run.${account.lastError}`)}${extra.error ? ` — ${extra.error}` : ''}` })}</div>}
 
       <div className="grid cards">
@@ -84,13 +99,28 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
           : <p className="muted" style={{ padding: '60px 0', textAlign: 'center' }}>{t('platform.noData')}</p>}
       </Reveal>
 
-      {extra.items.length > 0 && (
+      {(list.total > 0 || month) && (
         <Reveal className="glass pad sect" delay={0.16}>
-          <h2 style={{ marginBottom: 6 }}>{t('pp.items')}</h2>
+          <div className="row between" style={{ marginBottom: 6, flexWrap: 'wrap', gap: 10 }}>
+            <h2>{t('pp.items')} <span className="muted" style={{ fontWeight: 400 }}>· {list.total}</span></h2>
+            <div className="row" style={{ gap: 8 }}>
+              {list.months.length > 1 && (
+                <select value={month} style={{ width: 'auto' }} aria-label={t('pp.month')} onChange={(e) => { setMonth(e.target.value); setPage(0); setOpenId(null) }}>
+                  <option value="">{t('pp.allMonths')}</option>
+                  {list.months.map((x) => <option key={x.month} value={x.month}>{monthLabel(x.month)} ({x.count})</option>)}
+                </select>
+              )}
+              {pages > 1 && <>
+                <button className="btn" disabled={page === 0} onClick={() => { setPage(page - 1); setOpenId(null) }} aria-label={t('pp.prev')}>‹</button>
+                <span className="small muted">{t('pp.pageOf', { page: page + 1, pages })}</span>
+                <button className="btn" disabled={page >= pages - 1} onClick={() => { setPage(page + 1); setOpenId(null) }} aria-label={t('pp.next')}>›</button>
+              </>}
+            </div>
+          </div>
           {hasDetail && <p className="muted small" style={{ marginBottom: 6 }}>{t('pp.clickHint')}</p>}
           <div className="tbl-wrap"><table className="table">
             <thead><tr><th>{t('pp.name')}</th>{hasDates && <th>{t('pp.date')}</th>}{m.itemColumns.map((c) => <th key={c.key}>{loc(c.label, settings.lang)}</th>)}</tr></thead>
-            <tbody>{extra.items.map((it) => {
+            <tbody>{list.items.map((it) => {
               const open = it.id === openId && !!it.detail
               return (
                 <Fragment key={it.id}>

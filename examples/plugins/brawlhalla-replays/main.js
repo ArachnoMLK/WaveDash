@@ -4,11 +4,11 @@
 // Aucun accès réseau : tout se passe dans le bac à sable de WaveDash, sur le dossier que tu as choisi.
 
 var KEY = [107,16,222,60,68,75,209,70,160,16,82,193,178,49,211,106,251,172,17,222,6,104,8,120,140,213,179,249,106,64,214,19,12,174,157,197,212,107,84,114,252,87,93,26,6,115,194,81,75,176,201,140,120,4,17,122,239,116,62,70,57,160,199,166]
-var MAX_FILES = 400        // fichiers les plus récents pris en compte
-var MAX_NEW = 60           // nouveaux replays lus par actualisation (~65 ms chacun ; le reste suit à la suivante)
-var BUDGET_MS = 4000       // au-delà, on s'arrête et on garde le reste pour la suivante (le bac à sable coupe à 8 s)
+var MAX_NEW = 150          // nouveaux replays lus par actualisation au plus (~25 ms chacun) ; WaveDash relance tant qu'il en reste
+var BUDGET_MS = 2000       // au-delà, on s'arrête : le reste suit à la relance (le bac à sable coupe à 8 s ; une lecture courte gêne moins l'interface)
+var MAX_POINTS = 5000      // points d'historique renvoyés au plus (limite de WaveDash)
 var BUCKETS = 64
-var CACHE_V = 2             // version du contenu du cache : une entrée plus ancienne est relue (même clé, donc jamais comptée deux fois)
+var CACHE_V = 3            // version du contenu du cache : une entrée plus ancienne est relue
 
 // Légendes : identifiant du replay = legend_id de l'API officielle = HeroID du jeu (table HeroTypes du patch 11.00).
 // Une légende plus récente que cette table s'affiche « #id ».
@@ -22,42 +22,50 @@ var DBASE = [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,153
 var DEXT = [0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13]
 var CLORD = [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15]
 
-function huff(lengths, n) {
-  var count = new Array(16).fill(0), symbol = new Array(n), offs = new Array(16), i
-  for (i = 0; i < n; i++) count[lengths[i]]++
-  offs[1] = 0
-  for (i = 1; i < 15; i++) offs[i + 1] = offs[i] + count[i]
-  for (i = 0; i < n; i++) if (lengths[i]) symbol[offs[lengths[i]]++] = i
-  return { count: count, symbol: symbol }
+/** Table de décodage d'un code de Huffman canonique : indexée par les `max` prochains bits du flux (ordre deflate),
+ *  chaque case donne (symbole << 4) | longueur du code. Un seul accès par symbole au lieu d'une boucle bit par bit. */
+function huffTable(lengths, n) {
+  var max = 0, count = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], next = [], i, l
+  for (i = 0; i < n; i++) { if (lengths[i] > max) max = lengths[i]; count[lengths[i]]++ }
+  count[0] = 0
+  for (var code = 0, b = 1; b <= 15; b++) { code = (code + count[b - 1]) << 1; next[b] = code }
+  var size = 1 << max, tab = new Int32Array(size)
+  for (i = 0; i < n; i++) {
+    l = lengths[i]
+    if (!l) continue
+    var c = next[l]++, rev = 0
+    for (var k = 0; k < l; k++) { rev = (rev << 1) | (c & 1); c >>= 1 }
+    for (var j = rev; j < size; j += 1 << l) tab[j] = (i << 4) | l
+  }
+  return { tab: tab, mask: size - 1, max: max }
 }
 
 function inflate(src, limit) {
-  var pos = 2, bitBuf = 0, bitCnt = 0, out = new Uint8Array(Math.min(limit, 65536) + 600), o = 0
-  function bits(n) {
-    while (bitCnt < n) { if (pos >= src.length) throw new Error('fin des données'); bitBuf |= src[pos++] << bitCnt; bitCnt += 8 }
-    var v = bitBuf & ((1 << n) - 1); bitBuf >>>= n; bitCnt -= n; return v
+  var pos = 2, n = src.length, bitBuf = 0, bitCnt = 0, out = new Uint8Array(Math.min(limit, 65536) + 600), o = 0
+  function need(k) {                                                    // au-delà de la fin : des zéros, contrôlés plus bas
+    while (bitCnt < k) { bitBuf |= (pos < n ? src[pos] : 0) << bitCnt; pos++; bitCnt += 8 }
+    if (pos > n + 4) throw new Error('fin des données')
   }
-  function decode(h) {
-    var code = 0, first = 0, index = 0
-    for (var len = 1; len <= 15; len++) {
-      code |= bits(1)
-      var c = h.count[len]
-      if (code - c < first) return h.symbol[index + (code - first)]
-      index += c; first += c; first <<= 1; code <<= 1
-    }
-    throw new Error('code invalide')
+  function bits(k) { if (!k) return 0; need(k); var v = bitBuf & ((1 << k) - 1); bitBuf >>>= k; bitCnt -= k; return v }
+  function decode(t) {
+    need(t.max)
+    var v = t.tab[bitBuf & t.mask], l = v & 15
+    if (!l) throw new Error('code invalide')
+    bitBuf >>>= l; bitCnt -= l; return v >> 4
   }
-  function grow(need) {
-    if (o + need <= out.length) return
-    var bigger = new Uint8Array(out.length * 2 + need); bigger.set(out); out = bigger
+  function grow(need2) {
+    if (o + need2 <= out.length) return
+    var bigger = new Uint8Array(out.length * 2 + need2); bigger.set(out); out = bigger
   }
   var fixedL = null, fixedD = null, last
   do {
     last = bits(1)
     var type = bits(2), lt, dt
     if (type === 0) {
-      bitBuf = 0; bitCnt = 0
+      var drop = bitCnt & 7; bitBuf >>>= drop; bitCnt -= drop             // retour à la frontière d'octet
+      pos -= bitCnt >> 3; bitBuf = 0; bitCnt = 0
       var len = src[pos] | (src[pos + 1] << 8); pos += 4
+      if (pos + len > n) throw new Error('fin des données')
       grow(len)
       for (var k = 0; k < len; k++) out[o++] = src[pos++]
       if (o >= limit) break
@@ -66,33 +74,37 @@ function inflate(src, limit) {
     if (type === 1) {
       if (!fixedL) {
         var fl = []; for (var a = 0; a < 288; a++) fl.push(a < 144 ? 8 : a < 256 ? 9 : a < 280 ? 7 : 8)
-        fixedL = huff(fl, 288); fixedD = huff(new Array(30).fill(5), 30)
+        var fd = []; for (a = 0; a < 30; a++) fd.push(5)
+        fixedL = huffTable(fl, 288); fixedD = huffTable(fd, 30)
       }
       lt = fixedL; dt = fixedD
     } else if (type === 2) {
-      var nlen = bits(5) + 257, ndist = bits(5) + 1, ncode = bits(4) + 4, lengths = new Array(320).fill(0), idx
+      var nlen = bits(5) + 257, ndist = bits(5) + 1, ncode = bits(4) + 4, lengths = [], idx
+      for (idx = 0; idx < 19; idx++) lengths.push(0)
       for (idx = 0; idx < ncode; idx++) lengths[CLORD[idx]] = bits(3)
-      var ch = huff(lengths, 19)
-      idx = 0
-      var all = new Array(nlen + ndist).fill(0)
-      while (idx < nlen + ndist) {
+      var ch = huffTable(lengths, 19), all = []
+      while (all.length < nlen + ndist) {
         var sym = decode(ch)
-        if (sym < 16) all[idx++] = sym
+        if (sym < 16) all.push(sym)
         else {
           var prev = 0, rep
-          if (sym === 16) { prev = all[idx - 1]; rep = 3 + bits(2) } else if (sym === 17) rep = 3 + bits(3); else rep = 11 + bits(7)
-          while (rep--) all[idx++] = prev
+          if (sym === 16) { if (!all.length) throw new Error('code invalide'); prev = all[all.length - 1]; rep = 3 + bits(2) } else if (sym === 17) rep = 3 + bits(3); else rep = 11 + bits(7)
+          while (rep--) all.push(prev)
         }
       }
-      lt = huff(all.slice(0, nlen), nlen); dt = huff(all.slice(nlen), ndist)
+      lt = huffTable(all.slice(0, nlen), nlen); dt = huffTable(all.slice(nlen, nlen + ndist), ndist)
     } else throw new Error('bloc invalide')
     for (;;) {
       var s = decode(lt)
-      if (s < 256) { grow(1); out[o++] = s }
+      if (s < 256) { if (o >= out.length) grow(1); out[o++] = s }
       else if (s === 256) break
       else {
         s -= 257
-        var l = LBASE[s] + bits(LEXT[s]), d = decode(dt), dist = DBASE[d] + bits(DEXT[d])
+        if (s >= 29) throw new Error('code invalide')
+        var l = LBASE[s] + bits(LEXT[s]), d = decode(dt)
+        if (d >= 30) throw new Error('code invalide')
+        var dist = DBASE[d] + bits(DEXT[d])
+        if (dist > o) throw new Error('distance invalide')
         grow(l)
         for (var m = 0; m < l; m++) { out[o] = out[o - dist]; o++ }
       }
@@ -210,9 +222,20 @@ function parseBuffer(buf) {
         var who = r.bits(5), cnt = r.i32()
         if (cnt < 0 || cnt > 2000000) throw new Error('inputs invalides')
         var acc = rep.inputs[who] || (rep.inputs[who] = [0, 0, 0, 0, 0, 0]), prev = 0
+        // Boucle la plus chaude du plugin : lecture des bits en ligne (sans appel de méthode), bien plus rapide dans QuickJS.
+        var B = r.b, p = r.p, end = r.end, len = B.length
         for (var q = 0; q < cnt; q++) {
-          r.skip(32)
-          var flags = r.bit() ? r.bits(14) : 0, down = flags & ~prev
+          p += 32                                                       // horodatage, non utilisé
+          if (p + 1 > end) throw new Error('EOF')
+          var flags = 0
+          if ((B[p >> 3] >> (7 - (p & 7))) & 1) {
+            p++
+            if (p + 14 > end) throw new Error('EOF')
+            var i3 = p >> 3, win = (B[i3] << 16) | ((i3 + 1 < len ? B[i3 + 1] : 0) << 8) | (i3 + 2 < len ? B[i3 + 2] : 0)
+            flags = (win >> (10 - (p & 7))) & 16383
+            p += 14
+          } else p++
+          var down = flags & ~prev
           if (down) {
             if (down & 128) acc[0]++                                    // attaque légère
             if (down & 64) acc[1]++                                     // attaque lourde
@@ -223,6 +246,7 @@ function parseBuffer(buf) {
           }
           prev = flags
         }
+        r.p = p
       }
     } else if (t === 2) break
     else throw new Error('type d\'objet inconnu ' + t)
@@ -251,7 +275,7 @@ function saveCache(entries) {
   for (var k in entries) { var b = bucketOf(k.split('|')[0]); (buckets[b] = buckets[b] || {})[k] = entries[k] }
   for (var i = 0; i < BUCKETS; i++) {
     var key = 'c' + i, next = buckets[key] ? JSON.stringify(buckets[key]) : ''
-    if (next.length > 60000) continue                                   // sécurité : trop gros, on ne le garde pas
+    if (next.length > 60000) { host.log('Cache plein (' + key + ') : certains replays seront relus.'); continue }
     if ((host.storage.get(key) || '') !== next) host.storage.set(key, next)
   }
 }
@@ -358,71 +382,54 @@ var plugin = {
   },
 
   refresh: async function (ctx) {
-    var lang = ctx.lang, wanted = wantedList(ctx.inputs.playerName), started = Date.now()
-    var files = host.files.list().slice(0, MAX_FILES)               // du plus récent au plus ancien
-    var cache = loadCache(), next = {}, fresh = 0, skipped = 0, failed = 0
-    var parsed = []
+    var lang = ctx.lang, wanted = wantedList(ctx.inputs.playerName)
+    var files = host.files.list()                                       // tout le dossier, du plus récent au plus ancien
+    var cache = loadCache(), next = {}, fresh = 0, failed = 0, backlog = 0, items = [], unknown = {}
+    var started = Date.now()                                            // le budget ne compte que la lecture des replays
     for (var i = 0; i < files.length; i++) {
       var f = files[i], key = f.name + '|' + f.size + '|' + f.mtime
       var c = cache[key]
-      if (!c || c.v !== CACHE_V) {
-        if (fresh >= MAX_NEW || Date.now() - started > BUDGET_MS) {
-          skipped++
-          if (c) { next[key] = c; if (!c.bad) parsed.push({ file: f, c: c }) }   // ancienne entrée gardée telle quelle en attendant
-          continue
-        }
-        fresh++
-        try { c = compact(parseReplay(host.files.readBytes(f.name))) } catch (e) { failed++; host.log('Illisible : ' + f.name + ' — ' + (e && e.message ? e.message : e)); next[key] = { bad: 1, v: CACHE_V }; continue }
+      if (c && c.v === CACHE_V) { next[key] = c; continue }
+      if (fresh >= MAX_NEW || Date.now() - started > BUDGET_MS) { backlog++; continue }
+      fresh++
+      try {
+        var full = compact(parseReplay(host.files.readBytes(f.name))), a = analyse(full, wanted, lang)
+        full.n.forEach(function (n) { if (!LEGENDS[n[2]]) unknown[n[2]] = true })
+        // Le cache ne garde qu'un résumé par partie ; le détail part tout de suite dans WaveDash, qui le conserve.
+        next[key] = { v: CACHE_V, t: f.mtime, s: a.me ? [a.won === null ? -1 : a.won ? 1 : 0, a.taken, a.lost, Math.round(a.dur * 1000), a.apm === null ? -1 : Math.round(a.apm * 10)] : 0 }
+        if (a.me) items.push(buildItem(f, full, a, lang))
+      } catch (e) {
+        failed++; host.log('Illisible : ' + f.name + ' — ' + (e && e.message ? e.message : e)); next[key] = { v: CACHE_V, bad: 1 }
       }
-      next[key] = c
-      if (!c.bad) parsed.push({ file: f, c: c })
     }
-    parsed = parsed.filter(function (x) { return !x.c.bad })
-    // Parties sorties de la fenêtre des MAX_FILES derniers fichiers : leur bilan rejoint une base cumulée,
-    // pour que les totaux et la courbe continuent de monter au lieu de chuter.
-    var base = { games: 0, wins: 0, losses: 0, taken: 0, lost: 0, dur: 0 }
-    try { var b = JSON.parse(host.storage.get('base') || 'null'); if (b && typeof b.games === 'number') base = b } catch (e) { /* base illisible : repart de zéro */ }
-    var baseChanged = false
-    for (var old in cache) {
-      if (next[old] || cache[old].bad) continue
-      var gone = analyse(cache[old], wanted, lang)
-      if (!gone.me) continue
-      base.games++; base.dur += gone.dur; base.taken += gone.taken; base.lost += gone.lost
-      if (gone.won === true) base.wins++; else if (gone.won === false) base.losses++
-      baseChanged = true
-    }
-    saveCache(next)                                                     // le cache d'abord : une coupure ici ne compte jamais deux fois
-    if (baseChanged) host.storage.set('base', JSON.stringify(base))
-    host.log(files.length + ' fichiers, ' + fresh + ' lus, ' + failed + ' illisibles' + (skipped ? ', ' + skipped + ' reportés à la prochaine actualisation' : ''))
-
-    var totals = { games: base.games, wins: base.wins, losses: base.losses, taken: base.taken, lost: base.lost, dur: base.dur }, items = [], history = []
-    var chrono = parsed.slice().sort(function (a, b) { return a.file.mtime - b.file.mtime })
-    var unnamed = 0, apmSum = 0, apmN = 0, unknown = {}
-    chrono.forEach(function (x) {
-      x.c.n.forEach(function (n) { if (!LEGENDS[n[2]]) unknown[n[2]] = true })
-      var a = analyse(x.c, wanted, lang)
-      if (!a.me) { unnamed++; return }                                 // partie où tu n'apparais pas : ignorée
-      totals.games++; totals.dur += a.dur; totals.taken += a.taken; totals.lost += a.lost
-      if (a.won === true) totals.wins++; else if (a.won === false) totals.losses++
-      if (a.apm !== null) { apmSum += a.apm; apmN++ }
-      var decided = totals.wins + totals.losses
-      history.push({ ts: x.file.mtime, metrics: {
-        games: totals.games, wins: totals.wins, losses: totals.losses, winrate: decided ? totals.wins * 100 / decided : 0,
-        stocks_taken: totals.taken, stocks_lost: totals.lost, avg_duration: totals.dur / totals.games } })
-    })
+    saveCache(next)
+    if (host.storage.get('base')) host.storage.set('base', '')            // base cumulée des versions 1.0.x : plus utile
+    host.log(files.length + ' fichiers, ' + fresh + ' lus, ' + failed + ' illisibles' + (backlog ? ', ' + backlog + ' encore à lire' : ''))
     var unknownIds = Object.keys(unknown)
     if (unknownIds.length) host.log('Légende inconnue (' + unknownIds.map(function (k) { return '#' + k }).join(', ') + ') : nouvelle légende ? Mets à jour le plugin.')
-    if (unnamed) host.log(unnamed + ' parties sans ton pseudo (« ' + wanted.join(', ') + ' ») ignorées')
-    parsed.forEach(function (x) {                                       // du plus récent au plus ancien
-      if (items.length >= 200) return
-      var a = analyse(x.c, wanted, lang)
-      if (a.me) items.push(buildItem(x.file, x.c, a, lang))
+
+    // Totaux et courbe : toutes les parties lues, dans l'ordre chronologique (date du fichier).
+    var games = [], unnamed = 0
+    for (var k in next) { var e = next[k]; if (e.bad) continue; if (!e.s) { unnamed++; continue } games.push(e) }
+    games.sort(function (x, y) { return x.t - y.t })
+    var T = { games: 0, wins: 0, losses: 0, taken: 0, lost: 0, dur: 0, apm: 0, apmN: 0 }, history = []
+    var step = Math.max(1, Math.ceil(games.length / MAX_POINTS))
+    games.forEach(function (g, idx) {
+      var s = g.s
+      T.games++; T.taken += s[1]; T.lost += s[2]; T.dur += s[3] / 1000
+      if (s[0] === 1) T.wins++; else if (s[0] === 0) T.losses++
+      if (s[4] >= 0) { T.apm += s[4] / 10; T.apmN++ }
+      if (idx % step && idx !== games.length - 1) return                 // au-delà de 5000 parties, un point sur `step`
+      var decided = T.wins + T.losses
+      history.push({ ts: g.t, metrics: { games: T.games, wins: T.wins, losses: T.losses, winrate: decided ? T.wins * 100 / decided : 0,
+        stocks_taken: T.taken, stocks_lost: T.lost, avg_duration: T.dur / T.games } })
     })
-    var decided = totals.wins + totals.losses
-    var metrics = { games: totals.games, wins: totals.wins, losses: totals.losses, stocks_taken: totals.taken, stocks_lost: totals.lost }
-    if (decided) metrics.winrate = totals.wins * 100 / decided
-    if (totals.games) metrics.avg_duration = totals.dur / totals.games
-    if (apmN) metrics.apm = apmSum / apmN                                // moyenne sur les parties lues (la base cumulée n'a pas d'inputs)
-    return { metrics: metrics, items: items, history: history.slice(-5000) }
+    if (unnamed) host.log(unnamed + ' parties sans ton pseudo (« ' + wanted.join(', ') + ' ») ignorées')
+    var decided = T.wins + T.losses
+    var metrics = { games: T.games, wins: T.wins, losses: T.losses, stocks_taken: T.taken, stocks_lost: T.lost }
+    if (decided) metrics.winrate = T.wins * 100 / decided
+    if (T.games) metrics.avg_duration = T.dur / T.games
+    if (T.apmN) metrics.apm = T.apm / T.apmN
+    return { metrics: metrics, items: items.slice(0, 200), history: history, backlog: backlog }
   }
 }

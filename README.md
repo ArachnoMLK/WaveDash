@@ -5,7 +5,7 @@ Windows dashboard for your **YouTube, Instagram, TikTok and Brawlhalla** stats.
 
 Electron · React · TypeScript · SQLite · ECharts — style gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
 
-> **Version 0.6.1** — YouTube, Brawlhalla, mode démo, personnalisation avancée, mises à jour automatiques, paliers et notifications, objectifs, export, et **plugins `.wdsh`** exécutés dans un bac à sable isolé (guide : [docs/PLUGINS.md](docs/PLUGINS.md), exemples : `examples/`, dont **Brawlhalla Replays** qui lit tes fichiers `.replay` : légendes, appuis par minute, détail et frise des KOs). À venir : paliers pour les plugins, rivaux Brawlhalla, Instagram, TikTok.
+> **Version 0.6.2** — YouTube, Brawlhalla, mode démo, personnalisation avancée, mises à jour automatiques, paliers et notifications, objectifs, export, et **plugins `.wdsh`** exécutés dans un bac à sable isolé (guide : [docs/PLUGINS.md](docs/PLUGINS.md), exemples : `examples/`, dont **Brawlhalla Replays** qui lit tes fichiers `.replay` : légendes, appuis par minute, détail et frise des KOs). À venir : paliers pour les plugins, rivaux Brawlhalla, Instagram, TikTok.
 >
 > Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit être **public**.
 

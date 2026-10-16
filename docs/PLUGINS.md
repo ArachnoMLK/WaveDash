@@ -44,6 +44,7 @@ Puis dans WaveDash : **Plugins › Installer un plugin** (ou glisse le fichier d
 | `secrets` | jusqu'à 4 valeurs (clés API…) enregistrées **chiffrées** par WaveDash, jamais en clair. |
 | `metrics` | de 1 à 20. `format` : `number` (défaut), `percent`, `rank`, `duration` (secondes → mm:ss). `decimals` de 0 à 4. `primary` : métrique affichée d'abord. |
 | `itemColumns` | colonnes du tableau d'éléments (facultatif). |
+| `itemsMode` | `replace` (défaut) : chaque actualisation remplace la liste d'éléments. `keep` : les éléments renvoyés s'ajoutent à ceux déjà enregistrés (même `id` = mis à jour), jusqu'à 20 000 par compte ; la page les affiche par 50, avec un filtre par mois. Utile pour un historique (une partie par fichier, par exemple). |
 | `refreshMinutes` | délai minimal entre deux actualisations (5 à 1440, 30 par défaut). |
 
 Les textes (`label`, `description`, `help`) sont une chaîne simple ou `{ "fr": "…", "en": "…" }`.
@@ -64,11 +65,14 @@ var plugin = {
     return {
       metrics: { temperature: 17.4 },                       // clés déclarées dans le manifeste
       items:   [{ id: 'a', title: 'Élément', ts: Date.now(), fields: { size_kb: 12 } }],   // facultatif, 200 max
-      history: [{ ts: 1700000000000, metrics: { temperature: 12 } }]                    // facultatif : points passés, 5000 max (voir plus bas)
+      history: [{ ts: 1700000000000, metrics: { temperature: 12 } }],                   // facultatif : points passés, 5000 max (voir plus bas)
+      backlog: 0                                                                         // facultatif : travail restant (voir plus bas)
     }
   }
 }
 ```
+
+**`backlog`** : si le plugin ne peut pas tout traiter en une fois (budget de calcul), il indique ce qui reste (par exemple le nombre de fichiers pas encore lus). Tant que `backlog` est positif, WaveDash le relance 5 s après la fin de l'exécution, sans attendre `refreshMinutes`, et la page affiche la progression.
 
 **`history` fait foi** : pour chaque métrique, les points déjà enregistrés entre le premier point renvoyé et maintenant sont remplacés par ceux-ci. Un plugin qui complète des données passées (par exemple des fichiers lus en plusieurs fois) corrige ainsi les valeurs calculées avant ; les points plus anciens ne sont pas touchés.
 
@@ -92,7 +96,7 @@ detail: {
 | `await host.http(url, { method, headers, body })` | Requête HTTPS vers un domaine déclaré. Renvoie `{ status, ok, headers, text, json() }`. |
 | `host.log(...)` / `console.log(...)` | Journal visible dans la page du plugin (100 lignes max). |
 | `host.storage.get(clé)` / `.set(clé, texte)` | Mémoire persistante par compte (100 clés, 64 Ko par valeur) : utile pour ne retraiter que les nouveautés. |
-| `host.files.list()` | Les 2000 fichiers les plus récents du dossier choisi, du plus récent au plus ancien : `[{ name, size, mtime }]` (permission `folder`). |
+| `host.files.list()` | Les 20 000 fichiers les plus récents du dossier choisi, du plus récent au plus ancien : `[{ name, size, mtime }]` (permission `folder`). |
 | `host.files.readText(nom)` / `.readBytes(nom)` | Contenu d'un fichier (texte, ou `Uint8Array`). 8 Mo max par fichier. |
 
 Le reste n'existe pas : ni `fetch`, ni `require`, ni `process`, ni `setTimeout`, ni accès au disque en dehors de `host.files`.
@@ -120,9 +124,9 @@ La page d'un compte de plugin affiche l'erreur de la dernière actualisation et 
 
 ## Plugin fourni : Brawlhalla Replays
 
-`examples/brawlhalla-replays-1.1.0.wdsh` lit les fichiers `.replay` d'un dossier (permission `folder`, aucun réseau) : parties, victoires/défaites, taux de victoire, stocks pris/perdus, durée moyenne, appuis par minute, et pour chaque partie un détail (joueurs, équipes, légendes, place, stocks perdus, attaques légères/lourdes, esquives, appuis par minute) avec une frise des KOs.
+`examples/brawlhalla-replays-1.2.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier (permission `folder`, aucun réseau) : parties, victoires/défaites, taux de victoire, stocks pris/perdus, durée moyenne, appuis par minute, et pour chaque partie un détail (joueurs, équipes, légendes, place, stocks perdus, attaques légères/lourdes, esquives, appuis par minute) avec une frise des KOs.
 
-Il décompresse le fichier lui-même (inflate en JavaScript) dans le bac à sable et garde les parties déjà lues en cache : environ 55 ms par nouveau replay dans WaveDash, au plus 60 nouveaux replays ou 4 s de lecture par actualisation (le reste suit aux suivantes). Il suit les 400 replays les plus récents ; une partie qui sort de cette fenêtre reste comptée dans les totaux (sauf pour les appuis par minute, moyennés sur les parties en cache). Le pseudo accepte plusieurs noms séparés par des virgules (utile après un changement de pseudo).
+Toutes les parties du dossier comptent : les totaux, la courbe (datée par la date de chaque fichier) et la liste des parties remontent jusqu'au plus ancien replay. Le plugin décompresse lui-même chaque fichier (inflate en JavaScript à tables de décodage, vérifié identique à zlib sur 9012 fichiers) dans le bac à sable : environ 50 ms par replay dans WaveDash, 2 s de lecture par exécution. À la première installation, il signale le reste (`backlog`) et WaveDash le relance toutes les quelques secondes : environ 20 à 30 minutes pour 9000 replays, une seule fois. Ensuite, seuls les nouveaux fichiers sont lus. Le cache ne garde qu'un résumé de chaque partie (environ 100 octets) ; le détail est envoyé une fois à WaveDash, qui le conserve (`itemsMode: keep`). Le pseudo accepte plusieurs noms séparés par des virgules (utile après un changement de pseudo). Pendant une exécution, le plugin occupe le processus principal de WaveDash : l'interface peut répondre avec un peu de retard pendant le rattrapage.
 
 ### Ce qui est vérifié, ce qui ne l'est pas
 

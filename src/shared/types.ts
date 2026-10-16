@@ -199,7 +199,7 @@ export interface AppInfo { version: string; nativeGlass: boolean; encryptionAvai
 
 export type SecretKey = 'youtube.apiKey' | 'brawlhalla.apiKey'
 
-import type { InstalledPlugin, PluginAccount, PluginInspect, PluginItem } from './plugin'
+import type { InstalledPlugin, PluginAccount, PluginInspect, PluginItemsPage } from './plugin'
 
 /** Valeurs de métriques par clé : les plugins définissent leurs propres clés. */
 export type RawMetrics = Record<string, number>
@@ -243,7 +243,8 @@ export interface WaveApi {
   pluginAccountAdd(pluginId: string, inputs: Record<string, string>): Promise<{ ok: boolean; error?: string; detail?: string }>
   pluginAccountRemove(accountId: number): Promise<void>
   pluginAccountRefresh(accountId: number): Promise<void>
-  pluginAccountData(accountId: number): Promise<{ items: PluginItem[]; logs: string[]; error: string | null }>
+  pluginAccountData(accountId: number): Promise<{ logs: string[]; error: string | null; backlog: number }>
+  pluginAccountItems(accountId: number, offset: number, limit: number, month?: string): Promise<PluginItemsPage>
   pluginSecretSet(pluginId: string, key: string, value: string): Promise<boolean>
   pluginSecretDelete(pluginId: string, key: string): Promise<void>
   pickFolder(): Promise<string | null>

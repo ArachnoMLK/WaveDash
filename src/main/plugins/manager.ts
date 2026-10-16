@@ -3,7 +3,7 @@ import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
 import { readFileSync, realpathSync, statSync } from 'fs'
 import {
-  compareVersions, InstalledPlugin, PLUGIN_LIMITS, PluginAccount, PluginInspect, PluginItem, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
+  compareVersions, InstalledPlugin, PLUGIN_LIMITS, PluginAccount, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
 } from '@shared/plugin'
 import * as db from '../db'
 import * as secrets from '../secrets'
@@ -14,6 +14,13 @@ import { readZip, ZipError } from './zip'
 /** Après 5 échecs consécutifs, le plugin est désactivé pour ne pas s'exécuter en boucle. */
 const MAX_FAILURES = 5
 const MAX_STORAGE_KEYS = 100
+/** Délai avant de relancer un plugin qui signale du travail restant (`backlog`). */
+const CATCH_UP_MS = 5_000
+
+let notify: () => void = () => {}
+/** Appelé quand un rattrapage en arrière-plan a enregistré de nouvelles données (pour rafraîchir l'interface). */
+export const setPluginNotifier = (f: () => void): void => { notify = f }
+const running = new Set<number>(), catchUps = new Map<number, NodeJS.Timeout>()
 
 const secretKey = (pluginId: string, key: string): `plugin:${string}:${string}` => `plugin:${pluginId}:${key}`
 
@@ -181,7 +188,10 @@ export function removePluginAccount(accountId: number): void {
 export async function refreshPluginAccount(accountId: number): Promise<void> {
   const pa = db.getPluginAccountRow(accountId)
   const row = pa && db.getPluginRow(pa.plugin_id)
-  if (!pa || !row || !row.enabled) return
+  if (!pa || !row || !row.enabled || running.has(accountId)) return
+  running.add(accountId)
+  const t = catchUps.get(accountId)
+  if (t) { clearTimeout(t); catchUps.delete(accountId) }
   try {
     const manifest = loadManifest(row)
     const inputs = JSON.parse(pa.inputs) as Record<string, string>
@@ -190,7 +200,10 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
     if (!Object.keys(result.metrics).length && !result.history.length) throw new PluginError('invalid_result', 'Aucune métrique déclarée n’a été renvoyée')
     db.insertHistory(accountId, result.history)
     db.insertSnapshots(accountId, result.metrics)
-    db.setMeta(accountId, 'items', JSON.stringify(result.items))
+    db.savePluginItems(accountId, result.items, manifest.itemsMode)
+    db.setMeta(accountId, 'backlog', String(result.backlog))
+    // Travail restant (ex. fichiers pas encore lus) : on relance bientôt, sans attendre la prochaine actualisation.
+    if (result.backlog > 0) catchUps.set(accountId, setTimeout(() => { catchUps.delete(accountId); void refreshPluginAccount(accountId).then(() => notify()) }, CATCH_UP_MS))
     db.setMeta(accountId, 'log', JSON.stringify(run.logs))
     db.setMeta(accountId, 'error', '')
     db.markSync(accountId, null)
@@ -202,6 +215,9 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
     db.markSync(accountId, code)
     const failures = row.failures + 1
     db.setPluginState(row.id, failures, `${code}: ${msgOf(e)}`, failures >= MAX_FAILURES)
+    db.setMeta(accountId, 'backlog', '0')
+  } finally {
+    running.delete(accountId)
   }
 }
 
@@ -217,9 +233,15 @@ export async function refreshAllPlugins(): Promise<void> {
   }
 }
 
-export function pluginAccountData(accountId: number): { items: PluginItem[]; logs: string[]; error: string | null } {
+export function pluginAccountData(accountId: number): { logs: string[]; error: string | null; backlog: number } {
   const parse = <T,>(k: string, fallback: T): T => { try { return JSON.parse(db.getMeta(accountId, k) ?? '') as T } catch { return fallback } }
-  return { items: parse<PluginItem[]>('items', []), logs: parse<string[]>('log', []), error: db.getMeta(accountId, 'error') || null }
+  return { logs: parse<string[]>('log', []), error: db.getMeta(accountId, 'error') || null, backlog: Number(db.getMeta(accountId, 'backlog')) || 0 }
+}
+
+export function pluginAccountItems(accountId: number, offset: number, limit: number, month?: string): PluginItemsPage {
+  const page = Math.min(200, Math.max(1, Math.floor(limit) || 50)), from = Math.max(0, Math.floor(offset) || 0)
+  const m = typeof month === 'string' && /^\d{4}-\d{2}$/.test(month) ? month : undefined
+  return db.listPluginItems(accountId, from, page, m)
 }
 
 /* ---------- Fichier .wdsh reçu à l'ouverture (double-clic) ---------- */

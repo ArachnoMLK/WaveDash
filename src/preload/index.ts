@@ -30,6 +30,7 @@ const api: WaveApi = {
   pluginAccountRemove: (id) => ipcRenderer.invoke('plugins:accountRemove', id),
   pluginAccountRefresh: (id) => ipcRenderer.invoke('plugins:accountRefresh', id),
   pluginAccountData: (id) => ipcRenderer.invoke('plugins:accountData', id),
+  pluginAccountItems: (id, offset, limit, month) => ipcRenderer.invoke('plugins:accountItems', id, offset, limit, month),
   pluginSecretSet: (id, key, value) => ipcRenderer.invoke('plugins:secretSet', id, key, value),
   pluginSecretDelete: (id, key) => ipcRenderer.invoke('plugins:secretDelete', id, key),
   pickFolder: () => ipcRenderer.invoke('plugins:pickFolder'),

@@ -252,7 +252,13 @@ const fr = {
   "pp.detail": "Détail",
   "pp.timeline": "Frise des KOs",
   "pp.close": "Fermer",
-  "pp.clickHint": "Clique sur une ligne pour voir le détail."
+  "pp.clickHint": "Clique sur une ligne pour voir le détail.",
+  "pp.allMonths": "Tous les mois",
+  "pp.month": "Mois",
+  "pp.prev": "Page précédente",
+  "pp.next": "Page suivante",
+  "pp.pageOf": "Page {page} / {pages}",
+  "pp.backlog": "Lecture des données passées en cours : encore {count} à traiter. La page se met à jour toute seule."
 }
 const en: typeof fr = {
   'nav.overview': 'Overview', 'nav.settings': 'Settings',
@@ -505,7 +511,13 @@ const en: typeof fr = {
   "pp.detail": "Detail",
   "pp.timeline": "KO timeline",
   "pp.close": "Close",
-  "pp.clickHint": "Click a row to see the detail."
+  "pp.clickHint": "Click a row to see the detail.",
+  "pp.allMonths": "All months",
+  "pp.month": "Month",
+  "pp.prev": "Previous page",
+  "pp.next": "Next page",
+  "pp.pageOf": "Page {page} / {pages}",
+  "pp.backlog": "Reading past data: {count} still to process. This page updates on its own."
 }
 
 export type TKey = keyof typeof fr

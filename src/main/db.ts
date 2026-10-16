@@ -5,6 +5,7 @@ import { join } from 'path'
 import {
   Account, DEFAULT_SETTINGS, ItemStat, LatestMetrics, LegendStat, MetricKey, MilestoneEvent, Platform, Point, Settings
 } from '@shared/types'
+import { PLUGIN_LIMITS, PluginItem, PluginItemsPage } from '@shared/plugin'
 
 let db: Database.Database
 
@@ -67,7 +68,19 @@ export function initDb(): void {
       account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL,
       PRIMARY KEY (account_id, key)
     );
+    -- Éléments renvoyés par un plugin (JSON déjà validé), consultés page par page.
+    CREATE TABLE IF NOT EXISTS plugin_items (
+      account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, item_id TEXT NOT NULL, ts INTEGER NOT NULL, data TEXT NOT NULL,
+      PRIMARY KEY (account_id, item_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_plugin_items ON plugin_items(account_id, ts);
   `)
+  // Migration 0.6.2 : les éléments de plugin étaient un seul JSON dans account_meta.
+  const old = db.prepare("SELECT account_id, value FROM account_meta WHERE key = 'items'").all() as { account_id: number; value: string }[]
+  for (const o of old) {
+    try { savePluginItems(o.account_id, JSON.parse(o.value) as PluginItem[], 'replace') } catch { /* JSON illisible : ignoré */ }
+    db.prepare("DELETE FROM account_meta WHERE account_id = ? AND key = 'items'").run(o.account_id)
+  }
   // Migration : la table milestone_events (créée en 0.1) reçoit une colonne pour le détail JSON.
   const cols = db.prepare('PRAGMA table_info(milestone_events)').all() as { name: string }[]
   if (!cols.some((c) => c.name === 'detail')) db.exec('ALTER TABLE milestone_events ADD COLUMN detail TEXT')
@@ -276,4 +289,31 @@ export function insertHistory(accountId: number, points: { ts: number; metrics: 
     for (const [m, [a, b]] of Object.entries(span)) del.run(accountId, m, a, Math.max(b, now))
     for (const p of points) for (const [m, v] of Object.entries(p.metrics)) ins.run(accountId, m, p.ts, v)
   })()
+}
+
+/* ---------- Éléments de plugin ---------- */
+/** `replace` : la liste remplace l'ancienne. `keep` : ajout ou mise à jour par identifiant, au plus `maxStoredItems` (les plus récents). */
+export function savePluginItems(accountId: number, items: PluginItem[], mode: 'replace' | 'keep'): void {
+  const up = db.prepare('INSERT INTO plugin_items VALUES (?,?,?,?) ON CONFLICT(account_id, item_id) DO UPDATE SET ts = excluded.ts, data = excluded.data')
+  db.transaction(() => {
+    if (mode === 'replace') db.prepare('DELETE FROM plugin_items WHERE account_id = ?').run(accountId)
+    for (const it of items) up.run(accountId, it.id, it.ts ?? 0, JSON.stringify(it))
+    if (mode === 'keep') db.prepare(`DELETE FROM plugin_items WHERE account_id = ? AND item_id NOT IN
+      (SELECT item_id FROM plugin_items WHERE account_id = ? ORDER BY ts DESC LIMIT ?)`).run(accountId, accountId, PLUGIN_LIMITS.maxStoredItems)
+  })()
+}
+
+const MONTH = "strftime('%Y-%m', ts / 1000, 'unixepoch', 'localtime')"
+
+/** Une page d'éléments, du plus récent au plus ancien, éventuellement limitée à un mois (AAAA-MM). */
+export function listPluginItems(accountId: number, offset: number, limit: number, month?: string): PluginItemsPage {
+  const where = month ? `account_id = ? AND ts > 0 AND ${MONTH} = ?` : 'account_id = ?'
+  const args: (number | string)[] = month ? [accountId, month] : [accountId]
+  const rows = db.prepare(`SELECT data FROM plugin_items WHERE ${where} ORDER BY ts DESC, item_id LIMIT ? OFFSET ?`).all(...args, limit, offset) as { data: string }[]
+  const total = (db.prepare(`SELECT COUNT(*) AS n FROM plugin_items WHERE ${where}`).get(...args) as { n: number }).n
+  const months = db.prepare(`SELECT ${MONTH} AS month, COUNT(*) AS count FROM plugin_items WHERE account_id = ? AND ts > 0 GROUP BY month ORDER BY month DESC`)
+    .all(accountId) as { month: string; count: number }[]
+  const items: PluginItem[] = []
+  for (const r of rows) { try { items.push(JSON.parse(r.data) as PluginItem) } catch { /* ligne illisible ignorée */ } }
+  return { items, total, months }
 }

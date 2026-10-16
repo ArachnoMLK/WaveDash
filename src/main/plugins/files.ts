@@ -10,7 +10,7 @@ const extOk = (name: string, exts: string[]): boolean => exts.length === 0 || ex
 
 /** Les `max` fichiers les plus récents. Le tri se fait sur tout le dossier (jusqu'à `scan` fichiers examinés) :
  *  couper avant de trier rendrait des fichiers pris au hasard de l'ordre alphabétique, pas les derniers. */
-export function listFiles(a: FolderAccess, max = 2000, scan = 50_000): FileEntry[] {
+export function listFiles(a: FolderAccess, max = 20_000, scan = 50_000): FileEntry[] {
   const out: FileEntry[] = []
   let seen = 0
   for (const name of readdirSync(a.dir)) {

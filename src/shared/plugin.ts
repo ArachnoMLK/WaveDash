@@ -34,10 +34,13 @@ export interface PluginManifest {
   secrets: PluginSecret[]
   metrics: PluginMetric[]
   itemColumns: PluginColumn[]
+  /** `replace` (défaut) : chaque actualisation remplace la liste d'éléments. `keep` : les éléments s'ajoutent et sont
+   *  conservés (même `id` = mis à jour), pour garder un historique, par exemple une partie par fichier lu. */
+  itemsMode: 'replace' | 'keep'
   refreshMinutes: number
 }
 
-export const PLUGIN_LIMITS = { maxArchive: 5 * 1024 * 1024, maxScript: 1024 * 1024, maxItems: 200, maxHistory: 5000 }
+export const PLUGIN_LIMITS = { maxArchive: 5 * 1024 * 1024, maxScript: 1024 * 1024, maxItems: 200, maxHistory: 5000, maxStoredItems: 20000 }
 
 const ID_RE = /^[a-z0-9][a-z0-9._-]{2,63}$/
 const KEY_RE = /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/
@@ -134,10 +137,13 @@ export function validateManifest(raw: unknown): Result {
     itemColumns.push({ key: c.key, label, unit: typeof c.unit === 'string' ? c.unit.slice(0, 8) : undefined })
   }
 
+  const itemsMode = m.itemsMode === undefined ? 'replace' : m.itemsMode
+  if (itemsMode !== 'replace' && itemsMode !== 'keep') return fail('itemsMode')
+
   const refresh = typeof m.refreshMinutes === 'number' && Number.isFinite(m.refreshMinutes) ? Math.min(1440, Math.max(5, Math.round(m.refreshMinutes))) : 30
   return { ok: true, manifest: { wdsh: 1, id: m.id, name: m.name.trim(), version: m.version, author, description, minAppVersion: m.minAppVersion as string | undefined, entry,
     permissions: { network: network as string[], folder, folderExtensions: (exts as string[]).map((e) => e.toLowerCase()) },
-    inputs, secrets, metrics, itemColumns, refreshMinutes: refresh } }
+    inputs, secrets, metrics, itemColumns, itemsMode, refreshMinutes: refresh } }
 }
 
 /* ---------- Résultats renvoyés par un plugin ---------- */
@@ -152,6 +158,8 @@ export interface PluginRunResult {
   metrics: Record<string, number>
   items: PluginItem[]
   history: { ts: number; metrics: Record<string, number> }[]
+  /** Travail restant signalé par le plugin (ex. fichiers pas encore lus) : s'il est positif, WaveDash relance le plugin peu après. */
+  backlog: number
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e15 ? v : null)
@@ -184,7 +192,7 @@ export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
 }
 
 export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.now()): PluginRunResult {
-  const out: PluginRunResult = { metrics: {}, items: [], history: [] }
+  const out: PluginRunResult = { metrics: {}, items: [], history: [], backlog: 0 }
   if (!raw || typeof raw !== 'object') return out
   const r = raw as Record<string, unknown>
   const keys = new Set(m.metrics.map((x) => x.key))
@@ -194,6 +202,8 @@ export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.no
     return o
   }
   out.metrics = pickMetrics(r.metrics)
+  const backlog = num(r.backlog)
+  out.backlog = backlog !== null && backlog > 0 ? Math.min(1e7, Math.floor(backlog)) : 0
   const cols = new Set(m.itemColumns.map((c) => c.key))
   if (Array.isArray(r.items)) {
     for (const it of r.items.slice(0, PLUGIN_LIMITS.maxItems) as Record<string, unknown>[]) {
@@ -225,6 +235,13 @@ export function sanitizeResolveResult(raw: unknown): { externalId: string; displ
 }
 
 /* ---------- Types échangés avec l'interface ---------- */
+export interface PluginItemsPage {
+  items: PluginItem[]
+  /** Nombre d'éléments correspondant au filtre. */
+  total: number
+  /** Mois disponibles (AAAA-MM, heure locale), du plus récent au plus ancien, avec leur nombre d'éléments. */
+  months: { month: string; count: number }[]
+}
 export interface InstalledPlugin {
   id: string
   manifest: PluginManifest
