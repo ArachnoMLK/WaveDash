@@ -264,7 +264,6 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
     db.markSync(accountId, code)
     const failures = row.failures + 1
     db.setPluginState(row.id, failures, `${code}: ${msgOf(e)}`, failures >= MAX_FAILURES)
-    db.setMeta(accountId, 'backlog', '0')
   } finally {
     running.delete(accountId)
   }
@@ -277,7 +276,9 @@ export async function refreshAllPlugins(): Promise<void> {
     if (!row || !row.enabled) continue
     let minutes = 30
     try { minutes = loadManifest(row).refreshMinutes } catch { continue }
-    if (pa.last_sync_at && Date.now() - pa.last_sync_at < minutes * 60_000 * 0.9) continue
+    // Un compte qui a encore du retard (backlog) est relancé même s'il vient d'être actualisé (ex. après un redémarrage).
+    const behind = Number(db.getMeta(pa.account_id, 'backlog')) > 0
+    if (!behind && pa.last_sync_at && Date.now() - pa.last_sync_at < minutes * 60_000 * 0.9) continue
     await refreshPluginAccount(pa.account_id)
   }
 }
