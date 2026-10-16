@@ -19,7 +19,7 @@ function runner(id: string, dir: string, inputs: Record<string, string>) {
   const run = async (fn: RunRequest['fn'], extra: Partial<RunRequest['ctx']> = {}): Promise<unknown> => { const r = await runPlugin({
     manifest: m, script, fn, ctx: { inputs, secrets: {}, lang: 'fr', account: { externalId: 'x', displayName: 'x' }, ...extra },
     storage: { get: (k) => store.get(k) ?? null, set: (k, v) => { if (!/^[\w.-]{1,64}$/.test(k)) throw new Error('clé'); if (!store.has(k) && store.size >= 100) throw new Error('trop de clés'); store.set(k, v) } },
-    folder: { dir, extensions: m.permissions.folderExtensions }
+    folder: { dir, extensions: m.permissions.folderExtensions }, limits: { cpuMs: 60_000, wallMs: 120_000 }
   }); logs.push(...r.logs); return r.value }
   return Object.assign(run, { logs })
 }
@@ -41,7 +41,8 @@ test('Brawlhalla Replays sur des replays réels', { skip: !existsSync(source) &&
   const run = runner('brawlhalla-replays', dir, { folder: dir, playerName: 'Close' }), { m } = load('brawlhalla-replays')
 
   let r = sanitizeRunResult(await run('refresh'), m), loops = 0
-  while (r.backlog > 0 && loops++ < 20) r = sanitizeRunResult(await run('refresh'), m)
+  // Le plugin lit selon un budget de temps : sur une machine chargée (tests en parallèle), il lui faut plus de passages.
+  while (r.backlog > 0 && loops++ < 100) r = sanitizeRunResult(await run('refresh'), m)
   assert.equal(r.backlog, 0)
   const all = run.logs.join('\n'), failed = [...all.matchAll(/(\d+) illisibles/g)].reduce((s, x) => s + Number(x[1]), 0)
   const ignored = Number(/(\d+) parties sans ton pseudo/.exec([...run.logs].reverse().find((l) => /sans ton pseudo/.test(l)) ?? '')?.[1] ?? 0)
@@ -50,6 +51,10 @@ test('Brawlhalla Replays sur des replays réels', { skip: !existsSync(source) &&
   assert.ok(r.metrics.games > 0)
   assert.ok(r.summary?.tables?.length, 'bilan avec tableaux')
   assert.ok(r.items.length > 0 && r.items.every((i) => i.ts && i.detail), 'chaque partie est datée et détaillée')
+
+  const kinds = new Set(r.items.flatMap((i) => i.detail?.timeline?.events.map((e) => e.kind ?? 'ko') ?? []))
+  assert.ok(kinds.has('ko') && kinds.has('action'), `frise enrichie : ${[...kinds].join(', ')}`)
+  assert.ok(r.items.some((i) => i.detail?.image?.file.endsWith('.jpg')), 'vignette de carte')
 
   const again = sanitizeRunResult(await run('refresh'), m)
   assert.equal(again.metrics.games, r.metrics.games, 'une 2e actualisation ne recompte rien')

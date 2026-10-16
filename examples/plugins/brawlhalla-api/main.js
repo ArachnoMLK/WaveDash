@@ -41,6 +41,19 @@ async function playerId(ctx) {
   return digits
 }
 
+/** Changement de rang 1v1 (Or 5 → Platine 0…) : une notification, dans le sens de l'évolution de l'ELO.
+ *  Le rang précédent est gardé dans le stockage du compte ; le tout premier relevé ne notifie rien. */
+function tierNotice(ctx, ranked, metrics) {
+  if (!ranked || Array.isArray(ranked) || !ranked.tier) return []
+  var tier = String(ranked.tier), prev = host.storage.get('tier'), prevElo = Number(host.storage.get('elo')) || 0
+  host.storage.set('tier', tier); host.storage.set('elo', String(metrics.elo_1v1 || 0))
+  if (!prev || prev === tier) return []
+  var up = (metrics.elo_1v1 || 0) >= prevElo
+  return [{ id: 'tier:' + Date.now(), title: tier, direction: up ? 'up' : 'down',
+    text: up ? t(ctx.lang, 'Nouveau rang : ' + tier + ' (avant : ' + prev + ').', 'New rank: ' + tier + ' (was: ' + prev + ').')
+             : t(ctx.lang, 'Rang perdu : ' + tier + ' (avant : ' + prev + ').', 'Rank lost: ' + tier + ' (was: ' + prev + ').') }]
+}
+
 var plugin = {
   resolve: async function (ctx) {
     var id = await playerId(ctx), stats = await get(ctx, '/player/' + id + '/stats')
@@ -88,6 +101,6 @@ var plugin = {
       tables: teams && teams.length ? [{ title: t(lang, 'Équipes 2v2', '2v2 teams'), columns: [t(lang, 'Équipe', 'Team'), 'ELO', t(lang, 'Max', 'Peak'), t(lang, 'Parties', 'Games'), t(lang, 'Victoires', 'Wins')],
         rows: teams.slice(0, 20).map(function (x) { return [fixName(x.teamname), num(x.rating), num(x.peak_rating), num(x.games), num(x.wins)] }) }] : undefined
     }
-    return { metrics: metrics, items: items, summary: summary }
+    return { metrics: metrics, items: items, summary: summary, notices: tierNotice(ctx, ranked, metrics) }
   }
 }

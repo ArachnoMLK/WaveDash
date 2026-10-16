@@ -3,7 +3,7 @@ import { Notification } from 'electron'
 import { DEFAULT_TEMPLATES, METRIC_NAMES, PLATFORM_NAMES, renderTemplate, templateVars } from '@shared/labels'
 import { crossedDown, crossedUp, getPluginRule, getRule, MILESTONE_METRICS, pluginMilestoneMetrics } from '@shared/milestones'
 import { Account, LatestMetrics, MilestoneEvent, ProviderResult, Settings, TemplateKey } from '@shared/types'
-import { loc, PluginManifest } from '@shared/plugin'
+import { loc, PluginManifest, PluginNotice } from '@shared/plugin'
 import * as db from './db'
 
 let emit: (e: MilestoneEvent) => void = () => {}
@@ -87,10 +87,30 @@ export function processPluginRefresh(accountId: number, account: string, m: Plug
     const threshold = up ?? down
     if (threshold === null) continue
     const text = s.notifyTemplates[up !== null ? 'up' : 'down']?.trim() || DEFAULT_TEMPLATES[s.lang][up !== null ? 'up' : 'down']
-    const e = { accountId, platform: 'plugin' as const, source: m.name, account, metric: metric.key, threshold, previous: from, value: to,
+    const e = { accountId, platform: 'plugin' as const, source: m.name, account, metric: metric.key, label: loc(metric.label, s.lang), threshold, previous: from, value: to,
       direction: (up !== null ? 'up' : 'down') as 'up' | 'down', ts, demo: false }
     const event: MilestoneEvent = { ...e, id: 0, message: renderTemplate(text, templateVars({ platform: m.name, stat: loc(metric.label, s.lang), value: fmtNum(to, s),
       threshold: fmtNum(threshold, s), previous: fmtNum(from, s), account, rank: '', oldRank: '' })) }
+    event.id = db.insertEvent(event)
+    deliver(s, event)
+  }
+}
+
+/** Notifications envoyées par un plugin (ex. nouveau rang) : chaque `id` n'est envoyé qu'une fois par compte ; le réglage
+ *  « Notifications du plugin » peut les couper. Enregistrées dans l'historique comme les paliers. */
+export function processPluginNotices(accountId: number, account: string, m: PluginManifest, notices: PluginNotice[]): void {
+  if (!notices.length) return
+  const s = db.getSettings()
+  let seen: string[] = []
+  try { seen = JSON.parse(db.getMeta(accountId, 'notices') ?? '[]') as string[] } catch { seen = [] }
+  const fresh = notices.filter((n) => !seen.includes(n.id))
+  if (!fresh.length) return
+  db.setMeta(accountId, 'notices', JSON.stringify([...seen, ...fresh.map((n) => n.id)].slice(-200)))
+  if (s.pluginNotices[m.id] === false) return
+  const ts = Date.now()
+  for (const n of fresh) {
+    const event: MilestoneEvent = { id: 0, accountId, platform: 'plugin', source: m.name, account, metric: 'notice', threshold: 0, previous: 0, value: 0,
+      direction: n.direction, ts, toRank: n.title, message: n.text, demo: false }
     event.id = db.insertEvent(event)
     deliver(s, event)
   }

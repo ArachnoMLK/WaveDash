@@ -83,7 +83,7 @@ test('détail : tailles bornées, types contrôlés', () => {
     grids: [{ rows: ['a'], cols: ['b'], values: [['x']] }],
     series: [{ step: 0, lines: [] }, { step: 60, lines: [{ name: 'l', values: Array(2000).fill(1) }] }],
     bars: [{ categories: ['a', 'b'], series: [{ name: 's', values: [1] }] }],
-    timeline: { duration: 100, lanes: ['x'], events: [{ t: 5, lane: 0 }, { t: 5, lane: 3 }, { t: -1, lane: 0 }] },
+    timeline: { duration: 100, lanes: ['x'], events: [{ t: 5, lane: 0, kind: 'action' }, { t: 5, lane: 3 }, { t: -1, lane: 0 }, { t: 6, lane: 0, kind: 'boum' }] },
     script: '<script>'
   })!
   assert.equal(d.chips!.length, L.chips)
@@ -94,7 +94,7 @@ test('détail : tailles bornées, types contrôlés', () => {
   assert.equal(d.series!.length, 1)
   assert.equal(d.series![0].lines[0].values.length, L.points)
   assert.deepEqual(d.bars![0].series[0].values, [1, 0])
-  assert.equal(d.timeline!.events.length, 1)
+  assert.deepEqual(d.timeline!.events.map((e) => e.kind), ['action', undefined])
   assert.equal((d as Record<string, unknown>).script, undefined)
   assert.equal(sanitizeDetail({}), undefined)
   assert.equal(sanitizeDetail('x'), undefined)

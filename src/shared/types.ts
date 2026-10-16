@@ -1,8 +1,9 @@
 // Types partagés entre le processus principal, le preload et l'interface.
 
-// Brawlhalla (API officielle) est un plugin depuis la 1.0.1 : les plateformes intégrées ne sont plus que celles-ci.
-export type Platform = 'youtube' | 'instagram' | 'tiktok'
-export const PLATFORMS: Platform[] = ['youtube', 'instagram', 'tiktok']
+// Seul YouTube reste intégré : Brawlhalla (1.0.1), TikTok et le reste passent par des plugins ; Instagram n'a pas d'API
+// pour les comptes personnels (retiré en 1.1.0, il n'affichait que « bientôt disponible »).
+export type Platform = 'youtube'
+export const PLATFORMS: Platform[] = ['youtube']
 /** Plateformes dont le fournisseur est livré dans cette version. */
 export const AVAILABLE_PLATFORMS: Platform[] = ['youtube']
 
@@ -15,9 +16,7 @@ export type MetricKey =
   | 'subscribers' | 'views' | 'likes' | 'comments' | 'videos'
 
 export const METRICS_BY_PLATFORM: Record<Platform, MetricKey[]> = {
-  youtube: ['subscribers', 'views', 'likes', 'comments', 'videos'],
-  instagram: ['subscribers', 'likes', 'comments'],
-  tiktok: ['subscribers', 'views', 'likes']
+  youtube: ['subscribers', 'views', 'likes', 'comments', 'videos']
 }
 
 export interface Account {
@@ -76,8 +75,10 @@ export interface MilestoneEvent {
   platform: Platform | 'plugin'
   source?: string
   account: string
-  /** Une métrique, ou 'rank' pour un changement de rang. */
+  /** Une métrique, 'rank' pour un changement de rang, ou 'notice' pour une notification envoyée par un plugin. */
   metric: string
+  /** Nom lisible de la métrique (paliers des plugins) ; sinon traduit d'après `metric`. */
+  label?: string
   threshold: number
   previous: number
   value: number
@@ -159,6 +160,8 @@ export interface Settings {
   navHidden: string[]
   /** Noms personnalisés des onglets (identifiant d'onglet → nom) ; absent = nom par défaut. */
   navLabels: Record<string, string>
+  /** Notifications envoyées par les plugins : false = coupées pour ce plugin (identifiant → activé). */
+  pluginNotices: Record<string, boolean>
   themePresets: Record<string, ThemeData>
 }
 
@@ -178,7 +181,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bgMode: 'default', bgColor: '#101010', bgColor2: '#2a2a2a', bgAngle: 160, bgBlur: 8, bgDim: 35, ambient: true,
   accentEnabled: false, accentColor: '#8ab4ff', chartPalette: 'multi',
   radius: 18, density: 'comfortable', uiScale: 100, fontFamily: 'inter', animations: 60,
-  bgImage: null, navOrder: ['overview', 'goals', 'youtube', 'instagram', 'tiktok'], navHidden: [], navLabels: {}, themePresets: {},
+  bgImage: null, navOrder: ['overview', 'goals', 'youtube'], navHidden: [], navLabels: {}, pluginNotices: {}, themePresets: {},
   notificationsEnabled: true, notifyRank: true, notifySound: true, notifySoundKind: 'chime', notifyVolume: 60,
   notifyCelebration: true, notifyTemplates: {}, milestoneRules: {}
 }

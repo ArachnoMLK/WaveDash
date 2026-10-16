@@ -5,7 +5,7 @@ Windows dashboard for your **YouTube, Brawlhalla, TikTok, Discord** stats, and a
 
 Electron · React · TypeScript · SQLite · ECharts — gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
 
-> **Version 1.0.1**
+> **Version 1.1.0**
 >
 > Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit rester **public**.
 
@@ -27,11 +27,12 @@ Un plugin ajoute une source de données. Il tourne dans un **bac à sable QuickJ
 - **Catalogue en ligne** ([WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins)) : index **signé** (Ed25519), chaque paquet vérifié par SHA-256, mises à jour silencieuses seulement si les permissions ne changent pas.
 - **Plugins fournis** (`examples/plugins/`) :
   - **Brawlhalla (API officielle)** : ELO, classements, victoires et légendes avec ta clé Blue Mammoth Games (remplace l'ancienne plateforme intégrée).
-  - **Brawlhalla Replays** : lit et importe tes fichiers `.replay` (patchs 10.02 à 11.00). Bilan par légende, arme, carte, mode, coéquipier et adversaire, détail de chaque partie, recherche d'un joueur, d'une carte ou d'une légende, et outil « Croiser tes données » (ex. « Légendes × Modes avec Untel »).
+  - **Brawlhalla Replays** : lit et importe tes fichiers `.replay` (patchs 10.02 à 11.00). Bilan par légende, arme, carte, mode, coéquipier et adversaire ; aperçu de chaque partie avec la vignette de la carte (prise dans ton jeu installé) et une frise des KOs, lancers et provocations ; recherche d'un joueur, d'une carte ou d'une légende, et outil « Croiser tes données » (ex. « Légendes × Modes avec Untel »).
   - **TikTok (profil public)** : abonnés, likes, vidéos depuis la page publique du profil.
   - **Discord (serveurs)** : membres, en ligne, boosts et activité des salons via un bot (API officielle).
   - **Météo** et **Statistiques de dossier** : exemples simples pour écrire son propre plugin.
 - Pages de plugin modulables : modules à réduire, déplacer, masquer ; tableaux triables ; cartes de chaleur.
+- Paliers réglables pour chaque métrique de plugin, et notifications envoyées par les plugins (ex. changement de rang Brawlhalla).
 
 ### Installer
 Télécharge `WaveDash-Setup-x.y.z.exe` dans l'onglet **Releases**. L'installateur n'est **pas signé** : SmartScreen affiche « éditeur inconnu » au premier lancement (« Informations complémentaires » › « Exécuter quand même »).

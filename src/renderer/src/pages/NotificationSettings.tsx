@@ -110,9 +110,14 @@ export function NotificationSettings(): JSX.Element {
             {MILESTONE_METRICS[p].map((m) => <RuleEditor key={ruleKey(p, m)} rk={ruleKey(p, m)} label={t(`metric.${m}`)} rule={getRule(s.milestoneRules, p, m)} />)}
           </div>
         ))}
-        {plugins.filter((pl) => pluginMilestoneMetrics(pl.manifest).length).map((pl) => (
+        {plugins.filter((pl) => pluginMilestoneMetrics(pl.manifest).length || pl.manifest.notices).map((pl) => (
           <div key={pl.id} style={{ marginTop: 12 }}>
             <h2 className="muted small" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>{pl.manifest.name}</h2>
+            {pl.manifest.notices && (
+              <Row title={t('notif.pluginNotices')} help={t('notif.pluginNotices.help')}>
+                <Switch on={s.pluginNotices[pl.id] !== false} label={t('notif.pluginNotices')} onChange={(v) => void up({ pluginNotices: { ...s.pluginNotices, [pl.id]: v } })} />
+              </Row>
+            )}
             {pluginMilestoneMetrics(pl.manifest).map((m) => (
               <RuleEditor key={pluginRuleKey(pl.id, m.key)} rk={pluginRuleKey(pl.id, m.key)} label={loc(m.label, s.lang)} rule={getPluginRule(s.milestoneRules, pl.id, m)} />
             ))}

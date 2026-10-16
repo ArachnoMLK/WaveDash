@@ -8,7 +8,7 @@ import { applySystemSettings, materialFor, solidBackground } from './system'
 import { setPendingFile, syncBundledPlugins } from './plugins/manager'
 import { initUpdater } from './updater'
 import { stopPluginHost } from './plugins/isolated'
-import { migrateBuiltinBrawlhalla } from './migrations'
+import { migrateBuiltinBrawlhalla, removeSocialPlaceholders } from './migrations'
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -85,7 +85,7 @@ else {
     app.setAppUserModelId('app.wavedash.desktop')   // requis pour les notifications Windows
     initDb()
     try { const up = syncBundledPlugins(); if (up.length) console.log('Plugins mis à jour :', up.join(', ')) } catch (e) { console.error('Plugins fournis :', e) }
-    try { migrateBuiltinBrawlhalla() } catch (e) { console.error('Migration Brawlhalla :', e) }
+    try { migrateBuiltinBrawlhalla(); removeSocialPlaceholders() } catch (e) { console.error('Migrations :', e) }
     createWindow()
     createTray()
     registerIpc(() => win)

@@ -59,6 +59,10 @@ export function sanitizeBackup(raw: unknown): Partial<Settings> {
     out.navLabels = Object.fromEntries(Object.entries(s.navLabels as Record<string, unknown>)
       .filter(([k, v]) => NAV_IDS.includes(k) && typeof v === 'string' && v.trim()).map(([k, v]) => [k, (v as string).trim().slice(0, 40)]))
   }
+  if (s.pluginNotices && typeof s.pluginNotices === 'object') {
+    out.pluginNotices = Object.fromEntries(Object.entries(s.pluginNotices as Record<string, unknown>)
+      .filter(([k, v]) => /^[a-z0-9][a-z0-9._-]{2,63}$/.test(k) && typeof v === 'boolean')) as Record<string, boolean>
+  }
   if (s.themePresets && typeof s.themePresets === 'object') {
     const base: ThemeData = themeFromSettings(DEFAULT_SETTINGS)
     const presets: Record<string, ThemeData> = {}
@@ -75,5 +79,5 @@ export const BACKUP_KEYS: (keyof Settings)[] = [
   'accentEnabled', 'accentColor', 'chartPalette', 'radius', 'density', 'uiScale', 'fontFamily', 'animations',
   'lang', 'refreshMinutes', 'chartTypes', 'scrapingEnabled', 'startWithWindows', 'closeToTray', 'autoUpdate',
   'notificationsEnabled', 'notifyRank', 'notifySound', 'notifySoundKind', 'notifyVolume', 'notifyCelebration', 'notifyTemplates', 'milestoneRules',
-  'navOrder', 'navHidden', 'navLabels', 'themePresets'
+  'navOrder', 'navHidden', 'navLabels', 'pluginNotices', 'themePresets'
 ]

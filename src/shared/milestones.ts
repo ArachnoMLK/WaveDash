@@ -5,9 +5,7 @@ import type { PluginManifest, PluginMetric } from './plugin'
 
 /** Statistiques pour lesquelles on peut définir des paliers. */
 export const MILESTONE_METRICS: Record<Platform, MetricKey[]> = {
-  youtube: ['subscribers', 'views', 'likes', 'comments', 'videos'],
-  instagram: ['subscribers', 'likes', 'comments'],
-  tiktok: ['subscribers', 'views', 'likes']
+  youtube: ['subscribers', 'views', 'likes', 'comments', 'videos']
 }
 
 export const ruleKey = (p: Platform, m: MetricKey): string => `${p}.${m}`

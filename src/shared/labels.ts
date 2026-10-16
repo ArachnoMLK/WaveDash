@@ -1,7 +1,7 @@
 // Libellés utilisés par le processus principal (notifications, rapport PDF) et textes par défaut.
 import { Lang, MetricKey, Platform, TemplateKey } from './types'
 
-export const PLATFORM_NAMES: Record<Platform, string> = { youtube: 'YouTube', instagram: 'Instagram', tiktok: 'TikTok' }
+export const PLATFORM_NAMES: Record<Platform, string> = { youtube: 'YouTube' }
 
 export const METRIC_NAMES: Record<Lang, Record<MetricKey, string>> = {
   fr: { subscribers: 'Abonnés', views: 'Vues', likes: 'Likes', comments: 'Commentaires', videos: 'Vidéos' },

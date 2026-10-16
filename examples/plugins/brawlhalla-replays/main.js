@@ -267,7 +267,8 @@ function parseBuffer(buf) {
 // Indicateurs (d'après BrawlhallaReplayLibrary) : 1 haut, 2 bas, 4 gauche, 8 droite, 16 saut, 32 priorité neutre,
 // 64 attaque lourde, 128 attaque légère, 256 esquive/dash, 512 ramasser/lancer, 1024 à 8192 provocations.
 var BUCKET_MS = 15000
-function newInputs() { return { l: [0, 0, 0], h: [0, 0, 0], g: [0, 0, 0, 0, 0, 0, 0, 0, 0], d: 0, j: 0, t: 0, tt: 0, mv: 0, act: [], prev: 0, last: 0 } }
+// ev : instants (ms) des lancers (0) et provocations (1), 60 au plus par joueur, pour la frise de la partie.
+function newInputs() { return { l: [0, 0, 0], h: [0, 0, 0], g: [0, 0, 0, 0, 0, 0, 0, 0, 0], d: 0, j: 0, t: 0, tt: 0, mv: 0, act: [], ev: [], prev: 0, last: 0 } }
 function dirOf(f) { return f & 2 && !(f & 12) ? 2 : f & 12 ? 1 : 0 }            // 0 neutre, 1 côté, 2 bas (direction tenue)
 function trackInput(a, ts, f) {
   if (a.prev & 12 && ts > a.last) a.mv += ts - a.last                    // temps passé à tenir gauche ou droite
@@ -278,9 +279,9 @@ function trackInput(a, ts, f) {
     if (down & 64) a.h[dirOf(f)]++
     if (down & 256) { a.d++; a.g[(f & 1 ? 0 : f & 2 ? 6 : 3) + (f & 4 && !(f & 8) ? 0 : f & 8 && !(f & 4) ? 2 : 1)]++ }
     if (down & 16) a.j++
-    if (down & 512) a.t++
+    if (down & 512) { a.t++; if (a.ev.length < 60) a.ev.push([ts, 0]) }
   }
-  if (down & 15360) a.tt++
+  if (down & 15360) { a.tt++; if (a.ev.length < 60) a.ev.push([ts, 1]) }
   a.prev = f; a.last = ts
 }
 
@@ -356,7 +357,7 @@ function addPlayers(pl, full, a, t) {
 
 function compact(rep) {
   var ins = {}
-  for (var k in rep.inputs) { var a = rep.inputs[k]; ins[k] = { l: a.l, h: a.h, g: a.g, d: a.d, j: a.j, t: a.t, tt: a.tt, mv: a.mv, act: a.act } }
+  for (var k in rep.inputs) { var a = rep.inputs[k]; ins[k] = { l: a.l, h: a.h, g: a.g, d: a.d, j: a.j, t: a.t, tt: a.tt, mv: a.mv, act: a.act, ev: a.ev } }
   return { n: rep.ents.map(function (e) { return [e.name, e.team, e.heroes[0], e.bot ? 1 : 0, e.id, e.costume, e.stance, e.pid || 0] }), s: rep.scores, k: rep.kos, l: rep.length,
     m: rep.levelId, p: rep.playlist, pid: rep.playlistId, o: rep.online ? 1 : 0, lv: rep.lives, st: rep.settings || [], i: ins, ver: rep.version }
 }
@@ -440,6 +441,24 @@ function teamsTitle(ents) {
 var GRID_ROWS = ['↑', '·', '↓'], GRID_COLS = ['←', '·', '→']
 function grid3(g) { return [g.slice(0, 3), g.slice(3, 6), g.slice(6, 9)] }
 
+/** Frise de la partie : KOs (losanges ; en 1v1, l'auteur est forcément l'adversaire), lancers d'arme et provocations. */
+function timelineOf(c, a, fr) {
+  var laneOf = {}; a.ents.forEach(function (e, i) { laneOf[e.id] = i })
+  var duel = a.ents.length === 2 && !a.sameTeam(a.ents[0], a.ents[1]), events = []
+  c.k.forEach(function (k) {
+    var lane = laneOf[k[0]]; if (lane === undefined) return
+    var by = duel ? a.ents[1 - lane].name : ''
+    events.push({ t: k[1] / 1000, lane: lane, kind: 'ko', label: by ? tr(fr, 'KO par ', 'KO by ') + by : 'KO' })
+  })
+  a.ents.forEach(function (e, lane) {
+    var p = presses(c, e.id)
+    ;((p && p.ev) || []).forEach(function (x) { events.push({ t: x[0] / 1000, lane: lane, kind: x[1] ? 'mark' : 'action', label: x[1] ? tr(fr, 'Provocation', 'Taunt') : tr(fr, 'Lancer', 'Throw') }) })
+  })
+  // KOs d'abord : ils restent si la frise dépasse sa limite (400 événements).
+  events.sort(function (x, y) { return (x.kind === 'ko' ? 0 : 1) - (y.kind === 'ko' ? 0 : 1) || x.t - y.t })
+  return { duration: a.dur, lanes: a.ents.map(function (e) { return e.name }), events: events.slice(0, 400) }
+}
+
 function buildItem(file, c, a, lang) {
   var fr = lang === 'fr', st = c.st || []
   var chips = [mapName(file, c, fr), modeLabel(c, lang), 'Patch ' + patchOf(file, c), fmtDate(file.mtime), fmtDur(a.dur),
@@ -475,14 +494,7 @@ function buildItem(file, c, a, lang) {
     ],
     grids: grids,
     series: lines.length ? [{ title: tr(fr, 'Actions toutes les 15 s', 'Actions every 15 s'), step: BUCKET_MS / 1000, lines: lines }] : undefined,
-    timeline: {
-      duration: a.dur,
-      lanes: a.ents.map(function (e) { return e.name }),
-      events: c.k.map(function (k) {
-        var lane = -1; for (var i = 0; i < a.ents.length; i++) if (a.ents[i].id === k[0]) lane = i
-        return { t: k[1] / 1000, lane: lane, label: 'KO' }
-      }).filter(function (ev) { return ev.lane >= 0 })
-    }
+    timeline: timelineOf(c, a, fr)
   }
   return {
     id: file.name,

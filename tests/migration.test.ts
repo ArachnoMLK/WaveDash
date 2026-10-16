@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as db from '../src/main/db'
 import * as secrets from '../src/main/secrets'
-import { migrateBuiltinBrawlhalla } from '../src/main/migrations'
+import { migrateBuiltinBrawlhalla, removeSocialPlaceholders } from '../src/main/migrations'
 import { listPluginAccounts } from '../src/main/plugins/manager'
 
 test('Brawlhalla intégré → plugin : démo supprimée, vrai compte rattaché avec historique, clé et paliers', () => {
@@ -30,4 +30,15 @@ test('Brawlhalla intégré → plugin : démo supprimée, vrai compte rattaché 
 
   migrateBuiltinBrawlhalla()      // deuxième passage : rien ne change
   assert.equal(listPluginAccounts().filter((a) => a.id === real.id).length, 1)
+})
+
+test('Instagram et TikTok intégrés : comptes de démo supprimés, YouTube intact', () => {
+  db.initDb()
+  const ig = db.insertAccount({ platform: 'instagram' as never, input: 'x', displayName: 'IG', externalId: 'i', demo: true })
+  const tk = db.insertAccount({ platform: 'tiktok' as never, input: 'x', displayName: 'TK', externalId: 't', demo: true })
+  const yt = db.insertAccount({ platform: 'youtube', input: 'x', displayName: 'YT', externalId: 'y', demo: true })
+  removeSocialPlaceholders()
+  assert.equal(db.getAccount(ig.id), undefined)
+  assert.equal(db.getAccount(tk.id), undefined)
+  assert.ok(db.getAccount(yt.id))
 })

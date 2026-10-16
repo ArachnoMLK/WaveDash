@@ -106,7 +106,8 @@ export function categoryOption(type: ChartType, data: Category[], th: ChartTheme
 
 
 /** Frise d'événements : une ligne par joueur, un repère par événement (ex. KO), l'axe horizontal en minutes:secondes. */
-export function timelineOption(tl: { duration: number; lanes: string[]; events: { t: number; lane: number; label?: string }[] }, th: ChartTheme): EChartsOption {
+const MARK: Record<string, { symbol: string; symbolSize: number }> = { ko: { symbol: 'diamond', symbolSize: 16 }, action: { symbol: 'circle', symbolSize: 7 }, mark: { symbol: 'triangle', symbolSize: 11 } }
+export function timelineOption(tl: { duration: number; lanes: string[]; events: { t: number; lane: number; label?: string; kind?: string }[] }, th: ChartTheme): EChartsOption {
   const ax = axisStyle(th)
   const mmss = (v: number): string => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`
   const pal = palette(th)
@@ -123,7 +124,8 @@ export function timelineOption(tl: { duration: number; lanes: string[]; events: 
       type: 'scatter', symbol: 'diamond', symbolSize: 16,
       itemStyle: { color: (p: any) => pal[p.value[1] % pal.length] },
       // `name` et non `label` : `label` est une option de style d'ECharts pour chaque point.
-      data: tl.events.map((e) => ({ value: [e.t, e.lane], name: e.label ?? '' }))
+      // Forme selon le type : KO (losange), action (petit rond), repère (triangle) ; les KOs dessinés en dernier, au-dessus.
+      data: [...tl.events].sort((a, b) => (a.kind && a.kind !== 'ko' ? 0 : 1) - (b.kind && b.kind !== 'ko' ? 0 : 1)).map((e) => ({ value: [e.t, e.lane], name: e.label ?? '', ...MARK[e.kind ?? 'ko'] }))
     }]
   } as EChartsOption
 }

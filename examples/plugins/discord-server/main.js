@@ -85,12 +85,13 @@ async function syncChannels(g, token, F) {
   return true
 }
 
-/** Lit les nouveaux messages d'un salon (une page de 100 au plus). Renvoie true si le salon reste en retard. */
+/** Lit les nouveaux messages d'un salon (une page de 100 au plus). Renvoie true si le salon reste en retard.
+ *  Un salon déjà interrogé (ch.at) n'est plus en retard, même s'il n'a aucun message : sinon il le resterait pour toujours. */
 async function readChannel(g, cid, token) {
   var ch = g.chans[cid]
   if (ch.denied) return false
   var r = await call('/channels/' + cid + '/messages?limit=100' + (ch.last ? '&after=' + ch.last : ''), token)
-  if (r.skip || r.limited) return !!(ch.more || !ch.last)
+  if (r.skip || r.limited) return !!(ch.more || !ch.at)
   ch.at = Date.now()
   if (r.status === 403) { ch.denied = 1; return false }
   if (!r.data) return false
@@ -184,7 +185,7 @@ async function allServers(ctx, token, F) {
     if (g && g.info) { it.fields.boosts = g.info.b; totals.boosts += g.info.b }
     if (g) {
       saveGuild(g)
-      q = queueOf(g); q.forEach(function (cid) { if (g.chans[cid].more || !g.chans[cid].last) behind++ })
+      q = queueOf(g); q.forEach(function (cid) { if (g.chans[cid].more || !g.chans[cid].at) behind++ })
       var f = guildFigures(g), last = lastOf(g)
       totals.channels += f.channels; totals.messages_today += f.today; totals.messages_7d += f.week; totals.authors_7d += f.authors
       it.fields.today = f.today; it.fields.week = f.week; it.fields.total = f.total; it.fields.last = last ? fmtDate(last) : '—'
@@ -218,7 +219,7 @@ async function oneServer(ctx, token, guildId, F) {
   var q = queueOf(g)
   for (var i = 0; i < q.length && budget < MAX_REQ; i++) await readChannel(g, q[i], token)
   saveGuild(g)
-  queueOf(g).forEach(function (cid) { if (g.chans[cid].more || !g.chans[cid].last) behind++ })
+  queueOf(g).forEach(function (cid) { if (g.chans[cid].more || !g.chans[cid].at) behind++ })
   var d = info.data || {}, f = guildFigures(g), today = dayKey(Date.now()), week = dayKey(Date.now() - 6 * 86400000)
   var metrics = { members: d.approximate_member_count, online: d.approximate_presence_count, boosts: d.premium_subscription_count || 0,
     channels: f.channels, messages_today: f.today, messages_7d: f.week, authors_7d: f.authors }

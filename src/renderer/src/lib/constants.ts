@@ -2,7 +2,7 @@ import { ChartType, MetricKey, Platform, PLATFORMS } from '@shared/types'
 
 /** Métriques mises en avant dans les cartes de la vue d'ensemble. */
 export const PRIMARY_METRICS: Record<Platform, MetricKey[]> = {
-  youtube: ['subscribers', 'views'], instagram: ['subscribers', 'likes'], tiktok: ['subscribers', 'views']
+  youtube: ['subscribers', 'views']
 }
 
 /** Types de graphique proposés par statistique (courbes dans le temps vs données par catégorie). */

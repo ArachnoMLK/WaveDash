@@ -8,6 +8,12 @@ import { MilestoneRule } from '@shared/types'
 const PLUGIN = 'wavedash.brawlhalla-api'
 const OLD_SECRET = 'brawlhalla.apiKey' as never, NEW_SECRET = `plugin:${PLUGIN}:apiKey` as const
 
+/** 1.1.0 : les plateformes Instagram et TikTok intégrées sont retirées. Elles n'avaient pas de fournisseur : un compte
+ *  ne pouvait être qu'une démo, supprimée ici. Le suivi TikTok passe par le plugin « TikTok (profil public) ». */
+export function removeSocialPlaceholders(): void {
+  for (const a of db.listAccounts().filter((x) => ['instagram', 'tiktok'].includes(x.platform as string))) db.deleteAccount(a.id)
+}
+
 export function migrateBuiltinBrawlhalla(): void {
   const old = db.listAccounts().filter((a) => (a.platform as string) === 'brawlhalla')
   for (const a of old.filter((x) => x.demo)) db.deleteAccount(a.id)

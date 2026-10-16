@@ -11,7 +11,7 @@ import { loc, PluginAccount } from '@shared/plugin'
 import { fmtPluginMetric, pluginRoute } from '../lib/plugin'
 import { useChartTheme } from '../lib/useChartTheme'
 
-const SOCIAL: Platform[] = ['youtube', 'instagram', 'tiktok']
+const SOCIAL: Platform[] = ['youtube']
 
 /** Cartes de chiffres clés d'un compte. */
 function AccountSummary({ account }: { account: Account }): JSX.Element {

@@ -45,6 +45,7 @@ Puis dans WaveDash : **Plugins › Installer un plugin** (ou glisse le fichier d
 | `secrets` | jusqu'à 4 valeurs (clés API…) enregistrées **chiffrées** par WaveDash, jamais en clair. |
 | `metrics` | de 1 à 20. `format` : `number` (défaut), `percent`, `rank`, `duration` (secondes → mm:ss). `decimals` de 0 à 4. `primary` : métrique affichée d'abord. `milestone` (facultatif) : paliers proposés par défaut, `{ "increment": 100, "notifyDown": true, "enabled": true }` (incrément entier ≥ 1 ; sans incrément, séquence 10, 20, 50…). |
 | `itemColumns` | colonnes du tableau d'éléments (facultatif). |
+| `notices` | `true` si le plugin envoie des notifications (`notices` dans son résultat, voir plus bas). Affiché à l'installation ; chaque plugin peut être coupé dans Paramètres › Notifications. |
 | `search` | `true` si le script définit `search` : la page du compte affiche alors la barre de recherche du haut. |
 | `cross` | Outil « Croiser tes données » : `{ "measures": [{ "key", "label" }], "dimensions": [{ "key", "label" }] }` (2 à 12 chacun). Le script définit `cross(ctx)` ; `ctx.cross` = `{ who, measure, a, b }` (`b` peut valoir `none`) ; il renvoie un détail, en général des `bars` (`{ title, categories, series: [{ name, values }], stacked }`) et un tableau. |
 | `itemsMode` | `replace` (défaut) : chaque actualisation remplace la liste d'éléments. `keep` : les éléments renvoyés s'ajoutent à ceux déjà enregistrés (même `id` = mis à jour), jusqu'à 20 000 par compte ; la page les affiche par 50, avec un filtre par mois. Utile pour un historique (une partie par fichier, par exemple). |
@@ -75,13 +76,16 @@ var plugin = {
       metrics: { temperature: 17.4 },                       // clés déclarées dans le manifeste
       items:   [{ id: 'a', title: 'Élément', ts: Date.now(), fields: { size_kb: 12 } }],   // facultatif, 200 max
       history: [{ ts: 1700000000000, metrics: { temperature: 12 } }],                   // facultatif : points passés, 5000 max (voir plus bas)
-      backlog: 0                                                                         // facultatif : travail restant (voir plus bas)
+      backlog: 0,                                                                        // facultatif : travail restant (voir plus bas)
+      notices: [{ id: 'rang:42', title: 'Platine 0', text: 'Nouveau rang : Platine 0.', direction: 'up' }]   // facultatif, manifeste notices: true
     }
   }
 }
 ```
 
-**`backlog`** : si le plugin ne peut pas tout traiter en une fois (budget de calcul), il indique ce qui reste (par exemple le nombre de fichiers pas encore lus). Tant que `backlog` est positif, WaveDash le relance 5 s après la fin de l'exécution, sans attendre `refreshMinutes`, et la page affiche la progression.
+**`backlog`** : si le plugin ne peut pas tout traiter en une fois (budget de calcul), il indique ce qui reste (par exemple le nombre de fichiers pas encore lus). Tant que `backlog` est positif, WaveDash le relance 5 s après la fin de l'exécution, sans attendre `refreshMinutes`, et la page affiche la progression. Si le retard ne baisse pas pendant 3 relances de suite, WaveDash cesse ces relances rapides et attend l'actualisation normale suivante : un retard mal calculé ne peut pas faire tourner un plugin en boucle.
+
+**`notices`** (manifeste `notices: true`) : 3 notifications au plus par exécution (`title` 40 caractères, `text` 200, `direction` `up` ou `down`), envoyées comme un palier (notification Windows, son, célébration, historique). Chaque `id` n'est envoyé **qu'une fois** par compte : donne un identifiant nouveau à chaque événement. L'utilisateur peut couper les notifications d'un plugin dans Paramètres › Notifications.
 
 **`history` fait foi** : pour chaque métrique, les points déjà enregistrés entre le premier point renvoyé et maintenant sont remplacés par ceux-ci. Un plugin qui complète des données passées (par exemple des fichiers lus en plusieurs fois) corrige ainsi les valeurs calculées avant ; les points plus anciens ne sont pas touchés.
 
@@ -99,6 +103,7 @@ detail: {
   grids:    [{ title: 'Esquives', rows: ['↑', '·', '↓'], cols: ['←', '·', '→'], values: [[1, 2, 3], [4, 5, 6], [7, 8, 9]] }],  // grilles de chaleur : 8 max, 8 × 8
   series:   [{ title: 'Actions toutes les 15 s', step: 15, lines: [{ name: 'Close', values: [12, 9, 14] }] }],              // courbes : 4 max, 16 lignes, 600 points
   timeline: { duration: 183, lanes: ['Alby', 'Close'], events: [{ t: 29.1, lane: 0, label: 'KO' }] }                       // frise : 16 lignes, 400 repères max, t en secondes
+  //        events[].kind facultatif : 'ko' (losange, par défaut), 'action' (petit rond), 'mark' (triangle)
 }
 ```
 
@@ -163,7 +168,7 @@ La page d'un compte de plugin affiche l'erreur de la dernière actualisation et 
 
 - **Courbe et cartes** : parties, victoires, défaites, taux de victoire, stocks pris et perdus, durée moyenne, appuis par minute.
 - **Bilan** : chiffres clés, tableaux par légende, carte, mode, coéquipier, adversaire, jour et heure, direction de tes esquives, répartition de tes attaques.
-- **Détail d'une partie** : vignette de la carte (si tu indiques le dossier `images	humbnails` du jeu : WaveDash l'affiche depuis ton installation, aucune image n'est livrée), carte, mode, patch, date, durée, vies, réglages ; pour chaque joueur, légende, armes, posture, place, KOs subis, KOs infligés (en 1v1), attaques légères et lourdes par direction, esquives, sauts, lancers, provocations, temps de déplacement, appuis par minute ; grille de direction des esquives, courbe d'activité toutes les 15 s, frise des KOs.
+- **Détail d'une partie** : vignette de la carte (si tu indiques le dossier `images	humbnails` du jeu : WaveDash l'affiche depuis ton installation, aucune image n'est livrée), carte, mode, patch, date, durée, vies, réglages ; pour chaque joueur, légende, armes, posture, place, KOs subis, KOs infligés (en 1v1), attaques légères et lourdes par direction, esquives, sauts, lancers, provocations, temps de déplacement, appuis par minute ; grille de direction des esquives, courbe d'activité toutes les 15 s, frise de la partie (KOs, avec leur auteur en 1v1 ; lancers d'arme ; provocations).
 
 Toutes les parties du dossier comptent : les totaux, la courbe (datée par la date de chaque fichier) et la liste des parties remontent jusqu'au plus ancien replay. Le plugin décompresse lui-même chaque fichier (inflate en JavaScript à tables de décodage, vérifié identique à zlib sur 9012 fichiers) dans le bac à sable : environ 50 ms par replay dans WaveDash, 2 s de lecture par exécution. À la première installation, il signale le reste (`backlog`) et WaveDash le relance toutes les quelques secondes : environ 20 à 30 minutes pour 9000 replays, une seule fois. Ensuite, seuls les nouveaux fichiers sont lus. Le cache ne garde qu'un résumé de chaque partie (environ 100 octets) ; le détail est envoyé une fois à WaveDash, qui le conserve (`itemsMode: keep`). Le pseudo accepte plusieurs noms séparés par des virgules (utile après un changement de pseudo). Le rattrapage tourne dans le processus des plugins : l'interface reste fluide pendant ce temps.
 
@@ -188,9 +193,9 @@ Le format de fichier a été compris grâce aux projets open source BrawlhallaRe
 
 ## Plugin fourni : Brawlhalla (API officielle)
 
-`examples/brawlhalla-api-1.0.0.wdsh` remplace, depuis WaveDash 1.0.1, la plateforme Brawlhalla intégrée. Il lit ton profil par l'API officielle (seul domaine permis : `api.brawlhalla.com`) avec ta clé personnelle Blue Mammoth Games, enregistrée comme secret du plugin (chiffrée par Windows). Saisie : ID Brawlhalla, Steam ID64 ou lien `steamcommunity.com/profiles/…`. Métriques : ELO 1v1 (principale) et 2v2, ELO max, classements mondial et régional, parties, victoires, taux de victoire, niveau ; une ligne par légende (parties, victoires, KOs, chutes, niveau, temps de jeu) et un bilan (rang, région, clan, équipes 2v2).
+`examples/brawlhalla-api-1.2.0.wdsh` remplace, depuis WaveDash 1.0.1, la plateforme Brawlhalla intégrée. Il lit ton profil par l'API officielle (seul domaine permis : `api.brawlhalla.com`) avec ta clé personnelle Blue Mammoth Games, enregistrée comme secret du plugin (chiffrée par Windows). Saisie : ID Brawlhalla, Steam ID64 ou lien `steamcommunity.com/profiles/…`. Métriques : ELO 1v1 (principale) et 2v2, ELO max, classements mondial et régional, parties, victoires, taux de victoire, niveau ; une ligne par légende (parties, victoires, KOs, chutes, niveau, temps de jeu) et un bilan (rang, région, clan, équipes 2v2).
 
-À la mise à jour, un compte Brawlhalla intégré est rattaché à ce plugin avec son historique, sa clé et ses règles de paliers (l'ELO garde un palier tous les 100 points) ; un compte de démo est supprimé. La notification de changement de rang (Or 3 → Platine 0…) disparaît : un plugin ne renvoie que des nombres.
+À la mise à jour, un compte Brawlhalla intégré est rattaché à ce plugin avec son historique, sa clé et ses règles de paliers (l'ELO garde un palier tous les 100 points) ; un compte de démo est supprimé. Depuis la version 1.2.0 du plugin, le changement de rang 1v1 (Or 5 → Platine 0…) est de nouveau notifié, par les notifications de plugin (voir `notices`).
 
 ## Plugin fourni : TikTok (profil public)
 
@@ -198,7 +203,7 @@ Le format de fichier a été compris grâce aux projets open source BrawlhallaRe
 
 ## Plugin fourni : Discord (serveurs)
 
-`examples/discord-server-1.2.3.wdsh` suit des serveurs Discord avec l'API officielle (permission réseau : `discord.com` seulement). Trois façons de l'utiliser :
+`examples/discord-server-1.2.4.wdsh` suit des serveurs Discord avec l'API officielle (permission réseau : `discord.com` seulement). Trois façons de l'utiliser :
 
 - **Tous les serveurs d'un bot** : laisse l'invitation et l'ID vides, puis enregistre le jeton du bot dans les clés du plugin. Le compte liste chaque serveur où le bot est présent (membres, en ligne, messages du jour et des 7 jours, dernier message) ; un clic ouvre le détail du serveur (salons, membres les plus actifs, messages par jour). Jusqu'à 45 serveurs suivis en détail.
 - **Un seul serveur** : jeton du bot + ID du serveur ; la liste montre alors ses salons.
@@ -206,7 +211,7 @@ Le format de fichier a été compris grâce aux projets open source BrawlhallaRe
 
 Pour le bot : Discord Developer Portal › New Application › Bot › Reset Token, puis l'inviter sur chaque serveur (OAuth2 › URL Generator › `bot`, permissions « Voir les salons » et « Lire l'historique des messages »). Le jeton est enregistré chiffré par WaveDash et partagé par les comptes de ce plugin.
 
-Les messages sont comptés au fil de l'eau : au premier passage, les 100 derniers de chaque salon (dans la limite de 7 jours), ensuite tous les nouveaux. Leur contenu n'est ni lu ni gardé, et les messages des bots ne comptent pas. Au plus 26 requêtes par exécution : salons et serveurs sont lus à tour de rôle, et WaveDash relance le plugin tant qu'il reste du retard. Le mode bot a été vérifié sur une API Discord simulée (3 serveurs, salon interdit, 150 nouveaux messages), pas encore sur un vrai serveur.
+Les messages sont comptés au fil de l'eau : au premier passage, les 100 derniers de chaque salon (dans la limite de 7 jours), ensuite tous les nouveaux. Leur contenu n'est ni lu ni gardé, et les messages des bots ne comptent pas. Au plus 26 requêtes par exécution : salons et serveurs sont lus à tour de rôle, et WaveDash relance le plugin tant qu'il reste du retard. Le mode bot a été vérifié sur une API Discord simulée (3 serveurs, salon interdit, 150 nouveaux messages), puis sur un vrai serveur (269 membres, 30 salons, 2 boosts). Un salon sans aucun message ne compte plus comme « en retard » (1.2.4) : avant, il faisait relancer le plugin toutes les 5 s.
 
 Le plugin ne lit jamais l'application Discord de l'ordinateur ni un compte personnel (un « selfbot » est interdit par Discord).
 

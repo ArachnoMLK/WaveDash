@@ -7,7 +7,7 @@ import {
   compareVersions, IMAGE_FILE_RE, InstalledPlugin, sanitizeDetail, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
 } from '@shared/plugin'
 import * as db from '../db'
-import { processPluginRefresh } from '../milestones'
+import { processPluginNotices, processPluginRefresh } from '../milestones'
 import { fetchPackage, getCatalog } from './catalog'
 import * as secrets from '../secrets'
 import { FolderAccess, readFileSafe } from './files'
@@ -20,6 +20,8 @@ const MAX_FAILURES = 5
 const MAX_STORAGE_KEYS = 100
 /** Délai avant de relancer un plugin qui signale du travail restant (`backlog`). */
 const CATCH_UP_MS = 5_000
+/** Relances rapides sans que le retard baisse avant d'arrêter (le plugin reprend à l'actualisation normale suivante). */
+const MAX_STALLED = 3
 
 let notify: () => void = () => {}
 /** Appelé quand un rattrapage en arrière-plan a enregistré de nouvelles données (pour rafraîchir l'interface). */
@@ -272,13 +274,18 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
     if (!Object.keys(result.metrics).length && !result.history.length) throw new PluginError('invalid_result', 'Aucune métrique déclarée n’a été renvoyée')
     // Paliers : comparés au relevé précédent, avant d'enregistrer le nouveau ; une erreur de notification ne bloque rien.
     try { processPluginRefresh(accountId, pa.display_name, manifest, db.getLatest(accountId) as Record<string, number>, result.metrics) } catch (e) { console.error('Paliers plugin :', e) }
+    try { processPluginNotices(accountId, pa.display_name, manifest, result.notices) } catch (e) { console.error('Notifications plugin :', e) }
     db.insertHistory(accountId, result.history)
     db.insertSnapshots(accountId, result.metrics)
     db.savePluginItems(accountId, result.items, manifest.itemsMode)
+    // Garde-fou : un retard qui ne baisse jamais (plugin qui se trompe) ne doit pas relancer le plugin toutes les 5 s sans fin.
+    const prevBacklog = Number(db.getMeta(accountId, 'backlog')) || 0
+    const stalled = result.backlog > 0 && result.backlog >= prevBacklog ? (Number(db.getMeta(accountId, 'stalled')) || 0) + 1 : 0
+    db.setMeta(accountId, 'stalled', String(stalled))
     db.setMeta(accountId, 'backlog', String(result.backlog))
     if (result.summary) db.setMeta(accountId, 'summary', JSON.stringify(result.summary))
     // Travail restant (ex. fichiers pas encore lus) : on relance bientôt, sans attendre la prochaine actualisation.
-    if (result.backlog > 0) catchUps.set(accountId, setTimeout(() => { catchUps.delete(accountId); void refreshPluginAccount(accountId).then(() => notify()) }, CATCH_UP_MS))
+    if (result.backlog > 0 && stalled < MAX_STALLED) catchUps.set(accountId, setTimeout(() => { catchUps.delete(accountId); void refreshPluginAccount(accountId).then(() => notify()) }, CATCH_UP_MS))
     db.setMeta(accountId, 'log', JSON.stringify(run.logs))
     db.setMeta(accountId, 'error', '')
     db.markSync(accountId, null)
@@ -303,7 +310,7 @@ export async function refreshAllPlugins(): Promise<void> {
     let minutes = 30
     try { minutes = loadManifest(row).refreshMinutes } catch { continue }
     // Un compte qui a encore du retard (backlog) est relancé même s'il vient d'être actualisé (ex. après un redémarrage).
-    const behind = Number(db.getMeta(pa.account_id, 'backlog')) > 0
+    const behind = Number(db.getMeta(pa.account_id, 'backlog')) > 0 && (Number(db.getMeta(pa.account_id, 'stalled')) || 0) < MAX_STALLED
     if (!behind && pa.last_sync_at && Date.now() - pa.last_sync_at < minutes * 60_000 * 0.9) continue
     await refreshPluginAccount(pa.account_id)
   }

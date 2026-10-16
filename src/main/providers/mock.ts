@@ -12,9 +12,7 @@ function rng(seed: number): () => number {
 }
 
 const BASE: Record<Platform, Partial<Record<MetricKey, number>>> = {
-  youtube: { subscribers: 1840, views: 96400, likes: 5200, comments: 410, videos: 42 },
-  instagram: { subscribers: 2300, likes: 8800, comments: 640 },
-  tiktok: { subscribers: 5100, views: 210000, likes: 31000 }
+  youtube: { subscribers: 1840, views: 96400, likes: 5200, comments: 410, videos: 42 }
 }
 const DAY = 86_400_000
 

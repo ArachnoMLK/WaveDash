@@ -17,7 +17,7 @@ import { fetchPackage, getCatalog } from './plugins/catalog'
 import { fireTest, initMilestones } from './milestones'
 import { checkUpdate, getUpdateStatus, installUpdate } from './updater'
 
-const DEMO_NAMES = { youtube: 'Chaîne démo', instagram: 'Compte démo', tiktok: 'Compte démo' }
+const DEMO_NAMES = { youtube: 'Chaîne démo' }
 
 /** Empreinte simple d'un texte : rend les comptes démo différents selon ce qui est saisi. */
 const hash = (s: string): number => [...s.trim().toLowerCase()].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)

@@ -44,6 +44,8 @@ export interface PluginManifest {
   itemsMode: 'replace' | 'keep'
   /** Le script définit `search` : WaveDash affiche la barre de recherche en haut de la page du compte. */
   search: boolean
+  /** Le plugin peut envoyer des notifications (`notices` dans son résultat), désactivables dans les réglages. */
+  notices: boolean
   /** Outil « Croiser tes données » : mesures et axes proposés dans les menus ; le script définit alors `cross`. */
   cross?: { measures: { key: string; label: LocalText }[]; dimensions: { key: string; label: LocalText }[] }
   refreshMinutes: number
@@ -178,7 +180,7 @@ export function validateManifest(raw: unknown): Result {
   const refresh = typeof m.refreshMinutes === 'number' && Number.isFinite(m.refreshMinutes) ? Math.min(1440, Math.max(5, Math.round(m.refreshMinutes))) : 30
   return { ok: true, manifest: { wdsh: 1, id: m.id, name: m.name.trim(), version: m.version, author, description, minAppVersion: m.minAppVersion as string | undefined, entry,
     permissions: { network: network as string[], folder, folderExtensions: (exts as string[]).map((e) => e.toLowerCase()), images },
-    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
+    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, notices: m.notices === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
 }
 
 /* ---------- Résultats renvoyés par un plugin ---------- */
@@ -201,8 +203,10 @@ export interface PluginDetail {
   grids?: DetailGrid[]
   series?: DetailSeries[]
   bars?: DetailBars[]
-  timeline?: { duration: number; lanes: string[]; events: { t: number; lane: number; label?: string }[] }
+  /** Frise : `kind` choisit la forme du point (`ko` losange, par défaut ; `action` petit rond ; `mark` triangle). */
+  timeline?: { duration: number; lanes: string[]; events: { t: number; lane: number; label?: string; kind?: TimelineKind }[] }
 }
+export type TimelineKind = 'ko' | 'action' | 'mark'
 export interface PluginItem { id: string; title: string; ts?: number; fields: Record<string, string | number>; detail?: PluginDetail }
 export const DETAIL_LIMITS = {
   columns: 10, rows: 80, cell: 80, lanes: 16, events: 400, label: 24,
@@ -216,7 +220,11 @@ export interface PluginRunResult {
   summary?: PluginDetail
   /** Travail restant signalé par le plugin (ex. fichiers pas encore lus) : s'il est positif, WaveDash relance le plugin peu après. */
   backlog: number
+  /** Notifications (manifeste `notices: true`) : 3 au plus, chacune envoyée une seule fois (même `id` = ignorée ensuite). */
+  notices: PluginNotice[]
 }
+export interface PluginNotice { id: string; title: string; text: string; direction: 'up' | 'down' }
+export const NOTICE_LIMITS = { perRun: 3, id: 80, title: 40, text: 200 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e15 ? v : null)
 
@@ -280,11 +288,11 @@ export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
   if (tl && Array.isArray(tl.lanes) && Array.isArray(tl.events)) {
     const lanes = tl.lanes.slice(0, L.lanes).map((x) => str(x))
     const duration = num(tl.duration)
-    const events: { t: number; lane: number; label?: string }[] = []
+    const events: { t: number; lane: number; label?: string; kind?: TimelineKind }[] = []
     for (const e of tl.events.slice(0, L.events) as Record<string, unknown>[]) {
       const at = num(e?.t), lane = num(e?.lane)
       if (at === null || at < 0 || at > 86_400 || lane === null || !Number.isInteger(lane) || lane < 0 || lane >= lanes.length) continue
-      events.push({ t: at, lane, label: typeof e.label === 'string' ? e.label.slice(0, L.label) : undefined })
+      events.push({ t: at, lane, label: typeof e.label === 'string' ? e.label.slice(0, L.label) : undefined, kind: e.kind === 'action' || e.kind === 'mark' ? e.kind : undefined })
     }
     if (lanes.length && duration !== null && duration > 0 && duration <= 86_400) out.timeline = { duration, lanes, events }
   }
@@ -292,7 +300,7 @@ export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
 }
 
 export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.now()): PluginRunResult {
-  const out: PluginRunResult = { metrics: {}, items: [], history: [], backlog: 0 }
+  const out: PluginRunResult = { metrics: {}, items: [], history: [], backlog: 0, notices: [] }
   if (!raw || typeof raw !== 'object') return out
   const r = raw as Record<string, unknown>
   const keys = new Set(m.metrics.map((x) => x.key))
@@ -305,6 +313,13 @@ export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.no
   out.summary = sanitizeDetail(r.summary)
   const backlog = num(r.backlog)
   out.backlog = backlog !== null && backlog > 0 ? Math.min(1e7, Math.floor(backlog)) : 0
+  if (m.notices && Array.isArray(r.notices)) {
+    const N = NOTICE_LIMITS
+    for (const n of r.notices.slice(0, N.perRun) as Record<string, unknown>[]) {
+      if (!n || typeof n.id !== 'string' || !n.id.trim() || typeof n.title !== 'string' || !n.title.trim() || typeof n.text !== 'string') continue
+      out.notices.push({ id: n.id.slice(0, N.id), title: n.title.trim().slice(0, N.title), text: n.text.trim().slice(0, N.text), direction: n.direction === 'down' ? 'down' : 'up' })
+    }
+  }
   const cols = new Set(m.itemColumns.map((c) => c.key))
   if (Array.isArray(r.items)) {
     for (const it of r.items.slice(0, PLUGIN_LIMITS.maxItems) as Record<string, unknown>[]) {
