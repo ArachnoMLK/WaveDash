@@ -7,8 +7,9 @@ var KEY = [107,16,222,60,68,75,209,70,160,16,82,193,178,49,211,106,251,172,17,22
 var MAX_NEW = 150          // nouveaux replays lus par actualisation au plus (~25 ms chacun) ; WaveDash relance tant qu'il en reste
 var BUDGET_MS = 2000       // au-delà, on s'arrête : le reste suit à la relance (le bac à sable coupe à 8 s ; une lecture courte gêne moins l'interface)
 var MAX_POINTS = 5000      // points d'historique renvoyés au plus (limite de WaveDash)
-var BUCKETS = 96             // clés de stockage du cache (WaveDash en autorise 100, 64 Ko chacune)
-var CACHE_V = 6            // version du contenu du cache : une entrée plus ancienne est relue
+var BUCKETS = 76             // clés de stockage du cache des parties (c0 à c75 ; WaveDash autorise 100 clés de 64 Ko)
+var PLAYER_BUCKETS = 20      // profils des autres joueurs : clés c76 à c95 (mêmes clés qu'avant, rien de plus)
+var CACHE_V = 7            // version du contenu du cache : une entrée plus ancienne est relue
 
 // Légendes : identifiant du replay = legend_id de l'API officielle = HeroID du jeu (table HeroTypes du patch 11.00).
 // Une légende plus récente que cette table s'affiche « #id ».
@@ -304,6 +305,52 @@ function saveCache(entries) {
     if ((host.storage.get(key) || '') !== next) host.storage.set(key, next)
   }
 }
+/* ───────── profils des autres joueurs (cumulés partie après partie) ───────── */
+// Clé : identifiant de compte s'il existe, sinon pseudo sans tag. Champs : n pseudo le plus récent, p identifiant, t date du pseudo,
+// c parties, L légendes jouées, w/l victoires/défaites de son camp, d KOs subis, g esquives (3×3), at attaques (légère/lourde × neutre/côté/bas),
+// j sauts, dg esquives, th lancers, a/aN appuis par minute, tm/op parties avec toi / contre toi.
+function playerKeyOf(e) { return e.pid ? 'p' + e.pid : 'n' + bareName(e.name) }
+function playerBucket(k) { var h = 0; for (var i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) % 100003; return 'c' + (BUCKETS + h % PLAYER_BUCKETS) }
+function loadPlayers() {
+  if (host.storage.get('base') !== 'players' + CACHE_V) return {}       // version différente : tout est relu, les profils repartent de zéro
+  var out = {}
+  for (var i = 0; i < PLAYER_BUCKETS; i++) { try { var o = JSON.parse(host.storage.get('c' + (BUCKETS + i)) || '{}'); for (var k in o) out[k] = o[k] } catch (e) { /* ignoré */ } }
+  return out
+}
+function savePlayers(pl) {
+  var buckets = {}
+  for (var k in pl) { var b = playerBucket(k); (buckets[b] = buckets[b] || {})[k] = pl[k] }
+  for (var i = 0; i < PLAYER_BUCKETS; i++) {
+    var key = 'c' + (BUCKETS + i), o = buckets[key] || {}, txt = JSON.stringify(o)
+    if (txt.length > 60000) {                                             // trop gros : on oublie d'abord les joueurs croisés le moins souvent
+      var ks = Object.keys(o).sort(function (a, b) { return o[a].c - o[b].c })
+      while (txt.length > 60000 && ks.length) { delete o[ks.shift()]; txt = JSON.stringify(o) }
+    }
+    if ((host.storage.get(key) || '') !== txt) host.storage.set(key, txt)
+  }
+  host.storage.set('base', 'players' + CACHE_V)
+}
+function addPlayers(pl, full, a, t) {
+  var places = a.ents.map(function (e) { return full.s[e.id] }).filter(function (v) { return v > 0 })
+  var best = places.length ? Math.min.apply(null, places) : 0, decided = places.some(function (v) { return v !== best })
+  a.ents.forEach(function (e) {
+    if (e.bot || (a.me && e.id === a.me.id)) return
+    var k = playerKeyOf(e), x = pl[k] || (pl[k] = { n: '', p: e.pid || 0, t: 0, c: 0, L: {}, w: 0, l: 0, d: 0, g: [0, 0, 0, 0, 0, 0, 0, 0, 0], at: [0, 0, 0, 0, 0, 0], j: 0, dg: 0, th: 0, a: 0, aN: 0, tm: 0, op: 0 })
+    if (t >= x.t) { x.n = e.name.slice(0, 32); x.t = t }
+    x.c++; x.L[e.hero] = (x.L[e.hero] || 0) + 1; x.d += a.deaths[e.id].length
+    var place = full.s[e.id]
+    if (place > 0 && decided) { if (place === best) x.w++; else x.l++ }
+    if (a.me) { if (a.sameTeam(e, a.me)) x.tm++; else x.op++ }
+    var q = presses(full, e.id)
+    if (q) {
+      for (var i = 0; i < 9; i++) x.g[i] += q.g[i]
+      for (i = 0; i < 3; i++) { x.at[i] += q.l[i]; x.at[3 + i] += q.h[i] }
+      x.j += q.j; x.dg += q.d; x.th += q.t
+      var apm = apmOf(full, e.id); if (apm !== null) { x.a += apm; x.aN++ }
+    }
+  })
+}
+
 function compact(rep) {
   var ins = {}
   for (var k in rep.inputs) { var a = rep.inputs[k]; ins[k] = { l: a.l, h: a.h, g: a.g, d: a.d, j: a.j, t: a.t, tt: a.tt, mv: a.mv, act: a.act } }
@@ -594,6 +641,17 @@ function searchGames(query, lang) {
 
   if (top.type === 'player') {
     var P = top.data, W = wl(P.with), A = wl(P.against), all = P.with.concat(P.against).sort(function (a, b) { return a.t - b.t })
+    // Son profil : celui de son identifiant, plus les parties d'avant le patch 10.09 rattachées par pseudo.
+    var profiles = loadPlayers(), H = null
+    Object.keys(profiles).forEach(function (k) {
+      var x = profiles[k], mine = P.pid ? (k === 'p' + P.pid || (k.charAt(0) === 'n' && pidOf([x.n, 0]) === P.pid)) : k === 'n' + bareName(P.name)
+      if (!mine) return
+      if (!H) { H = JSON.parse(JSON.stringify(x)); return }
+      H.c += x.c; H.w += x.w; H.l += x.l; H.d += x.d; H.j += x.j; H.dg += x.dg; H.th += x.th; H.a += x.a; H.aN += x.aN
+      for (var i = 0; i < 9; i++) H.g[i] += x.g[i]
+      for (i = 0; i < 6; i++) H.at[i] += x.at[i]
+      for (var l in x.L) H.L[l] = (H.L[l] || 0) + x.L[l]
+    })
     var side = function (g) { return P.with.indexOf(g) >= 0 ? tr(fr, 'Avec', 'With') : tr(fr, 'Contre', 'Against') }
     var both = function (label, first, keyOf) {
       var w = {}, a = {}
@@ -603,15 +661,31 @@ function searchGames(query, lang) {
         rows: keys.map(function (k) { return [k, w[k] ? w[k].n : 0, w[k] ? rate(w[k]) : '—', a[k] ? a[k].n : 0, a[k] ? rate(a[k]) : '—'] })
           .sort(function (x, y) { return (y[1] + y[3]) - (x[1] + x[3]) }).slice(0, 30) }
     }
+    var his = []
+    if (H && H.c) {
+      his.push({ label: tr(fr, 'Ses parties (tes replays)', 'Their games (your replays)'), value: H.c },
+        { label: tr(fr, 'Son % de victoire', 'Their win %'), value: pct(H.w, H.w + H.l) + ' %' },
+        { label: tr(fr, 'Ses KOs subis / partie', 'Their stocks lost / game'), value: Math.round(H.d * 10 / H.c) / 10 },
+        { label: tr(fr, 'Ses appuis / min', 'Their presses / min'), value: H.aN ? Math.round(H.a / H.aN) : '—' },
+        { label: tr(fr, 'Ses esquives / partie', 'Their dodges / game'), value: Math.round(H.dg / H.c) },
+        { label: tr(fr, 'Ses sauts / partie', 'Their jumps / game'), value: Math.round(H.j / H.c) },
+        { label: tr(fr, 'Ses lancers / partie', 'Their throws / game'), value: Math.round(H.th * 10 / H.c) / 10 })
+    }
+    var hisTables = H && H.c ? [{ title: tr(fr, 'Ses légendes', 'Their legends'), columns: fr ? ['Légende', 'Parties', '% de ses parties'] : ['Legend', 'Games', '% of their games'],
+      rows: Object.keys(H.L).map(function (l) { return [legendName(+l), H.L[l], pct(H.L[l], H.c) + ' %'] }).sort(function (a, b) { return b[1] - a[1] }).slice(0, 30) }] : []
+    var hisGrids = H && H.c ? [
+      { title: tr(fr, 'Direction de ses esquives', 'Their dodge directions'), rows: GRID_ROWS, cols: GRID_COLS, values: grid3(H.g) },
+      { title: tr(fr, 'Ses attaques', 'Their attacks'), rows: [tr(fr, 'Légère', 'Light'), tr(fr, 'Lourde', 'Heavy')], cols: [tr(fr, 'Neutre', 'Neutral'), tr(fr, 'Côté', 'Side'), tr(fr, 'Bas', 'Down')], values: [H.at.slice(0, 3), H.at.slice(3, 6)] }] : []
     return {
       chips: chips,
-      stats: [{ label: tr(fr, 'Parties ensemble', 'Games together'), value: W.n }, { label: tr(fr, '% V ensemble', 'Win % together'), value: rate(W) },
+      grids: hisGrids,
+      stats: his.concat([{ label: tr(fr, 'Parties ensemble', 'Games together'), value: W.n }, { label: tr(fr, '% V ensemble', 'Win % together'), value: rate(W) },
         { label: tr(fr, 'Parties contre', 'Games against'), value: A.n }, { label: tr(fr, 'Tes victoires contre', 'Your wins against'), value: A.w + ' (' + rate(A) + ')' },
-        { label: tr(fr, 'Première partie', 'First game'), value: fmtDate(all[0].t).slice(0, 10) }, { label: tr(fr, 'Dernière partie', 'Last game'), value: fmtDate(all[all.length - 1].t).slice(0, 10) }],
-      tables: [both(tr(fr, 'Par carte', 'By map'), tr(fr, 'Carte', 'Map'), function (g) { return g.s.m }), both(tr(fr, 'Par mode', 'By mode'), 'Mode', function (g) { return g.s.p }),
+        { label: tr(fr, 'Première partie', 'First game'), value: fmtDate(all[0].t).slice(0, 10) }, { label: tr(fr, 'Dernière partie', 'Last game'), value: fmtDate(all[all.length - 1].t).slice(0, 10) }]),
+      tables: hisTables.concat([both(tr(fr, 'Par carte', 'By map'), tr(fr, 'Carte', 'Map'), function (g) { return g.s.m }), both(tr(fr, 'Par mode', 'By mode'), 'Mode', function (g) { return g.s.p }),
         both(tr(fr, 'Tes légendes', 'Your legends'), tr(fr, 'Légende', 'Legend'), function (g) { return legendName(g.s.L) }),
         { title: tr(fr, 'Dernières parties', 'Recent games'), columns: fr ? ['Date', 'Résultat', 'Avec / contre', 'Carte', 'Mode', 'Ta légende', 'Durée'] : ['Date', 'Result', 'With / against', 'Map', 'Mode', 'Your legend', 'Length'],
-          rows: recentRows(all, fr, side) }]
+          rows: recentRows(all, fr, side) }])
     }
   }
 
@@ -650,6 +724,7 @@ var plugin = {
     var learned = false
     var files = host.files.list()                                       // tout le dossier, du plus récent au plus ancien
     var cache = loadCache(), next = {}, fresh = 0, failed = 0, backlog = 0, items = [], unknown = {}
+    var players = loadPlayers()
     var started = Date.now()                                            // le budget ne compte que la lecture des replays
     for (var i = 0; i < files.length; i++) {
       var f = files[i], key = f.name + '|' + f.size + '|' + f.mtime
@@ -664,14 +739,15 @@ var plugin = {
         full.n.forEach(function (n) { if (!LEGENDS[n[2]]) unknown[n[2]] = true })
         // Le cache ne garde qu'un résumé par partie ; le détail part tout de suite dans WaveDash, qui le conserve.
         next[key] = { v: CACHE_V, t: f.mtime, s: a.me ? summaryOf(f, full, a, lang) : 0 }
+        addPlayers(players, full, a, f.mtime)
         if (a.me) items.push(buildItem(f, full, a, lang))
       } catch (e) {
         failed++; host.log('Illisible : ' + f.name + ' — ' + (e && e.message ? e.message : e)); next[key] = { v: CACHE_V, bad: 1 }
       }
     }
     saveCache(next)
+    if (fresh) savePlayers(players)
     if (learned) { host.storage.set('myPids', JSON.stringify(myPids)); host.log('Tes identifiants de joueur : ' + Object.keys(myPids).join(', ')) }
-    if (host.storage.get('base')) host.storage.set('base', '')            // base cumulée des versions 1.0.x : plus utile
     host.log(files.length + ' fichiers, ' + fresh + ' lus, ' + failed + ' illisibles' + (backlog ? ', ' + backlog + ' encore à lire' : ''))
     var unknownIds = Object.keys(unknown)
     if (unknownIds.length) host.log('Légende inconnue (' + unknownIds.map(function (k) { return '#' + k }).join(', ') + ') : nouvelle légende ? Mets à jour le plugin.')
