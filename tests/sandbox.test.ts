@@ -75,6 +75,13 @@ test('réseau : domaines déclarés seulement, et le plugin reçoit l’erreur',
 })
 
 test('fin d’exécution propre même avec une promesse encore en attente', async () => {
-  const r = await runPlugin(req('new Promise(() => {}); host.http("https://exemple.com/").catch(() => {}); return 1', {}, { permissions: { network: ['exemple.com'] } }))
-  assert.equal(r.value, 1)
+  // Serveur local qui ne répond jamais : la requête est encore en cours quand le plugin a fini (aucun accès à Internet).
+  const s = http.createServer(() => { /* pas de réponse */ })
+  await new Promise<void>((r) => s.listen(0, '127.0.0.1', r))
+  try {
+    const port = (s.address() as AddressInfo).port
+    const r = await runPlugin(req(`new Promise(() => {}); host.http("http://127.0.0.1:${port}/").catch(() => {}); return 1`,
+      { allowLocalForTests: true, manifest: { ...manifest(), permissions: { network: ['127.0.0.1'], folder: false, folderExtensions: [], images: false } } }))
+    assert.equal(r.value, 1)
+  } finally { s.closeAllConnections(); s.close() }
 })

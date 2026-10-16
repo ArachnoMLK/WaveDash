@@ -5,7 +5,7 @@ Windows dashboard for your **YouTube, Brawlhalla, TikTok, Discord** stats, and a
 
 Electron · React · TypeScript · SQLite · ECharts — gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
 
-> **Version 1.1.1**
+> **Version 1.1.2**
 >
 > Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit rester **public**.
 

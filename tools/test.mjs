@@ -17,10 +17,11 @@ await build({
   external: ['better-sqlite3', 'quickjs-emscripten']
 })
 const electron = join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron')
-// Un test bloqué échoue au bout de 3 min au lieu de suspendre tout (ex. sur GitHub). Sur GitHub, les échecs deviennent des annotations.
+// Un test bloqué échoue au bout de 3 min au lieu de suspendre tout (ex. sur GitHub) ; un fichier dont les tests sont finis se ferme
+// même s'il reste une connexion ou une minuterie ouverte (vu par intermittence sur GitHub). Sur GitHub, les échecs deviennent des annotations.
 const reporters = process.env.GITHUB_ACTIONS
   ? ['--test-reporter=spec', '--test-reporter-destination=stdout', `--test-reporter=${pathToFileURL(join(root, 'tools', 'gh-reporter.mjs')).href}`, '--test-reporter-destination=stdout']
   : []
-const r = spawnSync(electron, ['--test', '--test-timeout=180000', ...reporters, ...files.map((f) => join(outDir, f.replace(/\.ts$/, '.cjs')))],
+const r = spawnSync(electron, ['--test', '--test-timeout=180000', '--test-force-exit', ...reporters, ...files.map((f) => join(outDir, f.replace(/\.ts$/, '.cjs')))],
   { stdio: 'inherit', cwd: root, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', WAVEDASH_ROOT: root } })
 process.exit(r.status ?? 1)
