@@ -182,7 +182,7 @@ Le format de fichier a été compris grâce aux projets open source BrawlhallaRe
 
 ## Plugin fourni : Discord (serveurs)
 
-`examples/discord-server-1.2.1.wdsh` suit des serveurs Discord avec l'API officielle (permission réseau : `discord.com` seulement). Trois façons de l'utiliser :
+`examples/discord-server-1.2.2.wdsh` suit des serveurs Discord avec l'API officielle (permission réseau : `discord.com` seulement). Trois façons de l'utiliser :
 
 - **Tous les serveurs d'un bot** : laisse l'invitation et l'ID vides, puis enregistre le jeton du bot dans les clés du plugin. Le compte liste chaque serveur où le bot est présent (membres, en ligne, messages du jour et des 7 jours, dernier message) ; un clic ouvre le détail du serveur (salons, membres les plus actifs, messages par jour). Jusqu'à 45 serveurs suivis en détail.
 - **Un seul serveur** : jeton du bot + ID du serveur ; la liste montre alors ses salons.

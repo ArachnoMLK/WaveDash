@@ -47,7 +47,8 @@ function botError(status, F) {
 }
 
 /* ───────── état d'un serveur (stockage : « c.<id> » salons et jours, « a.<id> » membres actifs) ───────── */
-function loadGuild(id) { var c = load('c.' + id, { chans: {}, days: {} }); return { id: id, chans: c.chans, days: c.days, authors: load('a.' + id, {}) } }
+// « c.<id> » garde aussi la date de la dernière synchronisation (t) et les infos du serveur (boosts, niveau) : 2 clés par serveur.
+function loadGuild(id) { var c = load('c.' + id, { chans: {}, days: {} }); return { id: id, chans: c.chans, days: c.days, t: c.t || 0, info: c.info || null, authors: load('a.' + id, {}) } }
 function saveGuild(g) {
   var keep = dayKey(Date.now() - KEEP_DAYS * 86400000), keepA = dayKey(Date.now() - AUTHOR_DAYS * 86400000)
   var old = function (o, k) { for (var x in o) if (x < k) delete o[x] }
@@ -56,7 +57,15 @@ function saveGuild(g) {
   var ids = Object.keys(g.authors)
   ids.forEach(function (a) { old(g.authors[a].d, keepA) })
   if (ids.length > MAX_AUTHORS) ids.sort(function (a, b) { return g.authors[a].c - g.authors[b].c }).slice(0, ids.length - MAX_AUTHORS).forEach(function (a) { delete g.authors[a] })
-  save('c.' + g.id, { chans: g.chans, days: g.days }); save('a.' + g.id, g.authors)
+  save('c.' + g.id, { chans: g.chans, days: g.days, t: g.t, info: g.info }); save('a.' + g.id, g.authors)
+}
+
+/** Toutes les 6 h : liste des salons et infos du serveur (boosts, niveau de boost, que la liste des serveurs ne donne pas). */
+async function syncGuild(g, token, F) {
+  if (Object.keys(g.chans).length && g.t > Date.now() - 6 * 3600000) return
+  var r = await call('/guilds/' + g.id + '?with_counts=true', token)
+  if (r.data) g.info = { b: r.data.premium_subscription_count || 0, tier: r.data.premium_tier || 0, members: r.data.approximate_member_count, online: r.data.approximate_presence_count }
+  if (await syncChannels(g, token, F)) g.t = Date.now()
 }
 
 /** Met à jour la liste des salons textuels d'un serveur. */
@@ -150,12 +159,10 @@ async function allServers(ctx, token, F) {
   var tracked = guilds.slice(0, MAX_GUILDS), states = {}, behind = 0
   tracked.forEach(function (gd) { states[gd.id] = loadGuild(gd.id) })
   // Lecture répartie : chaque serveur à tour de rôle, un salon à la fois, tant qu'il reste des requêtes.
-  var order = tracked.map(function (gd) { return gd.id }).sort(function (a, b) { return (load('t.' + a, 0)) - (load('t.' + b, 0)) })
+  var order = tracked.map(function (gd) { return gd.id }).sort(function (a, b) { return states[a].t - states[b].t })
   for (var i = 0; i < order.length; i++) {
     var g = states[order[i]]
-    if (!Object.keys(g.chans).length || (load('t.' + g.id, 0) < Date.now() - 6 * 3600000)) {
-      try { if (await syncChannels(g, token, F)) save('t.' + g.id, Date.now()) } catch (e) { host.log(gdName(tracked, g.id) + ' : ' + e.message) }
-    }
+    try { await syncGuild(g, token, F) } catch (e) { host.log(gdName(tracked, g.id) + ' : ' + e.message) }
   }
   // Chaque salon est lu au plus une fois par exécution, sauf s'il lui reste une page de messages.
   var done = {}, progressed = true
@@ -174,6 +181,7 @@ async function allServers(ctx, token, F) {
     totals.members += gd.approximate_member_count || 0; totals.online += gd.approximate_presence_count || 0
     var g = states[gd.id]
     var it = { id: gd.id, title: gd.name, fields: { members: gd.approximate_member_count || 0, online: gd.approximate_presence_count || 0 } }
+    if (g && g.info) { it.fields.boosts = g.info.b; totals.boosts += g.info.b }
     if (g) {
       saveGuild(g)
       q = queueOf(g); q.forEach(function (cid) { if (g.chans[cid].more || !g.chans[cid].last) behind++ })
@@ -182,6 +190,7 @@ async function allServers(ctx, token, F) {
       it.fields.today = f.today; it.fields.week = f.week; it.fields.total = f.total; it.fields.last = last ? fmtDate(last) : '—'
       if (last) it.ts = last
       it.detail = { stats: [{ label: F ? 'Membres' : 'Members', value: it.fields.members }, { label: F ? 'En ligne' : 'Online', value: it.fields.online },
+        { label: 'Boosts', value: g.info ? g.info.b : '—' }, { label: F ? 'Niveau de boost' : 'Boost level', value: g.info ? g.info.tier : '—' },
         { label: F ? 'Salons' : 'Channels', value: f.channels }, { label: F ? 'Messages 7 jours' : 'Messages 7 days', value: f.week },
         { label: F ? 'Membres actifs 7 j' : 'Active members 7 d', value: f.authors }], tables: guildTables(g, F) }
     }
@@ -193,10 +202,10 @@ async function allServers(ctx, token, F) {
   return {
     metrics: totals, items: items, history: dailyHistory(allDays), backlog: behind,
     summary: { stats: [{ label: F ? 'Serveurs' : 'Servers', value: totals.servers }, { label: F ? 'Membres (total)' : 'Members (total)', value: totals.members },
-      { label: F ? 'En ligne' : 'Online', value: totals.online }, { label: F ? 'Messages aujourd’hui' : 'Messages today', value: totals.messages_today },
+      { label: F ? 'En ligne' : 'Online', value: totals.online }, { label: 'Boosts', value: totals.boosts }, { label: F ? 'Messages aujourd’hui' : 'Messages today', value: totals.messages_today },
       { label: F ? 'Messages 7 jours' : 'Messages 7 days', value: totals.messages_7d }, { label: F ? 'Membres actifs 7 j' : 'Active members 7 d', value: totals.authors_7d }],
-      tables: [{ title: F ? 'Serveurs' : 'Servers', columns: F ? ['Serveur', 'Membres', 'En ligne', 'Messages 7 j'] : ['Server', 'Members', 'Online', 'Messages 7 d'],
-        rows: items.map(function (it) { return [it.title, it.fields.members, it.fields.online, it.fields.week === undefined ? '—' : it.fields.week] }) }] }
+      tables: [{ title: F ? 'Serveurs' : 'Servers', columns: F ? ['Serveur', 'Membres', 'En ligne', 'Boosts', 'Messages 7 j'] : ['Server', 'Members', 'Online', 'Boosts', 'Messages 7 d'],
+        rows: items.map(function (it) { return [it.title, it.fields.members, it.fields.online, it.fields.boosts === undefined ? '—' : it.fields.boosts, it.fields.week === undefined ? '—' : it.fields.week] }) }] }
   }
 }
 function gdName(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].name; return id }
@@ -205,7 +214,7 @@ async function oneServer(ctx, token, guildId, F) {
   var info = await call('/guilds/' + guildId + '?with_counts=true', token)
   if (info.status) throw botError(info.status, F)
   var g = loadGuild(guildId), behind = 0
-  if (!Object.keys(g.chans).length || load('t.' + guildId, 0) < Date.now() - 6 * 3600000) { if (await syncChannels(g, token, F)) save('t.' + guildId, Date.now()) }
+  if (!Object.keys(g.chans).length || g.t < Date.now() - 6 * 3600000) { if (await syncChannels(g, token, F)) g.t = Date.now() }
   var q = queueOf(g)
   for (var i = 0; i < q.length && budget < MAX_REQ; i++) await readChannel(g, q[i], token)
   saveGuild(g)
