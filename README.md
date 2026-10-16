@@ -5,7 +5,7 @@ Windows dashboard for your **YouTube, Instagram, TikTok and Brawlhalla** stats.
 
 Electron · React · TypeScript · SQLite · ECharts — style gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
 
-> **Version 0.9.4** — YouTube, Brawlhalla, mode démo, personnalisation avancée, mises à jour automatiques, paliers et notifications, objectifs, export, et **plugins `.wdsh`** exécutés dans un bac à sable isolé (guide : [docs/PLUGINS.md](docs/PLUGINS.md), exemples : `examples/`, dont **Brawlhalla Replays** qui lit et importe tes fichiers `.replay` : bilan par légende, carte, mode, coéquipier et adversaire, détail complet de chaque partie ; et **TikTok** par la page publique du profil, **Discord** par l'API officielle). Catalogue de plugins en ligne ([WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins)), plugins fournis avec l'appli, paliers et vue d'ensemble pour les plugins. À venir : rivaux Brawlhalla, Instagram.
+> **Version 0.9.5** — YouTube, Brawlhalla, mode démo, personnalisation avancée, mises à jour automatiques, paliers et notifications, objectifs, export, et **plugins `.wdsh`** exécutés dans un bac à sable isolé (guide : [docs/PLUGINS.md](docs/PLUGINS.md), exemples : `examples/`, dont **Brawlhalla Replays** qui lit et importe tes fichiers `.replay` : bilan par légende, carte, mode, coéquipier et adversaire, détail complet de chaque partie ; et **TikTok** par la page publique du profil, **Discord** par l'API officielle). Catalogue de plugins en ligne ([WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins)), plugins fournis avec l'appli, paliers et vue d'ensemble pour les plugins. À venir : rivaux Brawlhalla, Instagram.
 >
 > Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit être **public**.
 

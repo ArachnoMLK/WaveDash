@@ -250,7 +250,7 @@ export interface WaveApi {
   pluginsCatalog(force?: boolean): Promise<{ entries: { id: string; name: string; version: string; author: string; description: import('./plugin').LocalText;
     permissions: { network?: string[]; folder?: boolean }; installedVersion: string | null }[]; fetchedAt: number | null; offline: boolean }>
   pluginsCatalogFetch(id: string): Promise<{ ok: boolean; path?: string; error?: string }>
-  pluginAccountItems(accountId: number, offset: number, limit: number, month?: string, sortKey?: string, desc?: boolean, query?: string): Promise<PluginItemsPage>
+  pluginAccountItems(accountId: number, offset: number, limit: number, month?: string, sortKey?: string, desc?: boolean, query?: string, scope?: string): Promise<PluginItemsPage>
   /** Ouvre le sélecteur de fichiers et importe les fichiers choisis pour ce compte ; null si annulé. */
   pluginImportFiles(accountId: number, extensions: string[]): Promise<{ imported: number; skipped: number } | null>
   pluginImportPaths(accountId: number, paths: string[]): Promise<{ imported: number; skipped: number }>

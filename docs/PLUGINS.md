@@ -92,7 +92,9 @@ detail: {
 }
 ```
 
-`refresh` peut aussi renvoyer un **`summary`** au même format : c'est le **bilan** du compte, affiché en haut de sa page (par exemple des totaux par catégorie).
+`refresh` peut aussi renvoyer un **`summary`** au même format : c'est le **bilan** du compte, affiché en haut de sa page (par exemple des totaux par catégorie). Chaque bloc du bilan est un module que l'utilisateur peut réduire, déplacer ou masquer (disposition gardée par compte).
+
+La page d'un compte propose une **recherche** dans tout l'élément ou dans une seule colonne (menu « Chercher dans ») ; pendant une recherche, WaveDash affiche des stats sur les éléments trouvés, pour chaque colonne : moyenne, minimum, maximum et total pour les nombres, durée moyenne pour les valeurs « m:ss », répartition pour le texte (par exemple le taux de victoire d'après une colonne Résultat).
 
 Si le plugin lit un dossier (`permissions.folder`), la page du compte propose **Importer des fichiers** : une fenêtre où glisser-déposer les fichiers (ou les choisir). WaveDash les copie d'abord (extensions du manifeste, 8 Mo max chacun, doublons ignorés) dans le dossier **Documents › WaveDash › Parties importées › <n° du compte>**, en gardant leur date ; `host.files` les voit en plus de ceux du dossier choisi. Le dossier choisi n'est jamais modifié, et le dossier d'imports est supprimé avec le compte.
 

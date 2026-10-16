@@ -287,7 +287,11 @@ export interface PluginItemsPage {
   total: number
   /** Mois disponibles (AAAA-MM, heure locale), du plus récent au plus ancien, avec leur nombre d'éléments. */
   months: { month: string; count: number }[]
+  /** Pendant une recherche : tes stats sur les éléments trouvés, colonne par colonne. */
+  stats?: ColumnStat[]
 }
+/** num : moyenne, min, max, total. dur : durées « m:ss » (en secondes). cat : valeurs les plus fréquentes avec leur nombre. */
+export interface ColumnStat { key: string; kind: 'num' | 'dur' | 'cat'; n: number; avg?: number; min?: number; max?: number; sum?: number; top?: { value: string; n: number }[] }
 export interface InstalledPlugin {
   id: string
   manifest: PluginManifest

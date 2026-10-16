@@ -5,7 +5,7 @@ import { join } from 'path'
 import {
   Account, DEFAULT_SETTINGS, ItemStat, LatestMetrics, LegendStat, MetricKey, MilestoneEvent, Platform, Point, Settings
 } from '@shared/types'
-import { PLUGIN_LIMITS, PluginItem, PluginItemsPage } from '@shared/plugin'
+import { ColumnStat, PLUGIN_LIMITS, PluginItem, PluginItemsPage } from '@shared/plugin'
 
 let db: Database.Database
 
@@ -306,12 +306,19 @@ export function savePluginItems(accountId: number, items: PluginItem[], mode: 'r
 const MONTH = "strftime('%Y-%m', ts / 1000, 'unixepoch', 'localtime')"
 
 /** Une page d'éléments, du plus récent au plus ancien, éventuellement limitée à un mois (AAAA-MM). */
-/** Tri : 'ts' (date), 'title' ou la clé d'une colonne du plugin ; les éléments sans valeur passent en dernier. */
-export function listPluginItems(accountId: number, offset: number, limit: number, month?: string, sortKey = 'ts', desc = true, query = ''): PluginItemsPage {
+/** Tri : 'ts' (date), 'title' ou la clé d'une colonne du plugin ; les éléments sans valeur passent en dernier.
+ *  Recherche : `scope` = 'all' (tout l'élément, détail compris), 'title' ou la clé d'une colonne. Pendant une recherche,
+ *  `statKeys` donne les colonnes sur lesquelles calculer tes stats (moyennes, répartitions). */
+export function listPluginItems(accountId: number, offset: number, limit: number, month?: string, sortKey = 'ts', desc = true, query = '',
+  scope = 'all', statKeys: string[] = []): PluginItemsPage {
   let where = month ? `account_id = ? AND ts > 0 AND ${MONTH} = ?` : 'account_id = ?'
   const args: (number | string)[] = month ? [accountId, month] : [accountId]
-  // Recherche dans tout l'élément (titre, colonnes, détail : joueurs, légendes, carte…), sans tenir compte de la casse.
-  for (const word of query.trim().split(/\s+/).filter(Boolean).slice(0, 6)) { where += " AND data LIKE ? ESCAPE '\\'"; args.push(`%${word.replace(/[\\%_]/g, (c) => '\\' + c)}%`) }
+  const target = scope === 'all' ? 'data' : scope === 'title' ? "json_extract(data, '$.title')" : 'json_extract(data, ?)'
+  for (const word of query.trim().split(/\s+/).filter(Boolean).slice(0, 6)) {
+    where += ` AND ${target} LIKE ? ESCAPE '\\'`
+    if (target === 'json_extract(data, ?)') args.push(`$.fields.${scope}`)
+    args.push(`%${word.replace(/[\\%_]/g, (c) => '\\' + c)}%`)
+  }
   const dir = desc ? 'DESC' : 'ASC'
   const expr = sortKey === 'ts' ? 'ts' : 'json_extract(data, ?)'
   const sortArgs: string[] = sortKey === 'ts' ? [] : [sortKey === 'title' ? '$.title' : `$.fields.${sortKey}`]
@@ -322,5 +329,24 @@ export function listPluginItems(accountId: number, offset: number, limit: number
     .all(accountId) as { month: string; count: number }[]
   const items: PluginItem[] = []
   for (const r of rows) { try { items.push(JSON.parse(r.data) as PluginItem) } catch { /* ligne illisible ignorée */ } }
-  return { items, total, months }
+  const stats = query.trim() ? statKeys.map((k) => columnStat(where, args, k)).filter((x): x is ColumnStat => !!x) : undefined
+  return { items, total, months, stats }
+}
+
+/** Stats d'une colonne sur les éléments filtrés : nombres (moyenne, min, max, total), durées « m:ss », ou valeurs les plus fréquentes. */
+function columnStat(where: string, args: (number | string)[], key: string): ColumnStat | null {
+  const path = `$.fields.${key}`
+  const num = db.prepare(`SELECT COUNT(v) n, AVG(v) avg, MIN(v) min, MAX(v) max, SUM(v) sum FROM (SELECT json_extract(data, ?) v FROM plugin_items WHERE ${where})
+    WHERE typeof(v) IN ('integer', 'real')`).get(path, ...args) as { n: number; avg: number; min: number; max: number; sum: number }
+  if (num.n) return { key, kind: 'num', n: num.n, avg: num.avg, min: num.min, max: num.max, sum: num.sum }
+  const groups = db.prepare(`SELECT v, COUNT(*) n FROM (SELECT json_extract(data, ?) v FROM plugin_items WHERE ${where}) WHERE typeof(v) = 'text' AND v NOT IN ('', '—')
+    GROUP BY v ORDER BY n DESC LIMIT 5000`).all(path, ...args) as { v: string; n: number }[]
+  if (!groups.length) return null
+  const n = groups.reduce((s, g) => s + g.n, 0)
+  if (groups.every((g) => /^\d{1,3}:\d{2}$/.test(g.v))) {
+    let sum = 0, min = Infinity, max = 0
+    for (const g of groups) { const [m, s] = g.v.split(':').map(Number), sec = m * 60 + s; sum += sec * g.n; min = Math.min(min, sec); max = Math.max(max, sec) }
+    return { key, kind: 'dur', n, avg: sum / n, min, max, sum }
+  }
+  return { key, kind: 'cat', n, top: groups.slice(0, 6).map((g) => ({ value: g.v.slice(0, 60), n: g.n })) }
 }

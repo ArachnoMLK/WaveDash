@@ -1,7 +1,7 @@
 // Page d'un compte de plugin : cartes de métriques, graphique d'évolution, éléments, journal.
 import { Fragment, ReactNode, useEffect, useState } from 'react'
-import { DetailTable, loc, PluginDetail, PluginItemsPage } from '@shared/plugin'
-import { ChartType, Point, RawMetrics } from '@shared/types'
+import { ColumnStat, DetailGrid, DetailTable, loc, PluginColumn, PluginDetail, PluginItemsPage } from '@shared/plugin'
+import { ChartType, Lang, Point, RawMetrics } from '@shared/types'
 import { Chart } from '../components/Chart'
 import { Reveal, StatCard, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
@@ -32,6 +32,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [sort, setSort] = useState<{ key: string; desc: boolean }>({ key: 'ts', desc: true })
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
+  const [scope, setScope] = useState('all')
   // La recherche part 300 ms après la dernière frappe.
   useEffect(() => { const h = setTimeout(() => { setQuery(search); setPage(0); setOpenId(null) }, 300); return () => clearTimeout(h) }, [search])
   const [note, setNote] = useState<string | null>(null)
@@ -53,9 +54,9 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   // Éléments lus page par page (un plugin peut en garder des milliers), éventuellement pour un seul mois.
   useEffect(() => {
     let alive = true
-    void window.api.pluginAccountItems(accountId, page * PAGE, PAGE, month || undefined, sort.key, sort.desc, query).then((r) => { if (alive) setList(r) })
+    void window.api.pluginAccountItems(accountId, page * PAGE, PAGE, month || undefined, sort.key, sort.desc, query, scope).then((r) => { if (alive) setList(r) })
     return () => { alive = false }
-  }, [accountId, page, month, dataVersion, sort, query])
+  }, [accountId, page, month, dataVersion, sort, query, scope])
   useEffect(() => { setPage(0); setMonth(''); setOpenId(null) }, [accountId])
 
   if (!account || !plugin || !m) return <div className="glass empty"><p>{t('goals.noAccounts')}</p></div>
@@ -143,7 +144,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
       {extra.summary && (
         <Reveal className="glass pad sect" delay={0.14}>
           <h2 style={{ marginBottom: 10 }}>{t('pp.summary')}</h2>
-          <DetailView detail={extra.summary} th={th} t={t} />
+          <DetailView detail={extra.summary} th={th} t={t} layoutKey={String(accountId)} />
         </Reveal>
       )}
 
@@ -165,7 +166,15 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
               </>}
             </div>
           </div>
-          <input type="text" className="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('pp.search')} aria-label={t('pp.search')} style={{ margin: '4px 0 8px' }} />
+          <div className="row" style={{ gap: 8, margin: '4px 0 8px' }}>
+            <select value={scope} style={{ width: 'auto' }} aria-label={t('pp.scope')} onChange={(e) => { setScope(e.target.value); setPage(0); setOpenId(null) }}>
+              <option value="all">{t('pp.scopeAll')}</option>
+              <option value="title">{t('pp.name')}</option>
+              {m.itemColumns.map((c) => <option key={c.key} value={c.key}>{loc(c.label, settings.lang)}</option>)}
+            </select>
+            <input type="text" className="search grow" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('pp.search')} aria-label={t('pp.search')} />
+          </div>
+          {query && list.stats && list.stats.length > 0 && <SearchStats stats={list.stats} total={list.total} columns={m.itemColumns} lang={settings.lang} t={t} />}
           {query && list.total === 0 && <p className="muted small">{t('pp.noResult')}</p>}
           {hasDetail && <p className="muted small" style={{ marginBottom: 6 }}>{t('pp.clickHint')}</p>}
           <div className="tbl-wrap"><table className="table">
@@ -229,9 +238,51 @@ function SortableTable({ tb }: { tb: DetailTable }): JSX.Element {
   )
 }
 
-/** Détail d'un élément de plugin, ou bilan du compte : badges, chiffres clés, tableaux, grilles, courbes, frise. */
-function DetailView({ detail, th, t, onClose }: { detail: PluginDetail; th: ChartTheme; t: (k: string) => string; onClose?: () => void }): JSX.Element {
+/** Disposition des modules d'un bilan (ordre, masqués, réduits), gardée dans ce navigateur, par compte. */
+interface Layout { order: string[]; hidden: string[]; collapsed: string[] }
+function useLayout(key: string | undefined): [Layout, (l: Layout) => void] {
+  const read = (): Layout => { try { const v = key ? JSON.parse(localStorage.getItem(`wd.layout.${key}`) ?? 'null') : null; return v && Array.isArray(v.order) ? v : { order: [], hidden: [], collapsed: [] } } catch { return { order: [], hidden: [], collapsed: [] } } }
+  const [layout, setLayout] = useState<Layout>(read)
+  useEffect(() => { setLayout(read()) }, [key])        // eslint-disable-line react-hooks/exhaustive-deps
+  const save = (l: Layout): void => { setLayout(l); try { if (key) localStorage.setItem(`wd.layout.${key}`, JSON.stringify(l)) } catch { /* stockage indisponible */ } }
+  return [layout, save]
+}
+
+function Heat({ g }: { g: DetailGrid }): JSX.Element {
+  const max = Math.max(1, ...g.values.flat())
+  return (
+    <figure className="heat">
+      <div className="heat-grid" style={{ gridTemplateColumns: `auto repeat(${g.cols.length}, 2.6rem)` }}>
+        <span />{g.cols.map((c, j) => <span key={j} className="small muted">{c}</span>)}
+        {g.rows.map((r, i) => [<span key={`r${i}`} className="small muted">{r}</span>,
+          ...g.cols.map((_, j) => <b key={`${i}-${j}`} style={{ background: `color-mix(in srgb, var(--accent) ${Math.round((g.values[i][j] / max) * 85)}%, var(--ctrl))` }}>{g.values[i][j]}</b>)])}
+      </div>
+      {g.title && <figcaption className="small muted">{g.title}</figcaption>}
+    </figure>
+  )
+}
+
+/** Détail d'un élément de plugin, ou bilan du compte : badges, chiffres clés, tableaux, grilles, courbes, frise.
+ *  Avec `layoutKey` (bilan), chaque bloc devient un module que l'on peut réduire, déplacer (flèches ou glisser) et masquer. */
+function DetailView({ detail, th, t, onClose, layoutKey }: { detail: PluginDetail; th: ChartTheme; t: (k: string, v?: Record<string, string | number>) => string; onClose?: () => void; layoutKey?: string }): JSX.Element {
   const tables = [...(detail.table ? [detail.table] : []), ...(detail.tables ?? [])]
+  const blocks: { id: string; title: string; node: ReactNode }[] = []
+  if (detail.stats) blocks.push({ id: 'stats', title: t('pp.keyFigures'), node: <div className="mini-stats">{detail.stats.map((s, i) => <div key={i}><span className="small muted">{s.label}</span><b>{s.value}</b></div>)}</div> })
+  tables.forEach((tb, k) => blocks.push({ id: `table:${tb.title ?? k}`, title: tb.title ?? `${t('pp.table')} ${k + 1}`, node: <SortableTable tb={tb} /> }))
+  if (layoutKey) detail.grids?.forEach((g, k) => blocks.push({ id: `grid:${g.title ?? k}`, title: g.title ?? `${t('pp.grid')} ${k + 1}`, node: <div className="grids"><Heat g={g} /></div> }))
+  else if (detail.grids) blocks.push({ id: 'grids', title: '', node: <div className="grids">{detail.grids.map((g, k) => <Heat key={k} g={g} />)}</div> })
+  detail.series?.forEach((sr, k) => blocks.push({ id: `series:${sr.title ?? k}`, title: sr.title ?? '', node: <Chart option={seriesOption(sr, th)} height={220} /> }))
+  if (detail.timeline) blocks.push({ id: 'timeline', title: t('pp.timeline'), node: <Chart option={timelineOption(detail.timeline, th)} height={Math.max(130, 48 + detail.timeline.lanes.length * 36)} /> })
+
+  const [layout, setLayout] = useLayout(layoutKey)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const pos = (id: string): number => { const i = layout.order.indexOf(id); return i < 0 ? 1000 + blocks.findIndex((b) => b.id === id) : i }
+  const ordered = layoutKey ? [...blocks].sort((a, b) => pos(a.id) - pos(b.id)) : blocks
+  const ids = ordered.map((b) => b.id)
+  const moveTo = (id: string, to: number): void => { const o = ids.filter((x) => x !== id); o.splice(Math.max(0, Math.min(o.length, to)), 0, id); setLayout({ ...layout, order: o }) }
+  const toggle = (list: 'hidden' | 'collapsed', id: string): void =>
+    setLayout({ ...layout, [list]: layout[list].includes(id) ? layout[list].filter((x) => x !== id) : [...layout[list], id] })
+
   return (
     <Reveal className="detail" delay={0}>
       {onClose && (
@@ -241,42 +292,60 @@ function DetailView({ detail, th, t, onClose }: { detail: PluginDetail; th: Char
         </div>
       )}
       {detail.chips && <div className="chips">{detail.chips.map((c, i) => <span key={i} className="chip">{c}</span>)}</div>}
-      {detail.stats && <div className="mini-stats">{detail.stats.map((s, i) => <div key={i}><span className="small muted">{s.label}</span><b>{s.value}</b></div>)}</div>}
-      {tables.map((tb, k) => (
-        <div key={k} className="detail-block">
-          {tb.title && <h3 className="small muted">{tb.title}</h3>}
-          <SortableTable tb={tb} />
-        </div>
-      ))}
-      {detail.grids && (
-        <div className="detail-block grids">
-          {detail.grids.map((g, k) => {
-            const max = Math.max(1, ...g.values.flat())
-            return (
-              <figure key={k} className="heat">
-                <div className="heat-grid" style={{ gridTemplateColumns: `auto repeat(${g.cols.length}, 2.6rem)` }}>
-                  <span />{g.cols.map((c, j) => <span key={j} className="small muted">{c}</span>)}
-                  {g.rows.map((r, i) => [<span key={`r${i}`} className="small muted">{r}</span>,
-                    ...g.cols.map((_, j) => <b key={`${i}-${j}`} style={{ background: `color-mix(in srgb, var(--accent) ${Math.round((g.values[i][j] / max) * 85)}%, var(--ctrl))` }}>{g.values[i][j]}</b>)])}
-                </div>
-                {g.title && <figcaption className="small muted">{g.title}</figcaption>}
-              </figure>
-            )
-          })}
-        </div>
+      {layoutKey && (
+        <details className="modules-menu">
+          <summary className="small muted">{t('pp.modules', { shown: ordered.filter((b) => !layout.hidden.includes(b.id)).length, all: ordered.length })}</summary>
+          <div className="modules-list">
+            {ordered.map((b) => (
+              <label key={b.id} className="small"><input type="checkbox" checked={!layout.hidden.includes(b.id)} onChange={() => toggle('hidden', b.id)} /> {b.title}</label>
+            ))}
+            <button className="btn" onClick={() => setLayout({ order: [], hidden: [], collapsed: [] })}>{t('pp.resetLayout')}</button>
+          </div>
+        </details>
       )}
-      {detail.series?.map((sr, k) => (
-        <div key={k} className="detail-block">
-          {sr.title && <h3 className="small muted">{sr.title}</h3>}
-          <Chart option={seriesOption(sr, th)} height={220} />
-        </div>
-      ))}
-      {detail.timeline && (
-        <div className="detail-block">
-          <h3 className="small muted">{t('pp.timeline')}</h3>
-          <Chart option={timelineOption(detail.timeline, th)} height={Math.max(130, 48 + detail.timeline.lanes.length * 36)} />
-        </div>
-      )}
+      {ordered.map((b, i) => {
+        if (!layoutKey) return <div key={b.id} className="detail-block">{b.title && <h3 className="small muted">{b.title}</h3>}{b.node}</div>
+        if (layout.hidden.includes(b.id)) return null
+        const shut = layout.collapsed.includes(b.id)
+        return (
+          <section key={b.id} className={`module${dragId === b.id ? ' dragging' : ''}`}
+            onDragOver={(e) => { if (dragId) e.preventDefault() }} onDrop={(e) => { e.preventDefault(); if (dragId && dragId !== b.id) moveTo(dragId, ids.indexOf(b.id)); setDragId(null) }}>
+            <header className="module-head" draggable onDragStart={() => setDragId(b.id)} onDragEnd={() => setDragId(null)}>
+              <button className="icon-btn" aria-expanded={!shut} aria-label={shut ? t('pp.expand') : t('pp.collapse')} onClick={() => toggle('collapsed', b.id)}>{shut ? '▸' : '▾'}</button>
+              <h3 className="grow" title={t('pp.dragHint')}>{b.title}</h3>
+              <button className="icon-btn" disabled={i === 0} aria-label={t('pp.moveUp')} onClick={() => moveTo(b.id, i - 1)}>↑</button>
+              <button className="icon-btn" disabled={i === ordered.length - 1} aria-label={t('pp.moveDown')} onClick={() => moveTo(b.id, i + 1)}>↓</button>
+              <button className="icon-btn" aria-label={t('pp.hide')} onClick={() => toggle('hidden', b.id)}>✕</button>
+            </header>
+            {!shut && <div className="module-body">{b.node}</div>}
+          </section>
+        )
+      })}
     </Reveal>
+  )
+}
+
+/** Tes stats sur les éléments trouvés par la recherche, colonne par colonne. */
+function SearchStats({ stats, total, columns, lang, t }: { stats: ColumnStat[]; total: number; columns: PluginColumn[]; lang: Lang; t: (k: string, v?: Record<string, string | number>) => string }): JSX.Element {
+  const nf = new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-US', { maximumFractionDigits: 1 })
+  const mmss = (s: number): string => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
+  return (
+    <div className="search-stats">
+      <h3 className="small">{t('pp.searchStats', { n: total })}</h3>
+      <div className="mini-stats">
+        {stats.map((s) => {
+          const label = loc(columns.find((c) => c.key === s.key)?.label, lang) || s.key
+          if (s.kind === 'cat') return (
+            <div key={s.key}><span className="small muted">{label}</span>
+              <span className="small">{s.top?.map((x) => `${x.value} ${Math.round((x.n * 100) / s.n)} %`).join(' · ')}</span></div>
+          )
+          const f = s.kind === 'dur' ? mmss : (v: number): string => nf.format(v)
+          return (
+            <div key={s.key}><span className="small muted">{label}</span><b>{f(s.avg ?? 0)}</b>
+              <span className="small muted">{t('pp.minMax', { min: f(s.min ?? 0), max: f(s.max ?? 0) })}{s.kind === 'num' ? ` · ${t('pp.sum', { sum: nf.format(s.sum ?? 0) })}` : ''}</span></div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
