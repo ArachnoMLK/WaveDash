@@ -1,82 +1,80 @@
 # WaveDash
 
-Dashboard Windows centralisé pour tes statistiques **YouTube, Instagram, TikTok et Brawlhalla**.
-Windows dashboard for your **YouTube, Instagram, TikTok and Brawlhalla** stats.
+Dashboard Windows centralisé pour tes statistiques **YouTube, Brawlhalla, TikTok, Discord** et tout ce qu'un plugin sait lire.
+Windows dashboard for your **YouTube, Brawlhalla, TikTok, Discord** stats, and anything a plugin can read.
 
-Electron · React · TypeScript · SQLite · ECharts — style gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
+Electron · React · TypeScript · SQLite · ECharts — gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
 
-> **Version 0.12.0** — YouTube, Brawlhalla, mode démo, personnalisation avancée, mises à jour automatiques, paliers et notifications, objectifs, export, et **plugins `.wdsh`** exécutés dans un bac à sable isolé (guide : [docs/PLUGINS.md](docs/PLUGINS.md), exemples : `examples/`, dont **Brawlhalla Replays** qui lit et importe tes fichiers `.replay` : bilan par légende, carte, mode, coéquipier et adversaire, détail complet de chaque partie ; et **TikTok** par la page publique du profil, **Discord** par l'API officielle). Catalogue de plugins en ligne ([WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins)), plugins fournis avec l'appli, paliers et vue d'ensemble pour les plugins. À venir : rivaux Brawlhalla, Instagram.
+> **Version 1.0.0**
 >
-> Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit être **public**.
+> Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit rester **public**.
 
 ---
 
 ## 🇫🇷 Français
 
-### Ce qui fonctionne (étape 1)
-- Fenêtre en verre (Mica/Acrylic natif sous Windows 11, flou CSS en repli), thèmes sombre/clair, animations réglables
-- **YouTube** : abonnés, vues, vidéos, likes et commentaires (50 dernières vidéos), meilleures vidéos
-- **Brawlhalla** : ELO 1v1/2v2, ELO max, classements, parties, victoires, taux de victoire, niveau, stats par légende
-- Historique local (SQLite) à partir du début du suivi, graphiques courbe / aire / barres / camembert / radar
-- Un seul compte par plateforme, chaque plateforme est optionnelle
-- **Mode démo** : données simulées pour tout tester sans clé API
-- Paramètres : thème, langue, intensité du verre et des animations, fréquence d'actualisation, type de graphique par statistique, clés API, démarrage avec Windows, barre système
+### Ce que fait WaveDash
+- **Plateformes intégrées** : YouTube (abonnés, vues, vidéos, likes et commentaires des 50 dernières vidéos, meilleures vidéos) et Brawlhalla (ELO 1v1/2v2, classements, victoires, stats par légende).
+- **Historique local** (SQLite) dès le début du suivi ; graphiques courbe, aire, barres, camembert, radar.
+- **Vue d'ensemble**, **objectifs**, **paliers** (10, 20, 50, 100…) avec notification Windows et célébration, **export** des données.
+- **Mode démo** : données simulées pour tout essayer sans clé API.
+- **Personnalisation** : thème, langue, verre, animations, fréquence d'actualisation, type de graphique par statistique, démarrage avec Windows, barre système.
+- **Mises à jour automatiques** silencieuses depuis les Releases GitHub (installateur vérifié par SHA-512).
 
-### Obtenir le `.exe` (sans rien compiler)
-1. Crée un dépôt GitHub et pousse ce dossier.
-2. Dans `electron-builder.yml`, la section `publish` utilise le dépôt courant via GitHub Actions ; rien à renseigner de plus.
-3. Crée un tag : `git tag v0.1.0 && git push origin v0.1.0`
-4. Le workflow *Release* compile `WaveDash-Setup-0.1.0.exe` et le publie dans l'onglet **Releases**.
+### Plugins `.wdsh`
+Un plugin ajoute une source de données. Il tourne dans un **bac à sable QuickJS**, dans un **processus séparé** : il ne voit que ce que ses permissions déclarées autorisent (domaines réseau, un dossier en lecture seule) et ne peut pas figer l'interface. Guide complet : [docs/PLUGINS.md](docs/PLUGINS.md).
 
-L'installateur n'est **pas signé** : Windows SmartScreen affichera « éditeur inconnu » au premier lancement (« Informations complémentaires » › « Exécuter quand même »).
+- **Catalogue en ligne** ([WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins)) : index **signé** (Ed25519), chaque paquet vérifié par SHA-256, mises à jour silencieuses seulement si les permissions ne changent pas.
+- **Plugins fournis** (`examples/plugins/`) :
+  - **Brawlhalla Replays** : lit et importe tes fichiers `.replay` (patchs 10.02 à 11.00). Bilan par légende, arme, carte, mode, coéquipier et adversaire, détail de chaque partie, recherche d'un joueur, d'une carte ou d'une légende, et outil « Croiser tes données » (ex. « Légendes × Modes avec Untel »).
+  - **TikTok (profil public)** : abonnés, likes, vidéos depuis la page publique du profil.
+  - **Discord (serveurs)** : membres, en ligne, boosts et activité des salons via un bot (API officielle).
+  - **Météo** et **Statistiques de dossier** : exemples simples pour écrire son propre plugin.
+- Pages de plugin modulables : modules à réduire, déplacer, masquer ; tableaux triables ; cartes de chaleur.
 
-### Développement local
+### Installer
+Télécharge `WaveDash-Setup-x.y.z.exe` dans l'onglet **Releases**. L'installateur n'est **pas signé** : SmartScreen affiche « éditeur inconnu » au premier lancement (« Informations complémentaires » › « Exécuter quand même »).
+
+### Clés API (Paramètres › Comptes connectés, chiffrées par Windows DPAPI)
+| Source | Ce qu'il faut | Limites |
+|---|---|---|
+| YouTube | Clé « YouTube Data API v3 » (Google Cloud Console, gratuit) | Likes/commentaires = 50 dernières vidéos |
+| Brawlhalla | Clé personnelle demandée à Blue Mammoth Games | Recherche par ID Brawlhalla ou Steam ID64 |
+| Discord (plugin) | Jeton d'un bot invité sur le serveur | Ne lit jamais le contenu des messages |
+| TikTok (plugin) | Aucune | Page publique, peut casser si TikTok la change |
+
+Les clés ne sont jamais écrites en clair, jamais commitées, et jamais renvoyées à l'interface. Instagram n'est pas pris en charge (pas d'API pour les comptes personnels).
+
+### Développement
 ```bash
 npm install
-npm run dev        # lance l'application avec rechargement à chaud
+npm run dev        # application avec rechargement à chaud
 npm run typecheck  # vérifie les types
-npm run dist       # génère l'installateur dans /dist (sous Windows)
+npm run dist       # installateur dans /dist (sous Windows)
 ```
-
-### Clés API (saisies dans Paramètres › Comptes connectés, chiffrées par Windows DPAPI)
-| Plateforme | Ce qu'il faut | Limites |
-|---|---|---|
-| YouTube | Clé API « YouTube Data API v3 » (Google Cloud Console, gratuit) | Statistiques publiques ; likes/commentaires = 50 dernières vidéos |
-| Brawlhalla | Clé personnelle demandée à Blue Mammoth Games | Recherche par ID Brawlhalla ou Steam ID64 |
-| Instagram | Compte Pro + app Meta (étape 3) | Pas d'API officielle pour les comptes personnels |
-| TikTok | API soumise à validation, sinon lecture publique (étape 4) | Lecture publique fragile, peut enfreindre les CGU, désactivée par défaut |
-
-Les clés ne sont jamais écrites en clair, jamais commitées, et jamais renvoyées à l'interface.
+Publier une version : incrémenter `package.json`, puis `git tag vX.Y.Z && git push origin vX.Y.Z` ; le workflow *Release* construit et publie l'installateur.
 
 ---
 
 ## 🇬🇧 English
 
-### Working now (step 1)
-Glass UI (native Mica/Acrylic on Windows 11, CSS blur fallback), dark/light themes, adjustable animations; YouTube and Brawlhalla tracking; local SQLite history; line/area/bar/pie/radar charts; one account per platform (each platform is optional); **demo mode** with simulated data; full settings page.
+WaveDash tracks YouTube and Brawlhalla natively, keeps a local SQLite history, and shows it with charts, goals, milestones (Windows notifications) and export. A **demo mode** works without any API key.
 
-### Getting the `.exe` (no local build needed)
-Push this folder to GitHub, then `git tag v0.1.0 && git push origin v0.1.0`. The *Release* workflow builds `WaveDash-Setup-0.1.0.exe` and attaches it to the Releases page. The installer is **unsigned**, so Windows SmartScreen shows an "unknown publisher" warning on first launch.
+**Plugins** (`.wdsh`) add data sources. Each runs in a QuickJS sandbox inside a separate process, limited to the network domains and the read-only folder it declares. The online catalog is **signed** (Ed25519) and every package is checked by SHA-256. Bundled plugins: Brawlhalla Replays (reads your `.replay` files: per legend/map/mode/teammate stats, search, data crossing), TikTok public profile, Discord servers (bot, official API), weather and folder stats examples. Plugin guide (French): [docs/PLUGINS.md](docs/PLUGINS.md).
 
-### Local development
-```bash
-npm install && npm run dev
-```
-
-### API keys
-Entered in Settings › Connected accounts and encrypted with Windows DPAPI. See the table above for each platform's requirements and limits.
+Download the installer from **Releases** (unsigned: SmartScreen warns on first launch). API keys are entered in Settings › Connected accounts and encrypted with Windows DPAPI. Development: `npm install && npm run dev`.
 
 ---
 
 ## Structure
 ```
-src/main        Processus principal : base SQLite, secrets, planificateur, fournisseurs (providers/), IPC
+src/main        Processus principal : base SQLite, secrets, planificateur, fournisseurs (providers/), plugins (plugins/), IPC
 src/preload     Pont sécurisé exposé à l'interface
 src/renderer    Interface React (pages/, components/, lib/, i18n/)
-src/shared      Types communs
-resources       Logo et icônes
+src/shared      Types communs et validation des plugins
+examples        Plugins fournis
+docs            Guide des plugins, étude du lecteur de replays
 ```
-Ajouter une plateforme = ajouter un fichier dans `src/main/providers/` qui implémente l'interface `Provider`.
 
 ## Licence
 MIT

@@ -122,7 +122,7 @@ Le reste n'existe pas : ni `fetch`, ni `require`, ni `process`, ni `setTimeout`,
 
 ## Sécurité et limites
 
-Le script s'exécute dans **QuickJS**, un moteur JavaScript isolé (WebAssembly). Il ne voit que `host`. À chaque exécution :
+Le script s'exécute dans **QuickJS**, un moteur JavaScript isolé (WebAssembly), lui-même lancé dans un **processus séparé** de WaveDash (« WaveDash · plugins ») : un plugin lent ne fige jamais l'interface, et si ce processus s'arrête, il est relancé et l'exécution réessayée une fois (ce qu'il écrit sur sa sortie d'erreur va dans `plugin-host.log`, dans le dossier de l'appli). Le stockage du compte est copié dans ce processus avant l'exécution, puis les changements sont enregistrés après. Le script ne voit que `host`. À chaque exécution :
 
 - **mémoire** : 48 Mo ; **pile** : 256 Ko ;
 - **calcul** : 8 s de temps de calcul cumulé ; **durée totale** : 45 s (réseau compris) ;
@@ -163,7 +163,7 @@ La page d'un compte de plugin affiche l'erreur de la dernière actualisation et 
 - **Bilan** : chiffres clés, tableaux par légende, carte, mode, coéquipier, adversaire, jour et heure, direction de tes esquives, répartition de tes attaques.
 - **Détail d'une partie** : carte, mode, patch, date, durée, vies, réglages ; pour chaque joueur, légende, armes, posture, place, KOs subis, KOs infligés (en 1v1), attaques légères et lourdes par direction, esquives, sauts, lancers, provocations, temps de déplacement, appuis par minute ; grille de direction des esquives, courbe d'activité toutes les 15 s, frise des KOs.
 
-Toutes les parties du dossier comptent : les totaux, la courbe (datée par la date de chaque fichier) et la liste des parties remontent jusqu'au plus ancien replay. Le plugin décompresse lui-même chaque fichier (inflate en JavaScript à tables de décodage, vérifié identique à zlib sur 9012 fichiers) dans le bac à sable : environ 50 ms par replay dans WaveDash, 2 s de lecture par exécution. À la première installation, il signale le reste (`backlog`) et WaveDash le relance toutes les quelques secondes : environ 20 à 30 minutes pour 9000 replays, une seule fois. Ensuite, seuls les nouveaux fichiers sont lus. Le cache ne garde qu'un résumé de chaque partie (environ 100 octets) ; le détail est envoyé une fois à WaveDash, qui le conserve (`itemsMode: keep`). Le pseudo accepte plusieurs noms séparés par des virgules (utile après un changement de pseudo). Pendant une exécution, le plugin occupe le processus principal de WaveDash : l'interface peut répondre avec un peu de retard pendant le rattrapage.
+Toutes les parties du dossier comptent : les totaux, la courbe (datée par la date de chaque fichier) et la liste des parties remontent jusqu'au plus ancien replay. Le plugin décompresse lui-même chaque fichier (inflate en JavaScript à tables de décodage, vérifié identique à zlib sur 9012 fichiers) dans le bac à sable : environ 50 ms par replay dans WaveDash, 2 s de lecture par exécution. À la première installation, il signale le reste (`backlog`) et WaveDash le relance toutes les quelques secondes : environ 20 à 30 minutes pour 9000 replays, une seule fois. Ensuite, seuls les nouveaux fichiers sont lus. Le cache ne garde qu'un résumé de chaque partie (environ 100 octets) ; le détail est envoyé une fois à WaveDash, qui le conserve (`itemsMode: keep`). Le pseudo accepte plusieurs noms séparés par des virgules (utile après un changement de pseudo). Le rattrapage tourne dans le processus des plugins : l'interface reste fluide pendant ce temps.
 
 ### Ce qui est vérifié, ce qui ne l'est pas
 

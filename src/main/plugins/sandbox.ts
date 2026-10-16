@@ -4,6 +4,7 @@
 // Chaque exécution utilise un moteur neuf, avec plafonds de mémoire, de temps de calcul et de requêtes.
 import type { QuickJSContext, QuickJSDeferredPromise } from 'quickjs-emscripten'
 import type { PluginManifest } from '@shared/plugin'
+import { setMaxListeners } from 'events'
 import { FolderAccess, listFiles, readFileSafe } from './files'
 import { httpRequest, NetConfig, NetError } from './net'
 
@@ -93,6 +94,7 @@ export async function runPlugin(req: RunRequest): Promise<{ value: unknown; logs
   const limits = { ...DEFAULT_LIMITS, ...req.limits }
   const logs: string[] = []
   const abort = new AbortController()
+  setMaxListeners(limits.maxRequests + 10, abort.signal)   // une écoute par requête du plugin
 
   let mod
   try { mod = await (await import('quickjs-emscripten')).newQuickJSWASMModule() } catch (e) { throw new PluginError('engine', `Moteur de plugins indisponible : ${(e as Error).message}`) }
@@ -211,6 +213,7 @@ export async function runPlugin(req: RunRequest): Promise<{ value: unknown; logs
     abort.abort()
     for (const d of deferreds) { try { d.dispose() } catch { /* déjà libéré */ } }
     try { vm.dispose() } catch { /* le moteur est jeté de toute façon */ }
-    try { rt.dispose() } catch { /* idem */ }
+    // Pas de rt.dispose() : une promesse du plugin encore en attente y déclenche une assertion de QuickJS.
+    // Le module WebAssembly, créé pour cette exécution, est jeté en entier avec le runtime.
   }
 }
