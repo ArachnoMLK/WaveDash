@@ -41,7 +41,7 @@ async function readInvite(code, F) {
   return r.data
 }
 function botError(status, F) {
-  if (status === 401) return new Error(F ? 'Jeton du bot refusé.' : 'Bot token rejected.')
+  if (status === 401) return new Error(F ? 'Jeton du bot refusé par Discord : regénère-le (Developer Portal › Bot › Reset Token) et colle le nouveau dans les clés du plugin.' : 'Bot token rejected by Discord: reset it (Developer Portal › Bot › Reset Token) and paste the new one in the plugin keys.')
   if (status === 403 || status === 404) return new Error(F ? 'Le bot n\'a pas accès à ce serveur.' : 'The bot cannot access this server.')
   return new Error((F ? 'Discord a répondu ' : 'Discord answered ') + status)
 }
@@ -235,8 +235,21 @@ async function inviteOnly(code, F) {
     { label: F ? 'En ligne' : 'Online', value: metrics.online }, { label: 'Boosts', value: metrics.boosts }] } }
 }
 
+/** Jeton du bot nettoyé (espaces, guillemets, préfixe « Bot ») et vérifié : un jeton de bot a trois parties séparées par des points.
+ *  Les confusions courantes (Client Secret, Public Key, ID d'application) reçoivent un message précis. */
+function cleanToken(raw, F) {
+  var t = String(raw || '').trim().replace(/^["']|["']$/g, '').replace(/^Bot\s+/i, '').trim()
+  if (!t) return ''
+  if (/^[\w-]{20,}\.[\w-]{4,}\.[\w-]{20,}$/.test(t)) return t
+  var hint = /^[0-9a-f]{64}$/i.test(t) ? (F ? 'c\'est la Public Key' : 'that is the Public Key')
+    : /^\d{15,22}$/.test(t) ? (F ? 'c\'est l\'ID de l\'application' : 'that is the Application ID')
+    : /^[\w-]{32}$/.test(t) ? (F ? 'c\'est le Client Secret' : 'that is the Client Secret') : (F ? 'format inattendu' : 'unexpected format')
+  throw new Error(F ? 'Ce n\'est pas un jeton de bot (' + hint + '). Dans le Discord Developer Portal : ton application › Bot › Reset Token, puis colle ce jeton dans les clés du plugin.'
+    : 'This is not a bot token (' + hint + '). In the Discord Developer Portal: your application › Bot › Reset Token, then paste it in the plugin keys.')
+}
+
 function modeOf(ctx) {
-  var token = (ctx.secrets.botToken || '').trim(), guildId = (ctx.inputs.guildId || '').trim(), code = inviteCode(ctx.inputs.invite), F = ctx.lang === 'fr'
+  var token = cleanToken(ctx.secrets.botToken, ctx.lang === 'fr'), guildId = (ctx.inputs.guildId || '').trim(), code = inviteCode(ctx.inputs.invite), F = ctx.lang === 'fr'
   if (guildId && !/^\d{15,22}$/.test(guildId)) throw new Error(F ? 'ID du serveur invalide.' : 'Invalid server ID.')
   return { token: token, guildId: guildId, code: code, F: F }
 }
@@ -247,8 +260,16 @@ var plugin = {
     var m = modeOf(ctx)
     // Le jeton est saisi après l'ajout du compte : sans invitation ni ID, le compte suivra tous les serveurs du bot.
     if (m.code) { var inv = await readInvite(m.code, m.F); return { externalId: inv.guild.id, displayName: inv.guild.name } }
-    if (m.guildId) return { externalId: m.guildId, displayName: (m.F ? 'Serveur ' : 'Server ') + m.guildId }
-    return { externalId: 'bot:' + (ctx.inputs.label || 'all'), displayName: m.F ? 'Discord · tous les serveurs du bot' : 'Discord · all bot servers' }
+    // Avec un jeton : on le teste tout de suite, pour que l'erreur s'affiche à l'ajout du compte et pas plus tard.
+    var bot = null
+    if (m.token) {
+      var me = await call('/users/@me', m.token)
+      if (me.status) throw botError(me.status, m.F)
+      bot = me.data && me.data.username
+    }
+    if (m.guildId) return { externalId: m.guildId, displayName: (m.F ? 'Serveur ' : 'Server ') + m.guildId + (bot ? ' · ' + bot : '') }
+    if (!m.token) throw new Error(m.F ? 'Enregistre d\'abord le jeton du bot (page Plugins › Discord › Clés), ou indique un lien d\'invitation.' : 'Save the bot token first (Plugins page › Discord › Keys), or enter an invite link.')
+    return { externalId: 'bot:all', displayName: 'Discord · ' + (bot || 'bot') + (m.F ? ' (tous ses serveurs)' : ' (all its servers)') }
   },
 
   refresh: async function (ctx) {

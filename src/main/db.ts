@@ -307,9 +307,11 @@ const MONTH = "strftime('%Y-%m', ts / 1000, 'unixepoch', 'localtime')"
 
 /** Une page d'éléments, du plus récent au plus ancien, éventuellement limitée à un mois (AAAA-MM). */
 /** Tri : 'ts' (date), 'title' ou la clé d'une colonne du plugin ; les éléments sans valeur passent en dernier. */
-export function listPluginItems(accountId: number, offset: number, limit: number, month?: string, sortKey = 'ts', desc = true): PluginItemsPage {
-  const where = month ? `account_id = ? AND ts > 0 AND ${MONTH} = ?` : 'account_id = ?'
+export function listPluginItems(accountId: number, offset: number, limit: number, month?: string, sortKey = 'ts', desc = true, query = ''): PluginItemsPage {
+  let where = month ? `account_id = ? AND ts > 0 AND ${MONTH} = ?` : 'account_id = ?'
   const args: (number | string)[] = month ? [accountId, month] : [accountId]
+  // Recherche dans tout l'élément (titre, colonnes, détail : joueurs, légendes, carte…), sans tenir compte de la casse.
+  for (const word of query.trim().split(/\s+/).filter(Boolean).slice(0, 6)) { where += " AND data LIKE ? ESCAPE '\\'"; args.push(`%${word.replace(/[\\%_]/g, (c) => '\\' + c)}%`) }
   const dir = desc ? 'DESC' : 'ASC'
   const expr = sortKey === 'ts' ? 'ts' : 'json_extract(data, ?)'
   const sortArgs: string[] = sortKey === 'ts' ? [] : [sortKey === 'title' ? '$.title' : `$.fields.${sortKey}`]

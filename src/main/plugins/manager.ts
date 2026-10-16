@@ -278,11 +278,11 @@ export function pluginAccountData(accountId: number): { logs: string[]; error: s
     summary: parse<PluginDetail | null>('summary', null) }
 }
 
-export function pluginAccountItems(accountId: number, offset: number, limit: number, month?: string, sortKey?: string, desc = true): PluginItemsPage {
+export function pluginAccountItems(accountId: number, offset: number, limit: number, month?: string, sortKey?: string, desc = true, query = ''): PluginItemsPage {
   const page = Math.min(200, Math.max(1, Math.floor(limit) || 50)), from = Math.max(0, Math.floor(offset) || 0)
   const m = typeof month === 'string' && /^\d{4}-\d{2}$/.test(month) ? month : undefined
   const key = sortKey === 'title' || sortKey === 'ts' || (typeof sortKey === 'string' && /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/.test(sortKey)) ? sortKey : 'ts'
-  return db.listPluginItems(accountId, from, page, m, key, desc !== false)
+  return db.listPluginItems(accountId, from, page, m, key, desc !== false, typeof query === 'string' ? query.slice(0, 100) : '')
 }
 
 /* ---------- Fichier .wdsh reçu à l'ouverture (double-clic) ---------- */

@@ -30,6 +30,10 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [page, setPage] = useState(0)
   const [month, setMonth] = useState('')
   const [sort, setSort] = useState<{ key: string; desc: boolean }>({ key: 'ts', desc: true })
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
+  // La recherche part 300 ms après la dernière frappe.
+  useEffect(() => { const h = setTimeout(() => { setQuery(search); setPage(0); setOpenId(null) }, 300); return () => clearTimeout(h) }, [search])
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
@@ -47,9 +51,9 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   // Éléments lus page par page (un plugin peut en garder des milliers), éventuellement pour un seul mois.
   useEffect(() => {
     let alive = true
-    void window.api.pluginAccountItems(accountId, page * PAGE, PAGE, month || undefined, sort.key, sort.desc).then((r) => { if (alive) setList(r) })
+    void window.api.pluginAccountItems(accountId, page * PAGE, PAGE, month || undefined, sort.key, sort.desc, query).then((r) => { if (alive) setList(r) })
     return () => { alive = false }
-  }, [accountId, page, month, dataVersion, sort])
+  }, [accountId, page, month, dataVersion, sort, query])
   useEffect(() => { setPage(0); setMonth(''); setOpenId(null) }, [accountId])
 
   if (!account || !plugin || !m) return <div className="glass empty"><p>{t('goals.noAccounts')}</p></div>
@@ -118,7 +122,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
         </Reveal>
       )}
 
-      {(list.total > 0 || month) && (
+      {(list.total > 0 || month || query) && (
         <Reveal className="glass pad sect" delay={0.16}>
           <div className="row between" style={{ marginBottom: 6, flexWrap: 'wrap', gap: 10 }}>
             <h2>{t('pp.items')} <span className="muted" style={{ fontWeight: 400 }}>· {list.total}</span></h2>
@@ -136,6 +140,8 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
               </>}
             </div>
           </div>
+          <input type="text" className="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('pp.search')} aria-label={t('pp.search')} style={{ margin: '4px 0 8px' }} />
+          {query && list.total === 0 && <p className="muted small">{t('pp.noResult')}</p>}
           {hasDetail && <p className="muted small" style={{ marginBottom: 6 }}>{t('pp.clickHint')}</p>}
           <div className="tbl-wrap"><table className="table">
             <thead><tr><SortTh k="title" sort={sort} onSort={sortBy}>{t('pp.name')}</SortTh>{hasDates && <SortTh k="ts" sort={sort} onSort={sortBy}>{t('pp.date')}</SortTh>}
