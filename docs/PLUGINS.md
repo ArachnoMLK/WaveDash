@@ -78,14 +78,23 @@ var plugin = {
 
 `ctx` contient : `inputs` (valeurs saisies), `secrets` (vos clés, déchiffrées), `lang` (`fr` ou `en`), `account` (`{ externalId, displayName }`, dans `refresh`).
 
-Un élément peut aussi porter un **`detail`** facultatif, affiché quand on clique sur sa ligne :
+Un élément peut aussi porter un **`detail`** facultatif, affiché sous sa ligne quand on clique dessus. Toutes les parties sont facultatives :
 
 ```js
 detail: {
-  table:    { columns: ['Joueur', 'Score'], rows: [['Alby', 2], ['Close', 1]] },        // 8 colonnes, 40 lignes max
-  timeline: { duration: 183, lanes: ['Alby', 'Close'], events: [{ t: 29.1, lane: 0, label: 'KO' }] }  // frise : 16 lignes, 400 repères max, t en secondes
+  chips:    ['Small Brawlhaven', 'Patch 11.00', '3:04'],                                   // badges : 16 max
+  stats:    [{ label: 'Parties', value: 12 }],                                               // chiffres clés : 24 max
+  table:    { columns: ['Joueur', 'Score'], rows: [['Alby', 2], ['Close', 1]] },             // 10 colonnes, 80 lignes max
+  tables:   [{ title: 'Actions', columns: [...], rows: [...] }],                             // 8 tableaux max
+  grids:    [{ title: 'Esquives', rows: ['↑', '·', '↓'], cols: ['←', '·', '→'], values: [[1, 2, 3], [4, 5, 6], [7, 8, 9]] }],  // grilles de chaleur : 8 max, 8 × 8
+  series:   [{ title: 'Actions toutes les 15 s', step: 15, lines: [{ name: 'Close', values: [12, 9, 14] }] }],              // courbes : 4 max, 16 lignes, 600 points
+  timeline: { duration: 183, lanes: ['Alby', 'Close'], events: [{ t: 29.1, lane: 0, label: 'KO' }] }                       // frise : 16 lignes, 400 repères max, t en secondes
 }
 ```
+
+`refresh` peut aussi renvoyer un **`summary`** au même format : c'est le **bilan** du compte, affiché en haut de sa page (par exemple des totaux par catégorie).
+
+Si le plugin lit un dossier (`permissions.folder`), la page du compte propose **Importer des fichiers** : WaveDash copie les fichiers choisis (extensions du manifeste, 8 Mo max chacun) dans un dossier qu'il gère pour ce compte, en gardant leur date ; `host.files` les voit en plus de ceux du dossier choisi. Le dossier choisi n'est jamais modifié, et le dossier d'imports est supprimé avec le compte.
 
 **Tout ce qui n'est pas déclaré dans le manifeste est ignoré** : métriques inconnues, colonnes inconnues, valeurs non numériques, horodatages absurdes.
 
@@ -124,7 +133,11 @@ La page d'un compte de plugin affiche l'erreur de la dernière actualisation et 
 
 ## Plugin fourni : Brawlhalla Replays
 
-`examples/brawlhalla-replays-1.2.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier (permission `folder`, aucun réseau) : parties, victoires/défaites, taux de victoire, stocks pris/perdus, durée moyenne, appuis par minute, et pour chaque partie un détail (joueurs, équipes, légendes, place, stocks perdus, attaques légères/lourdes, esquives, appuis par minute) avec une frise des KOs.
+`examples/brawlhalla-replays-1.3.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
+
+- **Courbe et cartes** : parties, victoires, défaites, taux de victoire, stocks pris et perdus, durée moyenne, appuis par minute.
+- **Bilan** : chiffres clés, tableaux par légende, carte, mode, coéquipier, adversaire, jour et heure, direction de tes esquives, répartition de tes attaques.
+- **Détail d'une partie** : carte, mode, patch, date, durée, vies, réglages ; pour chaque joueur, légende, armes, posture, place, KOs subis, KOs infligés (en 1v1), attaques légères et lourdes par direction, esquives, sauts, lancers, provocations, temps de déplacement, appuis par minute ; grille de direction des esquives, courbe d'activité toutes les 15 s, frise des KOs.
 
 Toutes les parties du dossier comptent : les totaux, la courbe (datée par la date de chaque fichier) et la liste des parties remontent jusqu'au plus ancien replay. Le plugin décompresse lui-même chaque fichier (inflate en JavaScript à tables de décodage, vérifié identique à zlib sur 9012 fichiers) dans le bac à sable : environ 50 ms par replay dans WaveDash, 2 s de lecture par exécution. À la première installation, il signale le reste (`backlog`) et WaveDash le relance toutes les quelques secondes : environ 20 à 30 minutes pour 9000 replays, une seule fois. Ensuite, seuls les nouveaux fichiers sont lus. Le cache ne garde qu'un résumé de chaque partie (environ 100 octets) ; le détail est envoyé une fois à WaveDash, qui le conserve (`itemsMode: keep`). Le pseudo accepte plusieurs noms séparés par des virgules (utile après un changement de pseudo). Pendant une exécution, le plugin occupe le processus principal de WaveDash : l'interface peut répondre avec un peu de retard pendant le rattrapage.
 
@@ -134,13 +147,19 @@ Vérifié sur 9012 replays réels (versions 261 à 271, patchs 10.02 à 11.00) :
 
 - **Validation par checksum.** Le jeu écrit un checksum des données de partie (joueurs, cosmétiques, légendes, carte). Le plugin le recalcule ; s'il ne correspond pas, le replay est signalé « format non reconnu (version N) » et rien n'en est affiché. Les 9012 replays passent ; un parseur volontairement faussé est rejeté. Le bit de tête de chaque légende compte comme bit 31 de sa valeur combinée (constaté sur les modes à plusieurs légendes ; la bibliothèque C# l'ignorait).
 - **Légendes.** L'identifiant lu dans le replay est le `HeroID` du jeu, identique au `legend_id` de l'API officielle. La table (70 légendes, jusqu'à Qinghua & Baobao) vient du fichier `HeroTypes` des données du patch 11.00, et concorde avec le lecteur de replay du jeu sur Eternity's End. Une légende inconnue s'affiche `#id` et le journal le signale (« nouvelle légende ? ») : il faut alors mettre à jour la table.
-- **Carte.** Le nom est lu dans le nom du fichier (`[11.00] SmallBrawlhaven (42).replay` → Small Brawlhaven) ; à défaut, `Carte #id`.
-- **Inputs.** Chaque joueur a la liste des changements d'état de ses touches (14 indicateurs : directions, saut, attaques légère et lourde, esquive, ramasser/lancer, quatre provocations). Le plugin compte les appuis ; les horodatages ne sont pas lus.
+- **Carte.** Le nom vient de la table `LevelTypes` du jeu (patch 11.00), vérifiée contre les noms de 2930 fichiers ; sinon du nom du fichier (`[11.00] SmallBrawlhaven (42).replay` → Small Brawlhaven) ; à défaut, `Carte #id`.
+- **Armes.** Les deux armes de chaque légende viennent de la table `HeroTypes` du jeu.
+- **Victoire.** Le score d'un joueur est sa place (1 = vainqueur). Certains modes (Kung Foot) ajoutent une entité qui n'est pas un joueur, avec un score de 0 : elle est ignorée.
+- **Inputs.** Chaque joueur a la liste horodatée (ms) des changements d'état de ses touches (14 indicateurs : directions, saut, attaques légère et lourde, esquive, ramasser/lancer, quatre provocations). Le plugin compte les appuis, note la direction tenue au moment de chaque attaque et de chaque esquive, mesure le temps passé à tenir gauche ou droite et l'activité toutes les 15 s.
 - **Auteur d'un KO : non.** Un KO ne contient que le joueur qui perd un stock et l'instant. La seconde liste (type 7) n'apparaît que dans des modes spéciaux (Kung Foot, sans KO) et ne désigne pas d'auteur non plus. En 1v1 l'auteur est forcément l'adversaire ; ailleurs, le fichier ne permet pas de le savoir.
 
-Hypothèses non vérifiées : la signification exacte de la liste de type 7 ; les formats antérieurs à la version 261.
+Hypothèses non vérifiées : la signification exacte de la liste de type 7 ; les formats antérieurs à la version 261 ; le nom des postures (le fichier donne un numéro, affiché tel quel) ; la direction « tenue » ne dit pas si l'attaque a eu lieu au sol ou en l'air.
 
-Dégâts, combos, positions ou esquives réussies ne sont **pas** dans le fichier : il faudrait rejouer la partie avec le moteur du jeu à partir des inputs (c'est ce que fait un service comme Yarralytics, sur ses serveurs).
+Dégâts infligés et subis, arme tenue, positions (air, sol, mur), combos, dashs, auteur des KOs hors 1v1 : rien de cela n'est **dans** le fichier. Il faudrait rejouer la partie avec le moteur du jeu à partir des inputs, ce que fait Yarralytics sur ses serveurs.
+
+## Plugin fourni : TikTok (profil public)
+
+`examples/tiktok-profile-1.0.0.wdsh` suit un profil TikTok public (abonnés, abonnements, likes reçus, vidéos, amis) en lisant sa page publique, sans compte ni clé, une fois par heure. Permission réseau : `www.tiktok.com` seulement. Ce n'est pas une API officielle : la lecture peut cesser si TikTok change sa page, et elle n'est pas prévue par ses conditions d'utilisation. En cas de changement, le plugin affiche une erreur au lieu de chiffres faux.
 
 Le format de fichier a été compris grâce aux projets open source BrawlhallaReplayLibrary (allhailcheese) et brawlhalla-replay-reader (itselectroz), tous deux sous licence MIT.
 

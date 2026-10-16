@@ -34,6 +34,7 @@ const api: WaveApi = {
   pluginSecretSet: (id, key, value) => ipcRenderer.invoke('plugins:secretSet', id, key, value),
   pluginSecretDelete: (id, key) => ipcRenderer.invoke('plugins:secretDelete', id, key),
   pickFolder: () => ipcRenderer.invoke('plugins:pickFolder'),
+  pluginImportFiles: (id, exts) => ipcRenderer.invoke('plugins:importFiles', id, exts),
   pathForFile: (file) => webUtils.getPathForFile(file),
   takePendingPluginFile: () => ipcRenderer.invoke('plugins:takePendingFile'),
   onPluginFile: (cb) => {

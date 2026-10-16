@@ -1,9 +1,10 @@
 // Gestion des plugins : installation (avec validation), comptes, actualisation, clés.
 import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
-import { readFileSync, realpathSync, statSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, utimesSync } from 'fs'
+import { basename, extname, join } from 'path'
 import {
-  compareVersions, InstalledPlugin, PLUGIN_LIMITS, PluginAccount, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
+  compareVersions, InstalledPlugin, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
 } from '@shared/plugin'
 import * as db from '../db'
 import * as secrets from '../secrets'
@@ -107,14 +108,17 @@ export function deletePluginSecret(pluginId: string, key: string): void {
 }
 
 /* ---------- Exécution ---------- */
-function folderOf(manifest: PluginManifest, inputs: Record<string, string>): FolderAccess | undefined {
+/** Dossier géré par WaveDash où sont copiés les fichiers importés pour un compte (lu en plus du dossier choisi). */
+export const importDirOf = (accountId: number): string => join(app.getPath('userData'), 'plugin-imports', String(accountId))
+
+function folderOf(manifest: PluginManifest, inputs: Record<string, string>, accountId?: number): FolderAccess | undefined {
   if (!manifest.permissions.folder) return undefined
   const key = manifest.inputs.find((i) => i.type === 'folder')?.key
   const dir = key ? inputs[key] : undefined
   let real: string | null = null
   try { if (dir && statSync(dir).isDirectory()) real = realpathSync(dir) } catch { /* dossier supprimé, déplacé ou inaccessible */ }
   if (!real) throw new PluginError('blocked', 'Le dossier choisi est introuvable')
-  return { dir: real, extensions: manifest.permissions.folderExtensions }
+  return { dir: real, extra: accountId === undefined ? undefined : importDirOf(accountId), extensions: manifest.permissions.folderExtensions }
 }
 
 function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh', inputs: Record<string, string>, account?: { id: number; externalId: string; displayName: string }): RunRequest {
@@ -126,7 +130,7 @@ function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh', inputs: Reco
   return {
     manifest, script: row.script, fn,
     ctx: { inputs, secrets: secretValues, lang: db.getSettings().lang, account: account ? { externalId: account.externalId, displayName: account.displayName } : undefined },
-    folder: folderOf(manifest, inputs),
+    folder: folderOf(manifest, inputs, accountId),
     storage: accountId === undefined
       ? { get: (k) => memory.get(k) ?? null, set: (k, v) => { memory.set(k, v) } }
       : {
@@ -181,7 +185,37 @@ export async function addPluginAccount(pluginId: string, rawInputs: Record<strin
 }
 
 export function removePluginAccount(accountId: number): void {
-  if (db.getPluginAccountRow(accountId)) db.deleteAccount(accountId)
+  if (!db.getPluginAccountRow(accountId)) return
+  db.deleteAccount(accountId)
+  try { rmSync(importDirOf(accountId), { recursive: true, force: true }) } catch { /* rien à supprimer */ }
+}
+
+/** Copie des fichiers choisis par l'utilisateur dans le dossier d'imports du compte, en gardant leur date
+ *  (les plugins s'en servent pour dater les données). Seules les extensions autorisées par le manifeste sont acceptées. */
+export function importPluginFiles(accountId: number, paths: string[]): { imported: number; skipped: number } {
+  const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
+  if (!pa || !row) return { imported: 0, skipped: paths.length }
+  const m = loadManifest(row)
+  if (!m.permissions.folder) return { imported: 0, skipped: paths.length }
+  const exts = m.permissions.folderExtensions, dir = importDirOf(accountId)
+  mkdirSync(dir, { recursive: true })
+  let imported = 0, skipped = 0
+  for (const p of paths.slice(0, 5000)) {
+    try {
+      const st = statSync(p), name = basename(p), ext = extname(name).toLowerCase()
+      if (!st.isFile() || (exts.length && !exts.includes(ext)) || st.size > 8 * 1024 * 1024) { skipped++; continue }
+      let target = join(dir, name)
+      for (let n = 2; existsSync(target); n++) {
+        if (statSync(target).size === st.size && readFileSync(target).equals(readFileSync(p))) { target = ''; break }   // déjà importé
+        target = join(dir, `${name.slice(0, name.length - ext.length)} (import ${n})${ext}`)
+      }
+      if (!target) { skipped++; continue }
+      copyFileSync(p, target)
+      utimesSync(target, st.atime, st.mtime)
+      imported++
+    } catch { skipped++ }
+  }
+  return { imported, skipped }
 }
 
 /** Exécute le plugin pour un compte et enregistre le résultat. Les erreurs sont conservées pour l'affichage. */
@@ -202,6 +236,7 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
     db.insertSnapshots(accountId, result.metrics)
     db.savePluginItems(accountId, result.items, manifest.itemsMode)
     db.setMeta(accountId, 'backlog', String(result.backlog))
+    if (result.summary) db.setMeta(accountId, 'summary', JSON.stringify(result.summary))
     // Travail restant (ex. fichiers pas encore lus) : on relance bientôt, sans attendre la prochaine actualisation.
     if (result.backlog > 0) catchUps.set(accountId, setTimeout(() => { catchUps.delete(accountId); void refreshPluginAccount(accountId).then(() => notify()) }, CATCH_UP_MS))
     db.setMeta(accountId, 'log', JSON.stringify(run.logs))
@@ -233,9 +268,10 @@ export async function refreshAllPlugins(): Promise<void> {
   }
 }
 
-export function pluginAccountData(accountId: number): { logs: string[]; error: string | null; backlog: number } {
+export function pluginAccountData(accountId: number): { logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null } {
   const parse = <T,>(k: string, fallback: T): T => { try { return JSON.parse(db.getMeta(accountId, k) ?? '') as T } catch { return fallback } }
-  return { logs: parse<string[]>('log', []), error: db.getMeta(accountId, 'error') || null, backlog: Number(db.getMeta(accountId, 'backlog')) || 0 }
+  return { logs: parse<string[]>('log', []), error: db.getMeta(accountId, 'error') || null, backlog: Number(db.getMeta(accountId, 'backlog')) || 0,
+    summary: parse<PluginDetail | null>('summary', null) }
 }
 
 export function pluginAccountItems(accountId: number, offset: number, limit: number, month?: string): PluginItemsPage {

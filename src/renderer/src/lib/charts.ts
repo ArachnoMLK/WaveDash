@@ -127,3 +127,22 @@ export function timelineOption(tl: { duration: number; lanes: string[]; events: 
     }]
   } as EChartsOption
 }
+
+/** Courbes au fil d'une partie : un point toutes les `step` secondes, axe horizontal en minutes:secondes. */
+export function seriesOption(sr: { unit?: string; step: number; lines: { name: string; values: number[] }[] }, th: ChartTheme): EChartsOption {
+  const ax = axisStyle(th)
+  const mmss = (v: number): string => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`
+  const unit = sr.unit ? ` ${sr.unit}` : ''
+  return {
+    ...base(th),
+    grid: { left: 8, right: 16, top: sr.lines.length > 1 ? 34 : 12, bottom: 4, containLabel: true },
+    legend: sr.lines.length > 1 ? { top: 0, textStyle: { color: th.dark ? '#bbb' : '#444' }, icon: 'roundRect' } : undefined,
+    tooltip: { ...(base(th).tooltip as object), trigger: 'axis', axisPointer: { type: 'line' },
+      formatter: (ps: any) => `${mmss(ps[0]?.value?.[0] ?? 0)}<br/>${ps.map((p: any) => `${p.marker}${p.seriesName} : ${fmt(p.value[1], th.lang, 1)}${unit}`).join('<br/>')}` },
+    xAxis: { type: 'value', min: 0, max: Math.max(1, (Math.max(...sr.lines.map((l) => l.values.length)) - 1) * sr.step),
+      axisLabel: { ...ax.axisLabel, formatter: (v: number) => mmss(v) }, axisLine: ax.axisLine, splitLine: { show: false } },
+    yAxis: { type: 'value', ...ax },
+    series: sr.lines.map((l) => ({ name: l.name, type: 'line', smooth: 0.3, showSymbol: false, lineStyle: { width: 2 },
+      data: l.values.map((v, i) => [i * sr.step, v]) }))
+  } as EChartsOption
+}

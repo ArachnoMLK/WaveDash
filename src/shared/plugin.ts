@@ -147,38 +147,83 @@ export function validateManifest(raw: unknown): Result {
 }
 
 /* ---------- Résultats renvoyés par un plugin ---------- */
-/** Détail facultatif d'un élément : un tableau et/ou une frise d'événements (affichés quand on clique sur l'élément). */
+/** Détail facultatif d'un élément (affiché au clic) ou bilan d'un compte : badges, chiffres clés, tableaux,
+ *  grilles de chaleur, courbes et frise d'événements. Toutes les parties sont facultatives. */
+export interface DetailTable { title?: string; columns: string[]; rows: (string | number)[][] }
+export interface DetailGrid { title?: string; rows: string[]; cols: string[]; values: number[][] }
+export interface DetailSeries { title?: string; unit?: string; step: number; lines: { name: string; values: number[] }[] }
 export interface PluginDetail {
-  table?: { columns: string[]; rows: (string | number)[][] }
+  chips?: string[]
+  stats?: { label: string; value: string | number }[]
+  table?: DetailTable
+  tables?: DetailTable[]
+  grids?: DetailGrid[]
+  series?: DetailSeries[]
   timeline?: { duration: number; lanes: string[]; events: { t: number; lane: number; label?: string }[] }
 }
 export interface PluginItem { id: string; title: string; ts?: number; fields: Record<string, string | number>; detail?: PluginDetail }
-export const DETAIL_LIMITS = { columns: 8, rows: 40, cell: 80, lanes: 16, events: 400, label: 24 }
+export const DETAIL_LIMITS = {
+  columns: 10, rows: 80, cell: 80, lanes: 16, events: 400, label: 24,
+  chips: 16, chip: 40, stats: 24, tables: 8, grids: 8, gridSize: 8, series: 4, lines: 16, points: 600
+}
 export interface PluginRunResult {
   metrics: Record<string, number>
   items: PluginItem[]
   history: { ts: number; metrics: Record<string, number> }[]
+  /** Bilan du compte (même format que le détail d'un élément), affiché en haut de sa page. */
+  summary?: PluginDetail
   /** Travail restant signalé par le plugin (ex. fichiers pas encore lus) : s'il est positif, WaveDash relance le plugin peu après. */
   backlog: number
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e15 ? v : null)
 
-/** Ne garde que ce que le manifeste déclare, avec les bons types. Rien d'autre n'entre dans la base. */
-/** Détail d'un élément : tailles bornées, types vérifiés, rien d'autre n'est conservé. */
+/** Détail d'un élément ou bilan : tailles bornées, types vérifiés, rien d'autre n'est conservé. */
 export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const r = raw as Record<string, unknown>, L = DETAIL_LIMITS, out: PluginDetail = {}
-  const t = r.table as Record<string, unknown> | undefined
-  if (t && Array.isArray(t.columns) && Array.isArray(t.rows)) {
-    const columns = t.columns.slice(0, L.columns).map((c) => String(c ?? '').slice(0, L.cell))
-    const rows = t.rows.slice(0, L.rows).filter(Array.isArray).map((row) =>
-      (row as unknown[]).slice(0, columns.length).map((v) => (typeof v === 'number' ? (Number.isFinite(v) ? v : 0) : String(v ?? '').slice(0, L.cell))))
-    if (columns.length && rows.length) out.table = { columns, rows }
+  const str = (v: unknown, max = L.cell): string => String(v ?? '').slice(0, max)
+  const cell = (v: unknown): string | number => (typeof v === 'number' ? (Number.isFinite(v) ? v : 0) : str(v))
+  const title = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.slice(0, L.cell) : undefined)
+  const table = (t: unknown): DetailTable | undefined => {
+    const o = t as Record<string, unknown> | undefined
+    if (!o || !Array.isArray(o.columns) || !Array.isArray(o.rows)) return undefined
+    const columns = o.columns.slice(0, L.columns).map((c) => str(c))
+    const rows = o.rows.slice(0, L.rows).filter(Array.isArray).map((row) => (row as unknown[]).slice(0, columns.length).map(cell))
+    return columns.length && rows.length ? { title: title(o.title), columns, rows } : undefined
+  }
+  if (Array.isArray(r.chips)) { const c = r.chips.slice(0, L.chips).map((x) => str(x, L.chip)).filter(Boolean); if (c.length) out.chips = c }
+  if (Array.isArray(r.stats)) {
+    const st = (r.stats as Record<string, unknown>[]).slice(0, L.stats).filter((x) => x && typeof x === 'object')
+      .map((x) => ({ label: str(x.label, L.chip), value: cell(x.value) }))
+    if (st.length) out.stats = st
+  }
+  const t1 = table(r.table); if (t1) out.table = t1
+  if (Array.isArray(r.tables)) { const ts = r.tables.slice(0, L.tables).map(table).filter((x): x is DetailTable => !!x); if (ts.length) out.tables = ts }
+  if (Array.isArray(r.grids)) {
+    const gs: DetailGrid[] = []
+    for (const g of (r.grids as Record<string, unknown>[]).slice(0, L.grids)) {
+      if (!g || !Array.isArray(g.rows) || !Array.isArray(g.cols) || !Array.isArray(g.values)) continue
+      const rows = g.rows.slice(0, L.gridSize).map((x) => str(x, L.label)), cols = g.cols.slice(0, L.gridSize).map((x) => str(x, L.label))
+      const values = rows.map((_, i) => cols.map((__, j) => { const v = num((g.values as unknown[][])[i]?.[j]); return v ?? 0 }))
+      if (rows.length && cols.length) gs.push({ title: title(g.title), rows, cols, values })
+    }
+    if (gs.length) out.grids = gs
+  }
+  if (Array.isArray(r.series)) {
+    const ss: DetailSeries[] = []
+    for (const x of (r.series as Record<string, unknown>[]).slice(0, L.series)) {
+      const step = num(x?.step)
+      if (!x || step === null || step <= 0 || step > 86_400 || !Array.isArray(x.lines)) continue
+      const lines = (x.lines as Record<string, unknown>[]).slice(0, L.lines).filter((l) => l && Array.isArray(l.values))
+        .map((l) => ({ name: str(l.name, L.cell), values: (l.values as unknown[]).slice(0, L.points).map((v) => num(v) ?? 0) }))
+      if (lines.length) ss.push({ title: title(x.title), unit: typeof x.unit === 'string' ? x.unit.slice(0, 8) : undefined, step, lines })
+    }
+    if (ss.length) out.series = ss
   }
   const tl = r.timeline as Record<string, unknown> | undefined
   if (tl && Array.isArray(tl.lanes) && Array.isArray(tl.events)) {
-    const lanes = tl.lanes.slice(0, L.lanes).map((x) => String(x ?? '').slice(0, L.cell))
+    const lanes = tl.lanes.slice(0, L.lanes).map((x) => str(x))
     const duration = num(tl.duration)
     const events: { t: number; lane: number; label?: string }[] = []
     for (const e of tl.events.slice(0, L.events) as Record<string, unknown>[]) {
@@ -188,7 +233,7 @@ export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
     }
     if (lanes.length && duration !== null && duration > 0 && duration <= 86_400) out.timeline = { duration, lanes, events }
   }
-  return out.table || out.timeline ? out : undefined
+  return Object.keys(out).length ? out : undefined
 }
 
 export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.now()): PluginRunResult {
@@ -202,6 +247,7 @@ export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.no
     return o
   }
   out.metrics = pickMetrics(r.metrics)
+  out.summary = sanitizeDetail(r.summary)
   const backlog = num(r.backlog)
   out.backlog = backlog !== null && backlog > 0 ? Math.min(1e7, Math.floor(backlog)) : 0
   const cols = new Set(m.itemColumns.map((c) => c.key))

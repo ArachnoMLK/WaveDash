@@ -5,7 +5,7 @@ import { ChartType, Point, RawMetrics } from '@shared/types'
 import { Chart } from '../components/Chart'
 import { Reveal, StatCard, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
-import { ChartTheme, timelineOption, timeOption } from '../lib/charts'
+import { ChartTheme, seriesOption, timelineOption, timeOption } from '../lib/charts'
 import { TIME_CHARTS } from '../lib/constants'
 import { ago, fmtDelta } from '../lib/format'
 import { RangeKey, sinceOf } from '../lib/hooks'
@@ -25,10 +25,11 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [metric, setMetric] = useState<string>(m?.metrics.find((x) => x.primary)?.key ?? m?.metrics[0]?.key ?? '')
   const [latest, setLatest] = useState<RawMetrics>({})
   const [series, setSeries] = useState<Record<string, Point[]>>({})
-  const [extra, setExtra] = useState<{ logs: string[]; error: string | null; backlog: number }>({ logs: [], error: null, backlog: 0 })
+  const [extra, setExtra] = useState<{ logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null }>({ logs: [], error: null, backlog: 0, summary: null })
   const [list, setList] = useState<PluginItemsPage>({ items: [], total: 0, months: [] })
   const [page, setPage] = useState(0)
   const [month, setMonth] = useState('')
+  const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
 
@@ -56,6 +57,12 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const ckey = `plugin:${plugin.id}.${def.key}`
   const type: ChartType = settings.chartTypes[ckey] ?? 'line'
   const refresh = async (): Promise<void> => { setBusy(true); await window.api.pluginAccountRefresh(accountId); await reloadPlugins(); setBusy(false) }
+  const importFiles = async (): Promise<void> => {
+    setBusy(true)
+    const r = await window.api.pluginImportFiles(accountId, m.permissions.folderExtensions)
+    setBusy(false)
+    if (r) { setNote(t('pp.imported', { imported: r.imported, skipped: r.skipped })); await reloadPlugins() }
+  }
   const hasDates = list.items.some((i) => i.ts)
   const hasDetail = list.items.some((i) => i.detail)
   const pages = Math.max(1, Math.ceil(list.total / PAGE))
@@ -67,9 +74,11 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
       <div className="page-head">
         <div className="grow"><h1>{account.displayName}</h1>
           <div className="muted small">{m.name} · {t('platform.synced', { time: ago(account.lastSyncAt, settings.lang, t('platform.never')) })}</div></div>
+        {m.permissions.folder && <button className="btn" disabled={busy} onClick={() => void importFiles()}>{t('pp.import')}</button>}
         <button className="btn" disabled={busy} onClick={() => void refresh()}>{t('platform.refresh')}</button>
         <button className="btn" onClick={() => void window.api.pluginAccountRemove(accountId).then(reloadPlugins)}>{t('pp.removeAccount')}</button>
       </div>
+      {note && <div className="glass pad small" style={{ marginBottom: 16 }} role="status">{note}</div>}
       {extra.backlog > 0 && <div className="glass pad small muted" style={{ marginBottom: 16 }}>{t('pp.backlog', { count: extra.backlog })}</div>}
       {account.lastError && <div className="err" style={{ marginBottom: 16 }}>{t('pp.error', { error: `${t(`plugin.run.${account.lastError}`)}${extra.error ? ` — ${extra.error}` : ''}` })}</div>}
 
@@ -98,6 +107,13 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
           ? <Chart option={timeOption(type, [{ name: loc(def.label, settings.lang), points: series[def.key] }], th, def.format === 'percent' ? ' %' : def.unit ? ` ${def.unit}` : '')} height={320} />
           : <p className="muted" style={{ padding: '60px 0', textAlign: 'center' }}>{t('platform.noData')}</p>}
       </Reveal>
+
+      {extra.summary && (
+        <Reveal className="glass pad sect" delay={0.14}>
+          <h2 style={{ marginBottom: 10 }}>{t('pp.summary')}</h2>
+          <DetailView detail={extra.summary} th={th} t={t} />
+        </Reveal>
+      )}
 
       {(list.total > 0 || month) && (
         <Reveal className="glass pad sect" delay={0.16}>
@@ -145,23 +161,54 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   )
 }
 
-/** Détail d'un élément de plugin : tableau et/ou frise d'événements. */
-function DetailView({ detail, th, t, onClose }: { detail: PluginDetail; th: ChartTheme; t: (k: string) => string; onClose: () => void }): JSX.Element {
+/** Détail d'un élément de plugin, ou bilan du compte : badges, chiffres clés, tableaux, grilles, courbes, frise. */
+function DetailView({ detail, th, t, onClose }: { detail: PluginDetail; th: ChartTheme; t: (k: string) => string; onClose?: () => void }): JSX.Element {
+  const tables = [...(detail.table ? [detail.table] : []), ...(detail.tables ?? [])]
   return (
     <Reveal className="detail" delay={0}>
-      <div className="row between" style={{ marginBottom: 6 }}>
-        <h3>{t('pp.detail')}</h3>
-        <button className="btn" onClick={onClose}>{t('pp.close')}</button>
-      </div>
-      {detail.table && (
-        <div className="tbl-wrap"><table className="table">
-          <thead><tr>{detail.table.columns.map((c, i) => <th key={i}>{c}</th>)}</tr></thead>
-          <tbody>{detail.table.rows.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j}>{v}</td>)}</tr>)}</tbody>
-        </table></div>
+      {onClose && (
+        <div className="row between" style={{ marginBottom: 6 }}>
+          <h3>{t('pp.detail')}</h3>
+          <button className="btn" onClick={onClose}>{t('pp.close')}</button>
+        </div>
       )}
+      {detail.chips && <div className="chips">{detail.chips.map((c, i) => <span key={i} className="chip">{c}</span>)}</div>}
+      {detail.stats && <div className="mini-stats">{detail.stats.map((s, i) => <div key={i}><span className="small muted">{s.label}</span><b>{s.value}</b></div>)}</div>}
+      {tables.map((tb, k) => (
+        <div key={k} className="detail-block">
+          {tb.title && <h3 className="small muted">{tb.title}</h3>}
+          <div className="tbl-wrap"><table className="table">
+            <thead><tr>{tb.columns.map((c, i) => <th key={i}>{c}</th>)}</tr></thead>
+            <tbody>{tb.rows.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j}>{v}</td>)}</tr>)}</tbody>
+          </table></div>
+        </div>
+      ))}
+      {detail.grids && (
+        <div className="detail-block grids">
+          {detail.grids.map((g, k) => {
+            const max = Math.max(1, ...g.values.flat())
+            return (
+              <figure key={k} className="heat">
+                <div className="heat-grid" style={{ gridTemplateColumns: `auto repeat(${g.cols.length}, 2.6rem)` }}>
+                  <span />{g.cols.map((c, j) => <span key={j} className="small muted">{c}</span>)}
+                  {g.rows.map((r, i) => [<span key={`r${i}`} className="small muted">{r}</span>,
+                    ...g.cols.map((_, j) => <b key={`${i}-${j}`} style={{ background: `color-mix(in srgb, var(--accent) ${Math.round((g.values[i][j] / max) * 85)}%, var(--ctrl))` }}>{g.values[i][j]}</b>)])}
+                </div>
+                {g.title && <figcaption className="small muted">{g.title}</figcaption>}
+              </figure>
+            )
+          })}
+        </div>
+      )}
+      {detail.series?.map((sr, k) => (
+        <div key={k} className="detail-block">
+          {sr.title && <h3 className="small muted">{sr.title}</h3>}
+          <Chart option={seriesOption(sr, th)} height={220} />
+        </div>
+      ))}
       {detail.timeline && (
-        <div style={{ marginTop: 14 }}>
-          <h3 className="small muted" style={{ marginBottom: 4 }}>{t('pp.timeline')}</h3>
+        <div className="detail-block">
+          <h3 className="small muted">{t('pp.timeline')}</h3>
           <Chart option={timelineOption(detail.timeline, th)} height={Math.max(130, 48 + detail.timeline.lanes.length * 36)} />
         </div>
       )}

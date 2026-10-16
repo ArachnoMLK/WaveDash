@@ -143,6 +143,16 @@ export function registerIpc(win: () => BrowserWindow | null): void {
     const r = w ? await dialog.showOpenDialog(w, opts) : await dialog.showOpenDialog(opts)
     return r.canceled ? null : r.filePaths[0] ?? null
   })
+  ipcMain.handle('plugins:importFiles', async (_e, id: number, exts: string[]) => {
+    const list = Array.isArray(exts) ? exts.filter((x) => typeof x === 'string' && /^\.[a-z0-9]{1,10}$/.test(x)).map((x) => x.slice(1)) : []
+    const opts = { properties: ['openFile' as const, 'multiSelections' as const], filters: list.length ? [{ name: list.join(', '), extensions: list }] : [] }
+    const w = win()
+    const r = w ? await dialog.showOpenDialog(w, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || !r.filePaths.length) return null
+    const res = plugins.importPluginFiles(Number(id), r.filePaths)
+    if (res.imported) { await plugins.refreshPluginAccount(Number(id)); notifyUpdated() }
+    return res
+  })
   ipcMain.handle('plugins:inspect', (_e, path: string) => plugins.inspectPackage(String(path)))
   ipcMain.handle('plugins:install', (_e, token: string) => { const r = plugins.installPending(String(token)); notifyUpdated(); return r })
   ipcMain.handle('plugins:setEnabled', (_e, id: string, enabled: boolean) => { db.setPluginEnabled(String(id), !!enabled); notifyUpdated() })
