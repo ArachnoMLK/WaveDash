@@ -4,6 +4,7 @@ import { build } from 'esbuild'
 import { spawnSync } from 'node:child_process'
 import { readdirSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const root = resolve(import.meta.dirname, '..'), outDir = join(root, 'out', 'tests')
 const filter = process.argv[2] ?? ''
@@ -16,6 +17,10 @@ await build({
   external: ['better-sqlite3', 'quickjs-emscripten']
 })
 const electron = join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron')
-const r = spawnSync(electron, ['--test', ...files.map((f) => join(outDir, f.replace(/\.ts$/, '.cjs')))],
+// Un test bloqué échoue au bout de 3 min au lieu de suspendre tout (ex. sur GitHub). Sur GitHub, les échecs deviennent des annotations.
+const reporters = process.env.GITHUB_ACTIONS
+  ? ['--test-reporter=spec', '--test-reporter-destination=stdout', `--test-reporter=${pathToFileURL(join(root, 'tools', 'gh-reporter.mjs')).href}`, '--test-reporter-destination=stdout']
+  : []
+const r = spawnSync(electron, ['--test', '--test-timeout=180000', ...reporters, ...files.map((f) => join(outDir, f.replace(/\.ts$/, '.cjs')))],
   { stdio: 'inherit', cwd: root, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', WAVEDASH_ROOT: root } })
 process.exit(r.status ?? 1)

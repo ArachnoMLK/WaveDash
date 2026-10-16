@@ -16,6 +16,7 @@ jobs:
       # Pas de version publiée si les types ou les tests échouent.
       - run: npm run typecheck
       - run: npm test
+        timeout-minutes: 20
       - run: npm run build
       - run: npx electron-builder --win nsis --publish always
         env:
