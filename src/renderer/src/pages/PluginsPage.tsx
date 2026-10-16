@@ -1,6 +1,6 @@
 // Gestion des plugins : installation (bouton ou glisser-déposer), comptes, clés, activation, désinstallation.
 import { useEffect, useState } from 'react'
-import { InstalledPlugin, loc } from '@shared/plugin'
+import { compareVersions, InstalledPlugin, loc } from '@shared/plugin'
 import { PermissionList, PluginInstallDialog } from '../components/PluginInstallDialog'
 import { PluginAccountDialog } from '../components/PluginAccountDialog'
 import { Reveal, Switch } from '../components/ui'
@@ -76,7 +76,18 @@ export function PluginsPage({ openPath, onOpenHandled }: { openPath: string | nu
   const path = installPath ?? openPath
   const [bundled, setBundled] = useState<Awaited<ReturnType<typeof window.api.pluginsBundled>>>([])
   useEffect(() => { void window.api.pluginsBundled().then(setBundled) }, [plugins])
-  const offered = bundled.filter((b) => !b.installedVersion || b.installedVersion !== b.version)
+  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof window.api.pluginsCatalog>> | null>(null)
+  const [fetching, setFetching] = useState<string | null>(null)
+  const [catalogError, setCatalogError] = useState<string | null>(null)
+  useEffect(() => { void window.api.pluginsCatalog(false).then(setCatalog) }, [plugins])
+  const fromCatalog = async (id: string): Promise<void> => {
+    setFetching(id); setCatalogError(null)
+    const r = await window.api.pluginsCatalogFetch(id)
+    setFetching(null)
+    if (r.ok && r.path) setInstallPath(r.path); else setCatalogError(r.error ?? '')
+  }
+  // Sans catalogue (hors ligne au premier lancement), les plugins fournis avec l'appli restent proposés.
+  const offered = catalog?.entries.length ? [] : bundled.filter((b) => !b.installedVersion || b.installedVersion !== b.version)
 
   const pick = async (): Promise<void> => { const p = await window.api.pluginsPickPackage(); if (p) setInstallPath(p) }
   const close = (): void => { setInstallPath(null); onOpenHandled() }
@@ -93,6 +104,28 @@ export function PluginsPage({ openPath, onOpenHandled }: { openPath: string | nu
       {plugins.length === 0
         ? <div className="glass empty sect"><p>{t('plugins.empty')}</p></div>
         : <div className="grid two sect">{plugins.map((p, i) => <Reveal key={p.id} delay={i * 0.05}><PluginCard plugin={p} onAddAccount={() => setAccountFor(p.id)} /></Reveal>)}</div>}
+
+      {catalog && catalog.entries.length > 0 && (
+        <Reveal className="glass pad sect">
+          <div className="row between" style={{ marginBottom: 8 }}>
+            <h2>{t('plugins.catalog')}</h2>
+            <button className="btn" onClick={() => void window.api.pluginsCatalog(true).then(setCatalog)}>{t('platform.refresh')}</button>
+          </div>
+          <p className="muted small" style={{ marginBottom: 6 }}>{t('plugins.catalogHint')}{catalog.offline ? ` ${t('plugins.catalogOffline')}` : ''}</p>
+          {catalogError && <div className="err" style={{ marginBottom: 8 }}>{catalogError}</div>}
+          {catalog.entries.map((e) => {
+            const upToDate = e.installedVersion !== null && compareVersions(e.installedVersion, e.version) >= 0   // jamais de retour en arrière
+            return (
+              <div key={e.id} className="row between" style={{ padding: '8px 0', borderTop: '1px solid var(--line)', gap: 12 }}>
+                <div className="grow"><b>{e.name}</b> <span className="muted small">{e.version}{e.author ? ` · ${e.author}` : ''}{e.installedVersion && !upToDate ? ` (${t('plugins.installedV', { v: e.installedVersion })})` : ''}</span>
+                  <div className="muted small">{loc(e.description, settings.lang)}</div></div>
+                {upToDate ? <span className="small muted">{t('plugins.upToDate')}</span>
+                  : <button className="btn" disabled={fetching !== null} onClick={() => void fromCatalog(e.id)}>{fetching === e.id ? '…' : e.installedVersion ? t('plugins.updateBtn') : t('plugins.install')}</button>}
+              </div>
+            )
+          })}
+        </Reveal>
+      )}
 
       {offered.length > 0 && (
         <Reveal className="glass pad sect">

@@ -13,6 +13,7 @@ import * as secrets from './secrets'
 import { applySystemSettings, hasNativeGlass } from './system'
 import { exportBackup, exportData, importBackup } from './export'
 import * as plugins from './plugins/manager'
+import { fetchPackage, getCatalog } from './plugins/catalog'
 import { fireTest, initMilestones } from './milestones'
 import { checkUpdate, getUpdateStatus, installUpdate } from './updater'
 
@@ -154,6 +155,12 @@ export function registerIpc(win: () => BrowserWindow | null): void {
     return res
   })
   ipcMain.handle('plugins:bundled', () => plugins.listBundled())
+  ipcMain.handle('plugins:catalog', (_e, force: boolean) => getCatalog(!!force))
+  ipcMain.handle('plugins:catalogFetch', async (_e, id: string) => {
+    try { return { ok: true, path: await fetchPackage(String(id)) } } catch (e) { return { ok: false, error: (e as Error).message } }
+  })
+  // Au démarrage (après coup, sans bloquer) : mises à jour silencieuses depuis le catalogue quand les permissions sont identiques.
+  setTimeout(() => { void plugins.syncCatalogUpdates().then((up) => { if (up.length) { console.log('Catalogue :', up.join(', ')); notifyUpdated() } }).catch(() => {}) }, 20_000)
   ipcMain.handle('plugins:inspect', (_e, path: string) => plugins.inspectPackage(String(path)))
   ipcMain.handle('plugins:install', (_e, token: string) => { const r = plugins.installPending(String(token)); notifyUpdated(); return r })
   ipcMain.handle('plugins:setEnabled', (_e, id: string, enabled: boolean) => { db.setPluginEnabled(String(id), !!enabled); notifyUpdated() })

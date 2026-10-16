@@ -123,6 +123,12 @@ Après **5 échecs consécutifs**, le plugin est désactivé automatiquement. À
 
 > Cette isolation réduit fortement le risque mais ne le supprime pas, et WaveDash n'est pas signé numériquement : **n'installe que des plugins dont tu connais l'auteur.**
 
+## Catalogue en ligne
+
+La page **Plugins › Catalogue** liste les plugins publiés sur le dépôt [ArachnoMLK/WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins). WaveDash lit son `index.json` (adresse écrite dans l'application, cache de 3 h, dernière copie gardée pour le mode hors ligne). Avant toute installation, le paquet téléchargé est vérifié : taille et empreinte SHA-256 identiques à celles de l'index, sinon il est refusé. L'installation passe ensuite par l'écran de confirmation habituel, avec les permissions. Au démarrage, un plugin installé est mis à jour en silence depuis le catalogue si sa nouvelle version demande exactement les mêmes permissions. Le catalogue ne fait jamais revenir un plugin à une version plus ancienne.
+
+Pour publier un plugin : pull request sur WaveDash-Plugins (voir son README). Le propriétaire du dépôt relit chaque contribution ; l'action **Check** vérifie que paquets, empreintes et sources correspondent.
+
 ## Plugins fournis avec WaveDash
 
 Les plugins du dossier `examples/` sont livrés dans l'installateur. La page **Plugins** propose ceux qui ne sont pas installés (ou dont une version plus récente est fournie), en un clic, avec l'écran de confirmation habituel. Au démarrage, WaveDash met à jour **en silence** un plugin installé dont il fournit une version plus récente, **seulement si ses permissions sont identiques** ; sinon, la mise à jour attend ta confirmation depuis la page Plugins.

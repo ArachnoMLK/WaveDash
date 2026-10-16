@@ -247,6 +247,9 @@ export interface WaveApi {
   pluginAccountRefresh(accountId: number): Promise<void>
   pluginAccountData(accountId: number): Promise<{ logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null }>
   pluginsBundled(): Promise<{ path: string; id: string; name: string; version: string; description: import('./plugin').LocalText; installedVersion: string | null }[]>
+  pluginsCatalog(force?: boolean): Promise<{ entries: { id: string; name: string; version: string; author: string; description: import('./plugin').LocalText;
+    permissions: { network?: string[]; folder?: boolean }; installedVersion: string | null }[]; fetchedAt: number | null; offline: boolean }>
+  pluginsCatalogFetch(id: string): Promise<{ ok: boolean; path?: string; error?: string }>
   pluginAccountItems(accountId: number, offset: number, limit: number, month?: string): Promise<PluginItemsPage>
   /** Ouvre le sélecteur de fichiers et importe les fichiers choisis pour ce compte ; null si annulé. */
   pluginImportFiles(accountId: number, extensions: string[]): Promise<{ imported: number; skipped: number } | null>

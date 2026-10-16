@@ -8,6 +8,7 @@ import {
 } from '@shared/plugin'
 import * as db from '../db'
 import { processPluginRefresh } from '../milestones'
+import { fetchPackage, getCatalog } from './catalog'
 import * as secrets from '../secrets'
 import { FolderAccess } from './files'
 import { PluginError, RunRequest, runPlugin } from './sandbox'
@@ -319,6 +320,21 @@ export function syncBundledPlugins(): string[] {
     const row = db.getPluginRow(b.id), r = inspectPackage(b.path)
     if (!row || !r.ok || !r.inspect || !samePermissions(loadManifest(row), r.inspect.manifest)) continue
     if (installPending(r.inspect.token).ok) updated.push(`${b.name} ${b.version}`)
+  }
+  return updated
+}
+
+/** Mises à jour depuis le catalogue en ligne : même règle que les plugins fournis (permissions identiques, sinon confirmation). */
+export async function syncCatalogUpdates(): Promise<string[]> {
+  const updated: string[] = []
+  const view = await getCatalog()
+  for (const e of view.entries) {
+    if (!e.installedVersion || compareVersions(e.version, e.installedVersion) <= 0) continue
+    try {
+      const path = await fetchPackage(e.id), row = db.getPluginRow(e.id), r = inspectPackage(path)
+      if (!row || !r.ok || !r.inspect || !samePermissions(loadManifest(row), r.inspect.manifest)) continue
+      if (installPending(r.inspect.token).ok) updated.push(`${e.name} ${e.version}`)
+    } catch (err) { console.error('Catalogue :', e.id, err) }
   }
   return updated
 }
