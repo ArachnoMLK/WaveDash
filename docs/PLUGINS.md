@@ -147,7 +147,7 @@ La page d'un compte de plugin affiche l'erreur de la dernière actualisation et 
 
 ## Plugin fourni : Brawlhalla Replays
 
-`examples/brawlhalla-replays-1.3.1.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
+`examples/brawlhalla-replays-1.4.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
 
 - **Courbe et cartes** : parties, victoires, défaites, taux de victoire, stocks pris et perdus, durée moyenne, appuis par minute.
 - **Bilan** : chiffres clés, tableaux par légende, carte, mode, coéquipier, adversaire, jour et heure, direction de tes esquives, répartition de tes attaques.
@@ -163,6 +163,7 @@ Vérifié sur 9012 replays réels (versions 261 à 271, patchs 10.02 à 11.00) :
 - **Légendes.** L'identifiant lu dans le replay est le `HeroID` du jeu, identique au `legend_id` de l'API officielle. La table (70 légendes, jusqu'à Qinghua & Baobao) vient du fichier `HeroTypes` des données du patch 11.00, et concorde avec le lecteur de replay du jeu sur Eternity's End. Une légende inconnue s'affiche `#id` et le journal le signale (« nouvelle légende ? ») : il faut alors mettre à jour la table.
 - **Carte.** Le nom vient de la table `LevelTypes` du jeu (patch 11.00), vérifiée contre les noms de 2930 fichiers ; sinon du nom du fichier (`[11.00] SmallBrawlhaven (42).replay` → Small Brawlhaven) ; à défaut, `Carte #id`.
 - **Armes.** Les deux armes de chaque légende viennent de la table `HeroTypes` du jeu.
+- **Identifiant de joueur.** Depuis la version 268 (patch 10.09), chaque joueur a un identifiant de compte (32 bits, 0 pour les bots), stable malgré les changements de pseudo ; le second joueur local (« pseudo•2 ») partage celui de son hôte. Le plugin apprend tes identifiants à partir d'un pseudo identique (avec ou sans tag de clan), puis te reconnaît par eux. Coéquipiers et adversaires sont regroupés par identifiant ; une partie plus ancienne, sans identifiant, est rattachée au joueur dont le pseudo sans tag correspond à un seul identifiant. Hypothèse non vérifiée : que ce soit le `brawlhalla_id` de l'API officielle.
 - **Victoire.** Le score d'un joueur est sa place (1 = vainqueur). Certains modes (Kung Foot) ajoutent une entité qui n'est pas un joueur, avec un score de 0 : elle est ignorée.
 - **Inputs.** Chaque joueur a la liste horodatée (ms) des changements d'état de ses touches (14 indicateurs : directions, saut, attaques légère et lourde, esquive, ramasser/lancer, quatre provocations). Le plugin compte les appuis, note la direction tenue au moment de chaque attaque et de chaque esquive, mesure le temps passé à tenir gauche ou droite et l'activité toutes les 15 s.
 - **Auteur d'un KO : non.** Un KO ne contient que le joueur qui perd un stock et l'instant. La seconde liste (type 7) n'apparaît que dans des modes spéciaux (Kung Foot, sans KO) et ne désigne pas d'auteur non plus. En 1v1 l'auteur est forcément l'adversaire ; ailleurs, le fichier ne permet pas de le savoir.

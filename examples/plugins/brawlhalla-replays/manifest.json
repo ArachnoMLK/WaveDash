@@ -2,36 +2,154 @@
   "wdsh": 1,
   "id": "wavedash.brawlhalla-replays",
   "name": "Brawlhalla Replays",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "author": "WaveDash",
   "description": {
     "fr": "Lit tes fichiers .replay Brawlhalla dans un dossier : victoires, défaites, stocks, durée, et le détail de chaque partie (joueurs, scores, frise des KOs). Tout est lu en local, aucun accès réseau.",
     "en": "Reads your Brawlhalla .replay files from a folder: wins, losses, stocks, duration, and a detail view per match (players, scores, KO timeline). Everything is read locally, no network access."
   },
-  "permissions": { "network": [], "folder": true, "folderExtensions": [".replay"] },
+  "permissions": {
+    "network": [],
+    "folder": true,
+    "folderExtensions": [
+      ".replay"
+    ]
+  },
   "inputs": [
-    { "key": "folder", "type": "folder", "required": true, "label": { "fr": "Dossier des replays", "en": "Replays folder" },
-      "help": { "fr": "Dans le jeu : Brawlhalla > Replays, ou le dossier où tu les enregistres.", "en": "In game: Brawlhalla > Replays, or the folder where you save them." } },
-    { "key": "playerName", "type": "text", "required": true, "label": { "fr": "Ton pseudo en jeu", "en": "Your in-game name" }, "placeholder": "Pseudo",
-      "help": { "fr": "Sert à savoir quelle partie tu as gagnée. Le tag de clan peut être omis. Plusieurs pseudos : sépare-les par des virgules.", "en": "Used to know which matches you won. The clan tag can be omitted. Several names: separate them with commas." } }
+    {
+      "key": "folder",
+      "type": "folder",
+      "required": true,
+      "label": {
+        "fr": "Dossier des replays",
+        "en": "Replays folder"
+      },
+      "help": {
+        "fr": "Dans le jeu : Brawlhalla > Replays, ou le dossier où tu les enregistres.",
+        "en": "In game: Brawlhalla > Replays, or the folder where you save them."
+      }
+    },
+    {
+      "key": "playerName",
+      "type": "text",
+      "required": true,
+      "label": {
+        "fr": "Ton pseudo en jeu",
+        "en": "Your in-game name"
+      },
+      "placeholder": "Pseudo",
+      "help": {
+        "fr": "Sert à savoir quelle partie tu as gagnée. Le tag de clan peut être omis. Plusieurs pseudos : sépare-les par des virgules.",
+        "en": "Used to know which matches you won. The clan tag can be omitted. Several names: separate them with commas."
+      }
+    }
   ],
   "metrics": [
-    { "key": "games", "label": { "fr": "Parties", "en": "Games" }, "primary": true },
-    { "key": "wins", "label": { "fr": "Victoires", "en": "Wins" } },
-    { "key": "losses", "label": { "fr": "Défaites", "en": "Losses" } },
-    { "key": "winrate", "label": { "fr": "Taux de victoire", "en": "Win rate" }, "format": "percent", "decimals": 1 },
-    { "key": "stocks_taken", "label": { "fr": "Stocks pris à l'adversaire", "en": "Stocks taken" } },
-    { "key": "stocks_lost", "label": { "fr": "Stocks perdus", "en": "Stocks lost" } },
-    { "key": "avg_duration", "label": { "fr": "Durée moyenne", "en": "Average length" }, "format": "duration" },
-    { "key": "apm", "label": { "fr": "Appuis par minute", "en": "Presses per minute" }, "decimals": 0 }
+    {
+      "key": "games",
+      "label": {
+        "fr": "Parties",
+        "en": "Games"
+      },
+      "primary": true
+    },
+    {
+      "key": "wins",
+      "label": {
+        "fr": "Victoires",
+        "en": "Wins"
+      }
+    },
+    {
+      "key": "losses",
+      "label": {
+        "fr": "Défaites",
+        "en": "Losses"
+      }
+    },
+    {
+      "key": "winrate",
+      "label": {
+        "fr": "Taux de victoire",
+        "en": "Win rate"
+      },
+      "format": "percent",
+      "decimals": 1
+    },
+    {
+      "key": "stocks_taken",
+      "label": {
+        "fr": "Stocks pris à l'adversaire",
+        "en": "Stocks taken"
+      }
+    },
+    {
+      "key": "stocks_lost",
+      "label": {
+        "fr": "Stocks perdus",
+        "en": "Stocks lost"
+      }
+    },
+    {
+      "key": "avg_duration",
+      "label": {
+        "fr": "Durée moyenne",
+        "en": "Average length"
+      },
+      "format": "duration"
+    },
+    {
+      "key": "apm",
+      "label": {
+        "fr": "Appuis par minute",
+        "en": "Presses per minute"
+      },
+      "decimals": 0
+    }
   ],
   "itemColumns": [
-    { "key": "mode", "label": { "fr": "Mode", "en": "Mode" } },
-    { "key": "result", "label": { "fr": "Résultat", "en": "Result" } },
-    { "key": "duration", "label": { "fr": "Durée", "en": "Length" } },
-    { "key": "kos", "label": { "fr": "KOs (total)", "en": "KOs (total)" } },
-    { "key": "apm", "label": { "fr": "Appuis/min", "en": "Presses/min" } },
-    { "key": "map", "label": { "fr": "Carte", "en": "Map" } }
+    {
+      "key": "mode",
+      "label": {
+        "fr": "Mode",
+        "en": "Mode"
+      }
+    },
+    {
+      "key": "result",
+      "label": {
+        "fr": "Résultat",
+        "en": "Result"
+      }
+    },
+    {
+      "key": "duration",
+      "label": {
+        "fr": "Durée",
+        "en": "Length"
+      }
+    },
+    {
+      "key": "kos",
+      "label": {
+        "fr": "KOs (total)",
+        "en": "KOs (total)"
+      }
+    },
+    {
+      "key": "apm",
+      "label": {
+        "fr": "Appuis/min",
+        "en": "Presses/min"
+      }
+    },
+    {
+      "key": "map",
+      "label": {
+        "fr": "Carte",
+        "en": "Map"
+      }
+    }
   ],
   "itemsMode": "keep",
   "refreshMinutes": 10

@@ -8,7 +8,7 @@ var MAX_NEW = 150          // nouveaux replays lus par actualisation au plus (~2
 var BUDGET_MS = 2000       // au-delà, on s'arrête : le reste suit à la relance (le bac à sable coupe à 8 s ; une lecture courte gêne moins l'interface)
 var MAX_POINTS = 5000      // points d'historique renvoyés au plus (limite de WaveDash)
 var BUCKETS = 96             // clés de stockage du cache (WaveDash en autorise 100, 64 Ko chacune)
-var CACHE_V = 5            // version du contenu du cache : une entrée plus ancienne est relue
+var CACHE_V = 6            // version du contenu du cache : une entrée plus ancienne est relue
 
 // Légendes : identifiant du replay = legend_id de l'API officielle = HeroID du jeu (table HeroTypes du patch 11.00).
 // Une légende plus récente que cette table s'affiche « #id ».
@@ -187,7 +187,7 @@ function parseBuffer(buf) {
       var sum = 0                                                       // checksum des joueurs (voir checksumOf)
       while (r.bit()) {
         var e = { id: r.i32() }
-        if (rep.version >= 268) r.i32()                                // identifiant de joueur (ajouté en v268, patch 10.09)
+        if (rep.version >= 268) e.pid = r.u32()                        // identifiant du compte (ajouté en v268, patch 10.09 ; 0 pour les bots)
         e.name = r.str()
         var cs = 0, cos = []
         for (i = 0; i < 6; i++) cos.push(r.u32())                      // couleurs, robot d'apparition, compagnon, émetteur, traînée, thème
@@ -307,7 +307,7 @@ function saveCache(entries) {
 function compact(rep) {
   var ins = {}
   for (var k in rep.inputs) { var a = rep.inputs[k]; ins[k] = { l: a.l, h: a.h, g: a.g, d: a.d, j: a.j, t: a.t, tt: a.tt, mv: a.mv, act: a.act } }
-  return { n: rep.ents.map(function (e) { return [e.name, e.team, e.heroes[0], e.bot ? 1 : 0, e.id, e.costume, e.stance] }), s: rep.scores, k: rep.kos, l: rep.length,
+  return { n: rep.ents.map(function (e) { return [e.name, e.team, e.heroes[0], e.bot ? 1 : 0, e.id, e.costume, e.stance, e.pid || 0] }), s: rep.scores, k: rep.kos, l: rep.length,
     m: rep.levelId, p: rep.playlist, pid: rep.playlistId, o: rep.online ? 1 : 0, lv: rep.lives, st: rep.settings || [], i: ins, ver: rep.version }
 }
 
@@ -335,16 +335,27 @@ function fmtDate(ts) { var d = new Date(ts); return pad(d.getDate()) + '/' + pad
 function pct(a, b) { return b ? Math.round(a * 1000 / b) / 10 : 0 }
 /** Pseudos recherchés : plusieurs possibles, séparés par des virgules (ex. après un changement de pseudo). */
 function wantedList(raw) { return (raw || '').split(/[,;]/).map(function (w) { return w.toLowerCase().trim() }).filter(Boolean) }
+/** Pseudo identique (avec ou sans tag de clan) : seul cas où ton identifiant est appris, pour ne jamais prendre celui d’un homonyme partiel. */
+function exactly(name, wanted) {
+  var a = name.toLowerCase(), tagless = a.indexOf('|') >= 0 ? a.slice(a.indexOf('|') + 1).trim() : a
+  return wanted.some(function (w) { return a === w || tagless === w })
+}
 function matches(name, wanted) {
   var a = name.toLowerCase()
   var tagless = a.indexOf('|') >= 0 ? a.slice(a.indexOf('|') + 1).trim() : a
   return wanted.some(function (w) { return a === w || tagless === w || a.indexOf(w) >= 0 })
 }
 
-function analyse(c, wanted) {
-  var ents = c.n.map(function (n) { return { name: n[0], team: n[1], hero: n[2], bot: n[3], id: n[4], costume: n[5], stance: n[6] } })
-  var me = null
-  for (var i = 0; i < ents.length; i++) if (matches(ents[i].name, wanted)) { me = ents[i]; break }
+/** Toi dans la partie : d'abord ton identifiant de compte (appris depuis ton pseudo, il survit aux changements de pseudo),
+ *  sinon ton pseudo. Le second joueur local (« pseudo•2 ») partage ton identifiant : il ne passe jamais avant toi. */
+function analyse(c, wanted, myPids) {
+  var ents = c.n.map(function (n) { return { name: n[0], team: n[1], hero: n[2], bot: n[3], id: n[4], costume: n[5], stance: n[6], pid: n[7] || 0 } })
+  var me = null, guest = function (e) { return /•\d+$/.test(e.name) }
+  var byPid = myPids ? ents.filter(function (e) { return e.pid && myPids[e.pid] }) : []
+  var byName = ents.filter(function (e) { return matches(e.name, wanted) })
+  var pool = byPid.length ? byPid : byName
+  for (var i = 0; i < pool.length; i++) if (!guest(pool[i])) { me = pool[i]; break }
+  if (!me && pool.length) me = pool[0]
   var deaths = {}; ents.forEach(function (e) { deaths[e.id] = [] })
   c.k.slice().sort(function (a, b) { return a[1] - b[1] }).forEach(function (k) { if (deaths[k[0]]) deaths[k[0]].push(k[1]) })
   // Score = place (1 = vainqueur). Certains modes (Kung Foot…) ajoutent une entité qui n'est pas un joueur, avec 0 : ignorée.
@@ -387,7 +398,7 @@ function buildItem(file, c, a, lang) {
   if (st[7] && st[7] !== 100) chips.push(tr(fr, 'Vitesse ', 'Speed ') + st[7] + ' %')
   var place = function (e) { var p = c.s[e.id]; return p > 0 ? p : '—' }
   var players = a.ents.map(function (e) {
-    return [e.name, e.team, legendName(e.hero), weaponsOf(e.hero, fr), tr(fr, 'Posture ', 'Stance ') + e.stance, place(e), a.deaths[e.id].length,
+    return [e.name, e.pid ? 'ID ' + e.pid : e.bot ? 'bot' : '—', e.team, legendName(e.hero), weaponsOf(e.hero, fr), tr(fr, 'Posture ', 'Stance ') + e.stance, place(e), a.deaths[e.id].length,
       a.kills[e.id] === null ? '—' : a.kills[e.id]]
   })
   var actions = a.ents.map(function (e) {
@@ -405,7 +416,7 @@ function buildItem(file, c, a, lang) {
     chips: chips,
     tables: [
       { title: tr(fr, 'Joueurs', 'Players'),
-        columns: fr ? ['Joueur', 'Équipe', 'Légende', 'Armes', 'Posture', 'Place', 'KOs subis', 'KOs infligés (1v1)'] : ['Player', 'Team', 'Legend', 'Weapons', 'Stance', 'Place', 'Stocks lost', 'KOs dealt (1v1)'],
+        columns: fr ? ['Joueur', 'ID', 'Équipe', 'Légende', 'Armes', 'Posture', 'Place', 'KOs subis', 'KOs infligés (1v1)'] : ['Player', 'ID', 'Team', 'Legend', 'Weapons', 'Stance', 'Place', 'Stocks lost', 'KOs dealt (1v1)'],
         rows: players },
       { title: tr(fr, 'Actions (attaques : neutre / côté / bas)', 'Actions (attacks: neutral / side / down)'),
         columns: fr ? ['Joueur', 'Légères', 'Lourdes', 'Esquives', 'Sauts', 'Lancers', 'Provocations', 'Déplacement', 'Appuis/min'] : ['Player', 'Light', 'Heavy', 'Dodges', 'Jumps', 'Throws', 'Taunts', 'Moving', 'Presses/min'],
@@ -443,8 +454,9 @@ function summaryOf(file, c, a, lang) {
   var me = a.me, p = presses(c, me.id), cut = function (n) { return n.slice(0, 24) }
   return { w: a.won === null ? -1 : a.won ? 1 : 0, d: a.lost, tk: a.taken, du: Math.round(a.dur * 1000), a: a.apm === null ? -1 : Math.round(a.apm * 10),
     L: me.hero, m: mapName(file, c, lang === 'fr'), p: modeLabel(c, lang), k: a.kills[me.id] === null ? -1 : a.kills[me.id],
-    tm: a.ents.filter(function (e) { return e.id !== me.id && a.sameTeam(e, me) }).map(function (e) { return cut(e.name) }),
-    op: a.ents.filter(function (e) { return !a.sameTeam(e, me) }).map(function (e) { return cut(e.name) }),
+    // Coéquipiers et adversaires : [pseudo, identifiant] (identifiant 0 pour les bots et les replays d'avant le patch 10.09).
+    tm: a.ents.filter(function (e) { return e.id !== me.id && a.sameTeam(e, me) }).map(function (e) { return [cut(e.name), e.pid] }),
+    op: a.ents.filter(function (e) { return !a.sameTeam(e, me) }).map(function (e) { return [cut(e.name), e.pid] }),
     g: p ? p.g : null, at: p ? p.l.concat(p.h) : null, j: p ? p.j : 0, dg: p ? p.d : 0, th: p ? p.t : 0 }
 }
 
@@ -453,7 +465,13 @@ function buildSummary(games, lang) {
   var fr = lang === 'fr', n = games.length
   if (!n) return undefined
   var tot = { w: 0, l: 0, d: 0, tk: 0, du: 0, a: 0, aN: 0, dg: 0, j: 0 }, g9 = [0, 0, 0, 0, 0, 0, 0, 0, 0], at = [0, 0, 0, 0, 0, 0]
-  var by = { L: {}, m: {}, p: {}, tm: {}, op: {}, day: {}, hour: {} }
+  var by = { L: {}, m: {}, p: {}, tm: {}, op: {}, day: {}, hour: {} }, label = {}
+  // Parties d'avant le patch 10.09 (sans identifiant) : rattachées au joueur qui porte le même pseudo (sans tag de clan)
+  // dans les parties récentes, si un seul identifiant correspond.
+  var pidsOf = {}
+  var bare = function (n) { var a = n.toLowerCase(); return (a.indexOf('|') >= 0 ? a.slice(a.indexOf('|') + 1) : a).replace(/•\d+$/, '').trim() }
+  games.forEach(function (g) { g.s.tm.concat(g.s.op).forEach(function (x) { if (x[1]) { var k = bare(x[0]); (pidsOf[k] = pidsOf[k] || {})[x[1]] = 1 } }) })
+  var nameToPid = function (n) { var ids = pidsOf[bare(n)]; var keys = ids ? Object.keys(ids) : []; return keys.length === 1 ? +keys[0] : 0 }
   var bump = function (map, key, s) {
     var o = map[key] || (map[key] = { n: 0, w: 0, l: 0, d: 0, a: 0, aN: 0 })
     o.n++; if (s.w === 1) o.w++; else if (s.w === 0) o.l++
@@ -467,7 +485,9 @@ function buildSummary(games, lang) {
     if (s.g) for (i = 0; i < 9; i++) g9[i] += s.g[i]
     if (s.at) for (i = 0; i < 6; i++) at[i] += s.at[i]
     bump(by.L, legendName(s.L), s); bump(by.m, s.m, s); bump(by.p, s.p, s)
-    s.tm.forEach(function (x) { bump(by.tm, x, s) }); s.op.forEach(function (x) { bump(by.op, x, s) })
+    // Un joueur = un identifiant quand il existe (pseudos successifs regroupés, homonymes séparés), sinon son pseudo.
+    var person = function (x) { var pid = x[1] || nameToPid(x[0]), k = pid ? 'p' + pid : 'n' + x[0]; if (x[1] || !label[k]) label[k] = x[0]; return k }
+    s.tm.forEach(function (x) { bump(by.tm, person(x), s) }); s.op.forEach(function (x) { bump(by.op, person(x), s) })
     bump(by.day, (dt.getDay() + 6) % 7, s); bump(by.hour, Math.floor(dt.getHours() / 2), s)
   })
   var rowsOf = function (map, min, limit, cols) {
@@ -479,6 +499,7 @@ function buildSummary(games, lang) {
   var days = fr ? ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
   var wl = fr ? ['Parties', 'V', 'D', '% V'] : ['Games', 'W', 'L', 'Win %']
   var basic = function (k, o) { return [k, o.n, o.w, o.l, wr(o)] }
+  var named = function (k, o) { return [label[k] || k.slice(1), o.n, o.w, o.l, wr(o)] }   // pseudo le plus récent du joueur
   return {
     stats: [
       { label: tr(fr, 'Parties', 'Games'), value: n }, { label: tr(fr, 'Victoires', 'Wins'), value: tot.w }, { label: tr(fr, 'Défaites', 'Losses'), value: tot.l },
@@ -494,8 +515,8 @@ function buildSummary(games, lang) {
         rows: rowsOf(by.L, 1, 80, function (k, o) { return basic(k, o).concat([Math.round(o.d * 10 / o.n) / 10, o.aN ? Math.round(o.a / o.aN) : '—']) }) },
       { title: tr(fr, 'Par carte', 'By map'), columns: [tr(fr, 'Carte', 'Map')].concat(wl), rows: rowsOf(by.m, 1, 40, basic) },
       { title: tr(fr, 'Par mode', 'By mode'), columns: ['Mode'].concat(wl), rows: rowsOf(by.p, 1, 40, basic) },
-      { title: tr(fr, 'Coéquipiers (3 parties ou plus)', 'Teammates (3+ games)'), columns: [tr(fr, 'Joueur', 'Player')].concat(wl), rows: rowsOf(by.tm, 3, 40, basic) },
-      { title: tr(fr, 'Adversaires (3 parties ou plus ; V = tes victoires)', 'Opponents (3+ games; W = your wins)'), columns: [tr(fr, 'Joueur', 'Player')].concat(wl), rows: rowsOf(by.op, 3, 40, basic) },
+      { title: tr(fr, 'Coéquipiers (3 parties ou plus)', 'Teammates (3+ games)'), columns: [tr(fr, 'Joueur', 'Player')].concat(wl), rows: rowsOf(by.tm, 3, 40, named) },
+      { title: tr(fr, 'Adversaires (3 parties ou plus ; V = tes victoires)', 'Opponents (3+ games; W = your wins)'), columns: [tr(fr, 'Joueur', 'Player')].concat(wl), rows: rowsOf(by.op, 3, 40, named) },
       { title: tr(fr, 'Par jour', 'By day'), columns: [tr(fr, 'Jour', 'Day')].concat(wl),
         rows: [0, 1, 2, 3, 4, 5, 6].filter(function (d) { return by.day[d] }).map(function (d) { return basic(days[d], by.day[d]) }) },
       { title: tr(fr, 'Par heure', 'By hour'), columns: [tr(fr, 'Heures', 'Hours')].concat(wl),
@@ -519,6 +540,8 @@ var plugin = {
 
   refresh: async function (ctx) {
     var lang = ctx.lang, wanted = wantedList(ctx.inputs.playerName)
+    var myPids = {}; try { myPids = JSON.parse(host.storage.get('myPids') || '{}') } catch (e) { myPids = {} }
+    var learned = false
     var files = host.files.list()                                       // tout le dossier, du plus récent au plus ancien
     var cache = loadCache(), next = {}, fresh = 0, failed = 0, backlog = 0, items = [], unknown = {}
     var started = Date.now()                                            // le budget ne compte que la lecture des replays
@@ -529,7 +552,9 @@ var plugin = {
       if (fresh >= MAX_NEW || Date.now() - started > BUDGET_MS) { backlog++; continue }
       fresh++
       try {
-        var full = compact(parseReplay(host.files.readBytes(f.name))), a = analyse(full, wanted)
+        var full = compact(parseReplay(host.files.readBytes(f.name))), a = analyse(full, wanted, myPids)
+        // Ton identifiant s'apprend la première fois que ton pseudo est trouvé (hors second joueur local).
+        if (a.me && a.me.pid && !myPids[a.me.pid] && exactly(a.me.name, wanted) && !/•\d+$/.test(a.me.name)) { myPids[a.me.pid] = a.me.name; learned = true }
         full.n.forEach(function (n) { if (!LEGENDS[n[2]]) unknown[n[2]] = true })
         // Le cache ne garde qu'un résumé par partie ; le détail part tout de suite dans WaveDash, qui le conserve.
         next[key] = { v: CACHE_V, t: f.mtime, s: a.me ? summaryOf(f, full, a, lang) : 0 }
@@ -539,6 +564,7 @@ var plugin = {
       }
     }
     saveCache(next)
+    if (learned) { host.storage.set('myPids', JSON.stringify(myPids)); host.log('Tes identifiants de joueur : ' + Object.keys(myPids).join(', ')) }
     if (host.storage.get('base')) host.storage.set('base', '')            // base cumulée des versions 1.0.x : plus utile
     host.log(files.length + ' fichiers, ' + fresh + ' lus, ' + failed + ' illisibles' + (backlog ? ', ' + backlog + ' encore à lire' : ''))
     var unknownIds = Object.keys(unknown)
