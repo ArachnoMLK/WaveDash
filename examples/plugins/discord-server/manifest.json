@@ -1,0 +1,40 @@
+{
+  "wdsh": 1,
+  "id": "wavedash.discord-server",
+  "name": "Discord (serveur)",
+  "version": "1.0.0",
+  "author": "WaveDash",
+  "description": {
+    "fr": "Suit un serveur Discord. Avec un lien d'invitation seul : membres, membres en ligne, boosts. Avec un bot (facultatif) : salons, messages par jour et par salon, membres les plus actifs. API officielle de Discord uniquement.",
+    "en": "Tracks a Discord server. With an invite link only: members, online members, boosts. With a bot (optional): channels, messages per day and per channel, most active members. Official Discord API only."
+  },
+  "permissions": { "network": ["discord.com"], "folder": false },
+  "inputs": [
+    { "key": "invite", "type": "text", "required": true, "placeholder": "discord.gg/xxxx",
+      "label": { "fr": "Lien d'invitation (permanent)", "en": "Invite link (permanent)" },
+      "help": { "fr": "Un lien qui n'expire pas, créé dans Discord : Inviter des gens › Modifier le lien › Expire : jamais.", "en": "A link that never expires, created in Discord: Invite people › Edit invite link › Expire: never." } },
+    { "key": "guildId", "type": "text", "required": false, "placeholder": "123456789012345678",
+      "label": { "fr": "ID du serveur (seulement avec un bot)", "en": "Server ID (bot only)" } }
+  ],
+  "secrets": [
+    { "key": "botToken", "label": { "fr": "Jeton du bot (facultatif)", "en": "Bot token (optional)" },
+      "help": { "fr": "Discord Developer Portal › ton application › Bot › Reset Token. Le bot doit être invité sur le serveur avec la permission « Lire l'historique des messages ».", "en": "Discord Developer Portal › your application › Bot › Reset Token. The bot must be invited to the server with the Read Message History permission." } }
+  ],
+  "metrics": [
+    { "key": "members", "label": { "fr": "Membres", "en": "Members" }, "primary": true },
+    { "key": "online", "label": { "fr": "En ligne", "en": "Online" } },
+    { "key": "online_pct", "label": { "fr": "Part en ligne", "en": "Online share" }, "format": "percent", "decimals": 1 },
+    { "key": "boosts", "label": { "fr": "Boosts", "en": "Boosts" } },
+    { "key": "channels", "label": { "fr": "Salons textuels", "en": "Text channels" } },
+    { "key": "messages_today", "label": { "fr": "Messages aujourd'hui", "en": "Messages today" } },
+    { "key": "messages_7d", "label": { "fr": "Messages sur 7 jours", "en": "Messages, last 7 days" } },
+    { "key": "authors_7d", "label": { "fr": "Membres actifs sur 7 jours", "en": "Active members, 7 days" } }
+  ],
+  "itemColumns": [
+    { "key": "today", "label": { "fr": "Aujourd'hui", "en": "Today" } },
+    { "key": "week", "label": { "fr": "7 jours", "en": "7 days" } },
+    { "key": "total", "label": { "fr": "Depuis le suivi", "en": "Since tracking" } },
+    { "key": "last", "label": { "fr": "Dernier message", "en": "Last message" } }
+  ],
+  "refreshMinutes": 15
+}
