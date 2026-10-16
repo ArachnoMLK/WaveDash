@@ -100,7 +100,7 @@ button.stat { text-align: left; font: inherit; color: inherit; cursor: pointer; 
 .chart-box { width: 100%; }
 
 /* Formulaires */
-input[type='text'], input[type='password'], select { width: 100%; padding: 10px 13px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--ctrl); color: var(--fg); font: inherit; font-size: 14px; outline: none; transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease); }
+input[type='text'], input[type='password'], input[type='search'], select { width: 100%; padding: 10px 13px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--ctrl); color: var(--fg); font: inherit; font-size: 14px; outline: none; transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease); }
 input:focus, select:focus { border-color: var(--line-strong); box-shadow: 0 0 0 3px var(--ctrl); }
 select option { background: #1c1c1c; color: #f2f2f2; }
 input[type='range'] { width: 100%; accent-color: var(--accent); }
@@ -177,6 +177,9 @@ input[type='color'] { width: 46px; height: 34px; padding: 2px; border-radius: va
 .heat-grid { display: grid; gap: 3px; align-items: center; text-align: center; }
 .heat-grid b { min-height: 3rem; padding: 4px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; font-weight: 600; font-size: 13px; line-height: 1.15; }
 .heat-grid b small { font-weight: 400; font-size: 11px; opacity: 0.8; }
+input[type='search'] { -webkit-appearance: none; appearance: none; }
+input[type='search']::-webkit-search-cancel-button { filter: grayscale(1); opacity: 0.6; cursor: pointer; }
+.top-search { margin-bottom: 36px; }                 /* même écart qu'entre les cartes et la courbe (36 px mesurés) */
 .top-search .search { font-size: 15px; }
 .table tr.detail-row > td { white-space: normal; background: var(--ctrl); padding: 4px 12px 16px; cursor: default; }
 .table tr.detail-row .table td { background: transparent; }
