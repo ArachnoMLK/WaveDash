@@ -1,7 +1,7 @@
 // Gestion des plugins : installation (avec validation), comptes, actualisation, clés.
 import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, utimesSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync } from 'fs'
 import { basename, extname, join } from 'path'
 import {
   compareVersions, InstalledPlugin, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
@@ -111,7 +111,16 @@ export function deletePluginSecret(pluginId: string, key: string): void {
 
 /* ---------- Exécution ---------- */
 /** Dossier géré par WaveDash où sont copiés les fichiers importés pour un compte (lu en plus du dossier choisi). */
-export const importDirOf = (accountId: number): string => join(app.getPath('userData'), 'plugin-imports', String(accountId))
+/** Dossier « Parties importées » d'un compte, dans Documents\WaveDash : les fichiers importés y sont copiés avant d'être lus. */
+export function importDirOf(accountId: number): string {
+  const dir = join(app.getPath('documents'), 'WaveDash', 'Parties importées', String(accountId))
+  // Migration : avant la 0.9.3, les imports étaient dans le dossier caché de l'appli.
+  const old = join(app.getPath('userData'), 'plugin-imports', String(accountId))
+  if (existsSync(old)) {
+    try { mkdirSync(dir, { recursive: true }); for (const n of readdirSync(old)) if (!existsSync(join(dir, n))) renameSync(join(old, n), join(dir, n)); rmSync(old, { recursive: true, force: true }) } catch { /* nouvel essai au prochain accès */ }
+  }
+  return dir
+}
 
 function folderOf(manifest: PluginManifest, inputs: Record<string, string>, accountId?: number): FolderAccess | undefined {
   if (!manifest.permissions.folder) return undefined

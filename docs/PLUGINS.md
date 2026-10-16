@@ -94,7 +94,7 @@ detail: {
 
 `refresh` peut aussi renvoyer un **`summary`** au même format : c'est le **bilan** du compte, affiché en haut de sa page (par exemple des totaux par catégorie).
 
-Si le plugin lit un dossier (`permissions.folder`), la page du compte propose **Importer des fichiers** : WaveDash copie les fichiers choisis (extensions du manifeste, 8 Mo max chacun) dans un dossier qu'il gère pour ce compte, en gardant leur date ; `host.files` les voit en plus de ceux du dossier choisi. Le dossier choisi n'est jamais modifié, et le dossier d'imports est supprimé avec le compte.
+Si le plugin lit un dossier (`permissions.folder`), la page du compte propose **Importer des fichiers** : une fenêtre où glisser-déposer les fichiers (ou les choisir). WaveDash les copie d'abord (extensions du manifeste, 8 Mo max chacun, doublons ignorés) dans le dossier **Documents › WaveDash › Parties importées › <n° du compte>**, en gardant leur date ; `host.files` les voit en plus de ceux du dossier choisi. Le dossier choisi n'est jamais modifié, et le dossier d'imports est supprimé avec le compte.
 
 **Tout ce qui n'est pas déclaré dans le manifeste est ignoré** : métriques inconnues, colonnes inconnues, valeurs non numériques, horodatages absurdes.
 

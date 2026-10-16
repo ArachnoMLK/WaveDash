@@ -151,6 +151,8 @@ input[type='color'] { width: 46px; height: 34px; padding: 2px; border-radius: va
 .table th.sortable { cursor: pointer; user-select: none; } .table th.sortable:hover { color: var(--fg); }
 .table tr.click { cursor: pointer; } .table tr.click:hover td { background: var(--ctrl); } .table tr.sel td { background: var(--ctrl); }
 .table td.wrap { white-space: normal; min-width: 200px; }
+.dropzone { border: 2px dashed var(--line-strong); border-radius: var(--radius-sm); padding: 42px 16px; text-align: center; color: var(--muted); transition: background 0.3s var(--ease), border-color 0.3s var(--ease); }
+.dropzone.over { border-color: var(--accent); background: var(--ctrl); color: var(--fg); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
 .chip { background: var(--ctrl); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; }
 .mini-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-bottom: 10px; }

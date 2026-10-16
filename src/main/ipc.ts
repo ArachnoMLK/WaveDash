@@ -1,6 +1,6 @@
 // Pont entre l'interface et le processus principal.
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
-import { copyFileSync, existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { extname, join } from 'path'
 import { AddAccountInput, AddAccountResult, AppInfo, MetricKey, SecretKey, Settings, ThemeData } from '@shared/types'
 import { sanitizeTheme } from '@shared/theme'
@@ -161,6 +161,16 @@ export function registerIpc(win: () => BrowserWindow | null): void {
   })
   // Au démarrage (après coup, sans bloquer) : mises à jour silencieuses depuis le catalogue quand les permissions sont identiques.
   setTimeout(() => { void plugins.syncCatalogUpdates().then((up) => { if (up.length) { console.log('Catalogue :', up.join(', ')); notifyUpdated() } }).catch(() => {}) }, 20_000)
+  // Fichiers glissés-déposés dans la fenêtre d'import : mêmes contrôles que le sélecteur (extensions, taille), copie puis lecture.
+  ipcMain.handle('plugins:importPaths', async (_e, id: number, paths: string[]) => {
+    const list = Array.isArray(paths) ? paths.filter((p) => typeof p === 'string' && p.length < 1000).slice(0, 5000) : []
+    const res = plugins.importPluginFiles(Number(id), list)
+    if (res.imported) { await plugins.refreshPluginAccount(Number(id)); notifyUpdated() }
+    return res
+  })
+  ipcMain.handle('plugins:openImportDir', async (_e, id: number) => {
+    const dir = plugins.importDirOf(Number(id)); mkdirSync(dir, { recursive: true }); await shell.openPath(dir); return dir
+  })
   ipcMain.handle('plugins:inspect', (_e, path: string) => plugins.inspectPackage(String(path)))
   ipcMain.handle('plugins:install', (_e, token: string) => { const r = plugins.installPending(String(token)); notifyUpdated(); return r })
   ipcMain.handle('plugins:setEnabled', (_e, id: string, enabled: boolean) => { db.setPluginEnabled(String(id), !!enabled); notifyUpdated() })

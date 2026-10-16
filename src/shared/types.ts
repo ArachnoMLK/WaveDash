@@ -253,6 +253,8 @@ export interface WaveApi {
   pluginAccountItems(accountId: number, offset: number, limit: number, month?: string, sortKey?: string, desc?: boolean, query?: string): Promise<PluginItemsPage>
   /** Ouvre le sélecteur de fichiers et importe les fichiers choisis pour ce compte ; null si annulé. */
   pluginImportFiles(accountId: number, extensions: string[]): Promise<{ imported: number; skipped: number } | null>
+  pluginImportPaths(accountId: number, paths: string[]): Promise<{ imported: number; skipped: number }>
+  pluginOpenImportDir(accountId: number): Promise<string>
   pluginSecretSet(pluginId: string, key: string, value: string): Promise<boolean>
   pluginSecretDelete(pluginId: string, key: string): Promise<void>
   pickFolder(): Promise<string | null>

@@ -35,6 +35,8 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   // La recherche part 300 ms après la dernière frappe.
   useEffect(() => { const h = setTimeout(() => { setQuery(search); setPage(0); setOpenId(null) }, 300); return () => clearTimeout(h) }, [search])
   const [note, setNote] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [over, setOver] = useState(false)
   const [busy, setBusy] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
 
@@ -62,11 +64,15 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const ckey = `plugin:${plugin.id}.${def.key}`
   const type: ChartType = settings.chartTypes[ckey] ?? 'line'
   const refresh = async (): Promise<void> => { setBusy(true); await window.api.pluginAccountRefresh(accountId); await reloadPlugins(); setBusy(false) }
-  const importFiles = async (): Promise<void> => {
-    setBusy(true)
-    const r = await window.api.pluginImportFiles(accountId, m.permissions.folderExtensions)
+  const done = async (r: { imported: number; skipped: number } | null): Promise<void> => {
     setBusy(false)
-    if (r) { setNote(t('pp.imported', { imported: r.imported, skipped: r.skipped })); await reloadPlugins() }
+    if (r) { setNote(t('pp.imported', { imported: r.imported, skipped: r.skipped })); setImporting(false); await reloadPlugins() }
+  }
+  const importFiles = async (): Promise<void> => { setBusy(true); await done(await window.api.pluginImportFiles(accountId, m.permissions.folderExtensions)) }
+  const importDropped = async (files: FileList): Promise<void> => {
+    const paths = Array.from(files).map((f) => window.api.pathForFile(f)).filter(Boolean)
+    if (!paths.length) return
+    setBusy(true); await done(await window.api.pluginImportPaths(accountId, paths))
   }
   const hasDates = list.items.some((i) => i.ts)
   const hasDetail = list.items.some((i) => i.detail)
@@ -81,10 +87,29 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
       <div className="page-head">
         <div className="grow"><h1>{account.displayName}</h1>
           <div className="muted small">{m.name} · {t('platform.synced', { time: ago(account.lastSyncAt, settings.lang, t('platform.never')) })}</div></div>
-        {m.permissions.folder && <button className="btn" disabled={busy} onClick={() => void importFiles()}>{t('pp.import')}</button>}
+        {m.permissions.folder && <button className="btn" disabled={busy} onClick={() => setImporting(true)}>{t('pp.import')}</button>}
         <button className="btn" disabled={busy} onClick={() => void refresh()}>{t('platform.refresh')}</button>
         <button className="btn" onClick={() => void window.api.pluginAccountRemove(accountId).then(reloadPlugins)}>{t('pp.removeAccount')}</button>
       </div>
+      {importing && (
+        <div className="overlay" onClick={() => !busy && setImporting(false)}>
+          <div className="glass modal" style={{ width: 'min(560px, 92vw)' }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('pp.import')}>
+            <h2 style={{ marginBottom: 6 }}>{t('pp.import')}</h2>
+            <p className="muted small" style={{ marginBottom: 12 }}>{t('pp.importHint', { ext: m.permissions.folderExtensions.join(', ') || '*' })}</p>
+            <div className={`dropzone${over ? ' over' : ''}`} onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)}
+              onDrop={(e) => { e.preventDefault(); setOver(false); void importDropped(e.dataTransfer.files) }}>
+              {busy ? t('pp.importing') : t('pp.dropHere')}
+            </div>
+            <div className="row between" style={{ marginTop: 14, gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn" onClick={() => void window.api.pluginOpenImportDir(accountId)}>{t('pp.openImportDir')}</button>
+              <div className="row" style={{ gap: 8 }}>
+                <button className="btn" disabled={busy} onClick={() => setImporting(false)}>{t('pp.close')}</button>
+                <button className="btn primary" disabled={busy} onClick={() => void importFiles()}>{t('pp.chooseFiles')}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {note && <div className="glass pad small" style={{ marginBottom: 16 }} role="status">{note}</div>}
       {extra.backlog > 0 && <div className="glass pad small muted" style={{ marginBottom: 16 }}>{t('pp.backlog', { count: extra.backlog })}</div>}
       {account.lastError && <div className="err" style={{ marginBottom: 16 }}>{t('pp.error', { error: `${t(`plugin.run.${account.lastError}`)}${extra.error ? ` — ${extra.error}` : ''}` })}</div>}
