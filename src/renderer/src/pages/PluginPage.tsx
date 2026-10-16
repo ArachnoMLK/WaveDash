@@ -300,10 +300,11 @@ function DetailView({ detail, th, t, onClose, layoutKey }: { detail: PluginDetai
   const tables = [...(detail.table ? [detail.table] : []), ...(detail.tables ?? [])]
   const blocks: { id: string; title: string; node: ReactNode }[] = []
   if (detail.stats) blocks.push({ id: 'stats', title: t('pp.keyFigures'), node: <div className="mini-stats">{detail.stats.map((s, i) => <div key={i}><span className="small muted">{s.label}</span><b>{s.value}</b></div>)}</div> })
+  // Les graphiques en barres d'abord : ils résument, le tableau détaille.
+  detail.bars?.forEach((b, k) => blocks.push({ id: `bars:${b.title ?? k}`, title: b.title ?? '', node: <Chart option={barsOption(b, th)} height={Math.max(260, Math.min(420, 200 + b.categories.length * 6))} /> }))
   tables.forEach((tb, k) => blocks.push({ id: `table:${tb.title ?? k}`, title: tb.title ?? `${t('pp.table')} ${k + 1}`, node: <SortableTable tb={tb} /> }))
   if (layoutKey) detail.grids?.forEach((g, k) => blocks.push({ id: `grid:${g.title ?? k}`, title: g.title ?? `${t('pp.grid')} ${k + 1}`, node: <div className="grids"><Heat g={g} caption={false} /></div> }))
   else if (detail.grids) blocks.push({ id: 'grids', title: '', node: <div className="grids">{detail.grids.map((g, k) => <Heat key={k} g={g} />)}</div> })
-  detail.bars?.forEach((b, k) => blocks.push({ id: `bars:${b.title ?? k}`, title: b.title ?? '', node: <Chart option={barsOption(b, th)} height={Math.max(260, Math.min(420, 200 + b.categories.length * 6))} /> }))
   detail.series?.forEach((sr, k) => blocks.push({ id: `series:${sr.title ?? k}`, title: sr.title ?? '', node: <Chart option={seriesOption(sr, th)} height={220} /> }))
   if (detail.timeline) blocks.push({ id: 'timeline', title: t('pp.timeline'), node: <Chart option={timelineOption(detail.timeline, th)} height={Math.max(130, 48 + detail.timeline.lanes.length * 36)} /> })
 

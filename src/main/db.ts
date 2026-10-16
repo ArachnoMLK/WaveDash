@@ -265,6 +265,12 @@ const PA_SELECT = `SELECT pa.account_id, pa.plugin_id, pa.inputs, a.display_name
 export const listPluginAccountRows = (): PluginAccountRow[] => db.prepare(`${PA_SELECT} ORDER BY pa.account_id`).all() as PluginAccountRow[]
 export const getPluginAccountRow = (accountId: number): PluginAccountRow | undefined => db.prepare(`${PA_SELECT} WHERE pa.account_id = ?`).get(accountId) as PluginAccountRow | undefined
 
+/** Tout le stockage d'un compte de plugin (copié dans le processus des plugins avant une exécution). */
+export function pluginStorageAll(pluginId: string, accountId: number): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const r of db.prepare('SELECT key, value FROM plugin_storage WHERE plugin_id = ? AND account_id = ?').all(pluginId, accountId) as { key: string; value: string }[]) out[r.key] = r.value
+  return out
+}
 export const pluginStorageGet = (pluginId: string, accountId: number, key: string): string | null =>
   (db.prepare('SELECT value FROM plugin_storage WHERE plugin_id = ? AND account_id = ? AND key = ?').get(pluginId, accountId, key) as { value: string } | undefined)?.value ?? null
 export const pluginStorageCount = (pluginId: string, accountId: number): number =>

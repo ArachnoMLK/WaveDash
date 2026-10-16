@@ -11,7 +11,8 @@ import { processPluginRefresh } from '../milestones'
 import { fetchPackage, getCatalog } from './catalog'
 import * as secrets from '../secrets'
 import { FolderAccess } from './files'
-import { PluginError, RunRequest, runPlugin } from './sandbox'
+import { PluginError, RunRequest } from './sandbox'
+import { runIsolated } from './isolated'
 import { readZip, ZipError } from './zip'
 
 /** Après 5 échecs consécutifs, le plugin est désactivé pour ne pas s'exécuter en boucle. */
@@ -181,7 +182,7 @@ export async function addPluginAccount(pluginId: string, rawInputs: Record<strin
   let externalId = createHash('sha1').update(JSON.stringify(c.inputs)).digest('hex').slice(0, 16)
   let displayName = Object.entries(c.inputs).find(([k]) => manifest.inputs.find((i) => i.key === k)?.type !== 'folder')?.[1] ?? manifest.name
   try {
-    const r = await runPlugin(buildRequest(row, 'resolve', c.inputs))
+    const r = await runIsolated(buildRequest(row, 'resolve', c.inputs))
     const res = sanitizeResolveResult(r.value)
     if (!res) return { ok: false, error: 'resolve_invalid' }
     externalId = res.externalId; displayName = res.displayName
@@ -240,7 +241,7 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
   try {
     const manifest = loadManifest(row)
     const inputs = JSON.parse(pa.inputs) as Record<string, string>
-    const run = await runPlugin(buildRequest(row, 'refresh', inputs, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }))
+    const run = await runIsolated(buildRequest(row, 'refresh', inputs, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }), { pluginId: row.id, accountId })
     const result = sanitizeRunResult(run.value, manifest)
     if (!Object.keys(result.metrics).length && !result.history.length) throw new PluginError('invalid_result', 'Aucune métrique déclarée n’a été renvoyée')
     // Paliers : comparés au relevé précédent, avant d'enregistrer le nouveau ; une erreur de notification ne bloque rien.
@@ -365,7 +366,7 @@ export async function pluginAccountSearch(accountId: number, query: string): Pro
   if (!pa || !row || !row.enabled || q.length < 2) return { ok: false }
   try {
     const inputs = JSON.parse(pa.inputs) as Record<string, string>
-    const run = await runPlugin(buildRequest(row, 'search', inputs, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, q))
+    const run = await runIsolated(buildRequest(row, 'search', inputs, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, q), { pluginId: row.id, accountId })
     return { ok: true, detail: sanitizeDetail(run.value) }
   } catch (e) {
     if (e instanceof PluginError && e.code === 'no_function') return { ok: false, unsupported: true }
@@ -386,7 +387,7 @@ export async function pluginAccountCross(accountId: number, req: Record<string, 
   const clean = { who: String(req?.who ?? '').trim().slice(0, 60), measure: pick(req?.measure, keys(m.cross.measures), m.cross.measures[0].key),
     a: pick(req?.a, keys(m.cross.dimensions), m.cross.dimensions[0].key), b: pick(req?.b, ['none', ...keys(m.cross.dimensions)], 'none') }
   try {
-    const run = await runPlugin(buildRequest(row, 'cross', JSON.parse(pa.inputs) as Record<string, string>, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, undefined, clean))
+    const run = await runIsolated(buildRequest(row, 'cross', JSON.parse(pa.inputs) as Record<string, string>, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, undefined, clean), { pluginId: row.id, accountId })
     return { ok: true, detail: sanitizeDetail(run.value) }
   } catch (e) { return { ok: false, error: msgOf(e) } }
 }

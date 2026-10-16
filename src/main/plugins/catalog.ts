@@ -1,7 +1,7 @@
 // Catalogue en ligne des plugins : index.json du dépôt ArachnoMLK/WaveDash-Plugins (adresse fixe, non modifiable).
 // Chaque paquet téléchargé est vérifié (taille, empreinte SHA-256 de l'index) avant d'être proposé à l'installation.
 import { app } from 'electron'
-import { createHash } from 'crypto'
+import { createHash, createPublicKey, verify } from 'crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { compareVersions, LocalText } from '@shared/plugin'
@@ -9,6 +9,11 @@ import * as db from '../db'
 
 const BASE = 'https://raw.githubusercontent.com/ArachnoMLK/WaveDash-Plugins/main/'
 const MAX_INDEX = 1024 * 1024, MAX_PACKAGE = 5 * 1024 * 1024, TTL = 3 * 3_600_000
+/** Clé publique du catalogue : index.json doit être signé (Ed25519) par la clé privée du propriétaire, qui n'est jamais en ligne. */
+const CATALOG_KEY = createPublicKey(`-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAt6yhLud7hcezlS7tvMLEh+twMsuZ2xg+GvZo2KHd1Dc=
+-----END PUBLIC KEY-----`)
+const signedBy = (index: Buffer, sig: Buffer): boolean => { try { return verify(null, index, CATALOG_KEY, sig) } catch { return false } }
 
 export interface CatalogEntry {
   id: string; name: string; version: string; author: string; description: LocalText; minAppVersion?: string
@@ -60,12 +65,18 @@ export async function getCatalog(force = false): Promise<CatalogView> {
   if (force || !cache || Date.now() - cache.at > TTL) {
     try {
       // Paramètre unique : contourne le cache de GitHub (jusqu'à 5 min), pour voir une publication tout de suite.
-      const buf = await download(BASE + 'index.json?v=' + Date.now(), MAX_INDEX)
+      const v = Date.now(), buf = await download(BASE + 'index.json?v=' + v, MAX_INDEX), sig = await download(BASE + 'index.json.sig?v=' + v, 1024)
+      const sigBuf = Buffer.from(sig.toString('utf8').trim(), 'base64')
+      if (!signedBy(buf, sigBuf)) throw new Error('signature du catalogue invalide')
       cache = { entries: parseIndex(JSON.parse(buf.toString('utf8'))), at: Date.now() }
-      writeFileSync(join(dir(), 'index.json'), buf)
+      writeFileSync(join(dir(), 'index.json'), buf); writeFileSync(join(dir(), 'index.json.sig'), sigBuf)
     } catch {
       offline = true
-      if (!cache) try { cache = { entries: parseIndex(JSON.parse(readFileSync(join(dir(), 'index.json'), 'utf8'))), at: 0 } } catch { cache = null }
+      // Hors ligne (ou index refusé) : la dernière copie enregistrée, seulement si sa signature est valide elle aussi.
+      if (!cache) try {
+        const buf = readFileSync(join(dir(), 'index.json')), sigBuf = readFileSync(join(dir(), 'index.json.sig'))
+        cache = signedBy(buf, sigBuf) ? { entries: parseIndex(JSON.parse(buf.toString('utf8'))), at: 0 } : null
+      } catch { cache = null }
     }
   }
   const installed = new Map(db.listPluginRows().map((r) => { try { return [r.id, (JSON.parse(r.manifest) as { version: string }).version] as const } catch { return [r.id, ''] as const } }))

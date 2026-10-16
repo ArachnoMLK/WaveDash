@@ -7,6 +7,7 @@ import { refreshAll } from './scheduler'
 import { applySystemSettings, materialFor, solidBackground } from './system'
 import { setPendingFile, syncBundledPlugins } from './plugins/manager'
 import { initUpdater } from './updater'
+import { stopPluginHost } from './plugins/isolated'
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -77,6 +78,6 @@ else {
     void refreshAll()
     initUpdater(() => win)
   })
-  app.on('before-quit', () => { quitting = true })
+  app.on('before-quit', () => { quitting = true; stopPluginHost() })
   app.on('window-all-closed', () => { /* l'appli reste dans la barre système */ })
 }
