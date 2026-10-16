@@ -258,7 +258,12 @@ function cleanToken(raw, F) {
 }
 
 function modeOf(ctx) {
-  var token = cleanToken(ctx.secrets.botToken, ctx.lang === 'fr'), guildId = (ctx.inputs.guildId || '').trim(), code = inviteCode(ctx.inputs.invite), F = ctx.lang === 'fr'
+  var F = ctx.lang === 'fr', guildId = (ctx.inputs.guildId || '').trim(), code = inviteCode(ctx.inputs.invite), token = ''
+  // Le jeton est commun à tous les comptes du plugin : invalide, il ne doit pas casser un compte suivi par simple invitation.
+  try { token = cleanToken(ctx.secrets.botToken, F) } catch (e) {
+    if (!code || guildId) throw e
+    host.log(e.message + (F ? ' Compte par invitation : jeton ignoré.' : ' Invite account: token ignored.'))
+  }
   if (guildId && !/^\d{15,22}$/.test(guildId)) throw new Error(F ? 'ID du serveur invalide.' : 'Invalid server ID.')
   return { token: token, guildId: guildId, code: code, F: F }
 }
