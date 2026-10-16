@@ -37,9 +37,18 @@ test('manifeste : valeurs par défaut et bornes', () => {
   assert.equal(m.entry, 'main.js')
   assert.equal(m.itemsMode, 'replace')
   assert.equal(m.search, false)
-  assert.deepEqual(m.permissions, { network: [], folder: false, folderExtensions: [] })
+  assert.deepEqual(m.permissions, { network: [], folder: false, folderExtensions: [], images: false })
   assert.equal(manifest({ cross: { measures: [{ key: 'm', label: 'M' }], dimensions: [{ key: 'bad key', label: 'D' }] } }).cross, undefined)
   assert.ok(manifest({ cross: { measures: [{ key: 'm', label: 'M' }], dimensions: [{ key: 'd', label: 'D' }] } }).cross)
+})
+
+test('manifeste : paliers proposés par une métrique', () => {
+  const m = manifest({ metrics: [{ key: 'elo', label: 'ELO', milestone: { increment: 100, notifyDown: true } }] })
+  assert.deepEqual(m.metrics[0].milestone, { enabled: undefined, increment: 100, notifyDown: true })
+  assert.equal(err({ metrics: [{ key: 'n', label: 'N', milestone: { increment: 0 } }] }), 'metrics')
+  assert.equal(err({ metrics: [{ key: 'n', label: 'N', milestone: { increment: 1.5 } }] }), 'metrics')
+  assert.equal(err({ metrics: [{ key: 'n', label: 'N', milestone: 'oui' }] }), 'metrics')
+  assert.equal(err({ metrics: [{ key: 'n', label: 'N', milestone: { notifyDown: 1 } }] }), 'metrics')
 })
 
 test('versions', () => {

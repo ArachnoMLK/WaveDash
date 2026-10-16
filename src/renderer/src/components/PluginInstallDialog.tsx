@@ -10,6 +10,7 @@ export function PermissionList({ m }: { m: PluginManifest }): JSX.Element {
   if (m.permissions.network.length) rows.push(t('plugins.perm.network', { domains: m.permissions.network.map((d) => (d.startsWith('*.') ? t('plugins.perm.wildcard', { domain: d.slice(2) }) : d)).join(', ') }))
   else rows.push(t('plugins.perm.network.none'))
   if (m.permissions.folder) rows.push(t('plugins.perm.folder', { ext: m.permissions.folderExtensions.length ? t('plugins.perm.folder.ext', { ext: m.permissions.folderExtensions.join(', ') }) : '' }))
+  if (m.permissions.images) rows.push(t('plugins.perm.images'))
   if (m.secrets.length) rows.push(t('plugins.perm.secrets', { names: m.secrets.map((s) => loc(s.label, settings.lang)).join(', ') }))
   return <ul style={{ paddingLeft: 18, lineHeight: 1.7, fontSize: 13.5 }}>{rows.map((r) => <li key={r}>{r}</li>)}</ul>
 }

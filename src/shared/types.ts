@@ -244,6 +244,9 @@ export interface WaveApi {
   /** Ouvre le sélecteur de fichiers et importe les fichiers choisis pour ce compte ; null si annulé. */
   pluginImportFiles(accountId: number, extensions: string[]): Promise<{ imported: number; skipped: number } | null>
   pluginImportPaths(accountId: number, paths: string[]): Promise<{ imported: number; skipped: number }>
+  /** Image du dossier d'images d'un compte de plugin, en data URL (null si absente ou refusée). */
+  pluginImage(accountId: number, file: string): Promise<string | null>
+  pluginAccountUpdate(accountId: number, inputs: Record<string, string>): Promise<{ ok: boolean; error?: string }>
   pluginOpenImportDir(accountId: number): Promise<string>
   pluginSecretSet(pluginId: string, key: string, value: string): Promise<boolean>
   pluginSecretDelete(pluginId: string, key: string): Promise<void>

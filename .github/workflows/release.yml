@@ -13,6 +13,9 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, }
       - run: npm install --no-audit --no-fund   # pas de package-lock.json fourni : il sera généré au premier npm install
+      # Pas de version publiée si les types ou les tests échouent.
+      - run: npm run typecheck
+      - run: npm test
       - run: npm run build
       - run: npx electron-builder --win nsis --publish always
         env:

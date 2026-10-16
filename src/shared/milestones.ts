@@ -1,6 +1,7 @@
 // Logique des paliers : valeurs de seuil, prochain palier, franchissement. Fonctions pures, utilisées par
 // le processus principal (détection) et par l'interface (objectifs, barres de progression).
 import { MetricKey, MilestoneRule, Platform } from './types'
+import type { PluginManifest, PluginMetric } from './plugin'
 
 /** Statistiques pour lesquelles on peut définir des paliers. */
 export const MILESTONE_METRICS: Record<Platform, MetricKey[]> = {
@@ -17,6 +18,20 @@ export function defaultRule(_p: Platform, m: MetricKey): MilestoneRule {
 
 export const getRule = (rules: Record<string, MilestoneRule>, p: Platform, m: MetricKey): MilestoneRule =>
   ({ ...defaultRule(p, m), ...rules[ruleKey(p, m)] })
+
+/* ---------- Paliers des plugins ---------- */
+export const pluginRuleKey = (pluginId: string, metric: string): string => `plugin:${pluginId}.${metric}`
+/** Métriques de plugin qui peuvent avoir des paliers : nombres et pourcentages (pas les rangs ni les durées). */
+export const pluginMilestoneMetrics = (m: PluginManifest): PluginMetric[] => m.metrics.filter((x) => x.format === 'number' || x.format === 'percent')
+/** Règle par défaut : celle que propose le manifeste (ex. un palier tous les 100 pour un ELO), sinon la séquence 10-20-50…
+ *  sur la métrique principale seulement. */
+export function pluginDefaultRule(x: PluginMetric): MilestoneRule {
+  const ms = x.milestone
+  if (ms) return { enabled: ms.enabled ?? true, sequence: !ms.increment, increment: ms.increment ?? 0, custom: [], notifyDown: ms.notifyDown ?? false }
+  return { enabled: x.primary && x.format === 'number', sequence: true, increment: 0, custom: [], notifyDown: false }
+}
+export const getPluginRule = (rules: Record<string, MilestoneRule>, pluginId: string, x: PluginMetric): MilestoneRule =>
+  ({ ...pluginDefaultRule(x), ...rules[pluginRuleKey(pluginId, x.key)] })
 
 const SEQ = [1, 2, 5]
 /** Plus petit terme de 10, 20, 50, 100, 200, 500… strictement supérieur à v. */

@@ -1,8 +1,9 @@
 // Notifications : activation, son, célébration, textes personnalisés, paliers par statistique.
 import { useState } from 'react'
-import { MetricKey, MilestoneRule, Platform, PLATFORMS, SoundKind, TemplateKey } from '@shared/types'
+import { MilestoneRule, PLATFORMS, SoundKind, TemplateKey } from '@shared/types'
 import { DEFAULT_TEMPLATES, renderTemplate, TEMPLATE_VARIABLES, templateVars } from '@shared/labels'
-import { getRule, MILESTONE_METRICS, nextThreshold, ruleKey } from '@shared/milestones'
+import { getPluginRule, getRule, MILESTONE_METRICS, nextThreshold, pluginMilestoneMetrics, pluginRuleKey, ruleKey } from '@shared/milestones'
+import { loc } from '@shared/plugin'
 import { Row, Section, Slider } from '../components/settingsUi'
 import { Switch, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
@@ -12,14 +13,13 @@ import { playSound } from '../lib/sound'
 // Les modèles de changement de rang servaient au Brawlhalla intégré, devenu un plugin : seuls « hausse » et « baisse » restent.
 const TEMPLATES: TemplateKey[] = ['up', 'down']
 
-/** Éditeur des paliers d'une statistique (séquence, incrément, valeurs précises, baisses). */
-function RuleEditor({ platform, metric }: { platform: Platform; metric: MetricKey }): JSX.Element {
+/** Éditeur des paliers d'une statistique (séquence, incrément, valeurs précises, baisses) : plateforme intégrée ou plugin. */
+function RuleEditor({ rk, label, rule }: { rk: string; label: string; rule: MilestoneRule }): JSX.Element {
   const { t, settings, updateSettings } = useApp()
-  const rule = getRule(settings.milestoneRules, platform, metric)
   const [custom, setCustom] = useState(rule.custom.join(', '))
   const [inc, setInc] = useState(String(rule.increment))
   const save = (patch: Partial<MilestoneRule>): void =>
-    void updateSettings({ milestoneRules: { ...settings.milestoneRules, [ruleKey(platform, metric)]: { ...rule, ...patch } } })
+    void updateSettings({ milestoneRules: { ...settings.milestoneRules, [rk]: { ...rule, ...patch } } })
 
   const commitInc = (): void => {
     const n = Math.max(0, Math.min(1e9, Math.round(Number(inc.replace(/\s/g, '')) || 0)))
@@ -37,7 +37,7 @@ function RuleEditor({ platform, metric }: { platform: Platform; metric: MetricKe
   return (
     <details className="rule">
       <summary>
-        <span className="grow">{t(`metric.${metric}`)}</span>
+        <span className="grow">{label}</span>
         <span className="badge">{rule.enabled ? t('on') : t('off')}</span>
       </summary>
       <Row title={t('rule.enabled')}><Switch on={rule.enabled} label={t('rule.enabled')} onChange={(v) => save({ enabled: v })} /></Row>
@@ -57,7 +57,7 @@ function RuleEditor({ platform, metric }: { platform: Platform; metric: MetricKe
 }
 
 export function NotificationSettings(): JSX.Element {
-  const { t, settings: s, updateSettings: up } = useApp()
+  const { t, settings: s, updateSettings: up, plugins } = useApp()
   const defaults = DEFAULT_TEMPLATES[s.lang]
   const setTpl = (k: TemplateKey, v: string): void => void up({ notifyTemplates: { ...s.notifyTemplates, [k]: v } })
 
@@ -107,7 +107,15 @@ export function NotificationSettings(): JSX.Element {
         {PLATFORMS.map((p) => (
           <div key={p} style={{ marginTop: 12 }}>
             <h2 className="muted small" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>{t(`platform.${p}`)}</h2>
-            {MILESTONE_METRICS[p].map((m) => <RuleEditor key={`${p}.${m}`} platform={p} metric={m} />)}
+            {MILESTONE_METRICS[p].map((m) => <RuleEditor key={ruleKey(p, m)} rk={ruleKey(p, m)} label={t(`metric.${m}`)} rule={getRule(s.milestoneRules, p, m)} />)}
+          </div>
+        ))}
+        {plugins.filter((pl) => pluginMilestoneMetrics(pl.manifest).length).map((pl) => (
+          <div key={pl.id} style={{ marginTop: 12 }}>
+            <h2 className="muted small" style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>{pl.manifest.name}</h2>
+            {pluginMilestoneMetrics(pl.manifest).map((m) => (
+              <RuleEditor key={pluginRuleKey(pl.id, m.key)} rk={pluginRuleKey(pl.id, m.key)} label={loc(m.label, s.lang)} rule={getPluginRule(s.milestoneRules, pl.id, m)} />
+            ))}
           </div>
         ))}
       </Section>

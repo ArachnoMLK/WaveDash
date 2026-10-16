@@ -40,9 +40,10 @@ Puis dans WaveDash : **Plugins › Installer un plugin** (ou glisse le fichier d
 | `permissions.network` | domaines joignables en **HTTPS**. `*.exemple.com` = tous les sous-domaines (pas le domaine nu). Jusqu'à 10. |
 | `permissions.folder` | `true` pour lire **un dossier choisi par l'utilisateur**. Exige exactement un champ `inputs` de type `folder`. |
 | `permissions.folderExtensions` | extensions lisibles (ex. `[".replay"]`). Vide = toutes. |
-| `inputs` | jusqu'à 8 champs saisis à l'ajout d'un compte : `text`, `number` ou `folder`. |
+| `permissions.images` | `true` pour **afficher** des images d'un dossier choisi par l'utilisateur (ex. vignettes d'un jeu). Exige exactement un champ `inputs` de type `images`. Le script ne lit jamais ce dossier et ne reçoit pas son chemin : il nomme seulement un fichier dans `detail.image`, que WaveDash affiche (JPG, PNG ou WebP, 3 Mo au plus). |
+| `inputs` | jusqu'à 8 champs saisis à l'ajout d'un compte (modifiables ensuite avec le bouton **Modifier** de la page du compte) : `text`, `number`, `folder` ou `images`. |
 | `secrets` | jusqu'à 4 valeurs (clés API…) enregistrées **chiffrées** par WaveDash, jamais en clair. |
-| `metrics` | de 1 à 20. `format` : `number` (défaut), `percent`, `rank`, `duration` (secondes → mm:ss). `decimals` de 0 à 4. `primary` : métrique affichée d'abord. |
+| `metrics` | de 1 à 20. `format` : `number` (défaut), `percent`, `rank`, `duration` (secondes → mm:ss). `decimals` de 0 à 4. `primary` : métrique affichée d'abord. `milestone` (facultatif) : paliers proposés par défaut, `{ "increment": 100, "notifyDown": true, "enabled": true }` (incrément entier ≥ 1 ; sans incrément, séquence 10, 20, 50…). |
 | `itemColumns` | colonnes du tableau d'éléments (facultatif). |
 | `search` | `true` si le script définit `search` : la page du compte affiche alors la barre de recherche du haut. |
 | `cross` | Outil « Croiser tes données » : `{ "measures": [{ "key", "label" }], "dimensions": [{ "key", "label" }] }` (2 à 12 chacun). Le script définit `cross(ctx)` ; `ctx.cross` = `{ who, measure, a, b }` (`b` peut valoir `none`) ; il renvoie un détail, en général des `bars` (`{ title, categories, series: [{ name, values }], stacked }`) et un tableau. |
@@ -90,6 +91,7 @@ Un élément peut aussi porter un **`detail`** facultatif, affiché sous sa lign
 
 ```js
 detail: {
+  image:    { file: 'BrawlhavenSmall.jpg', caption: 'Small Brawlhaven' },                   // permission images : fichier du dossier d'images
   chips:    ['Small Brawlhaven', 'Patch 11.00', '3:04'],                                   // badges : 16 max
   stats:    [{ label: 'Parties', value: 12 }],                                               // chiffres clés : 24 max
   table:    { columns: ['Joueur', 'Score'], rows: [['Alby', 2], ['Close', 1]] },             // 10 colonnes, 80 lignes max
@@ -145,7 +147,7 @@ Les plugins du dossier `examples/` sont livrés dans l'installateur. La page **P
 
 ## Paliers et vue d'ensemble
 
-Les comptes de plugins apparaissent dans la **vue d'ensemble** (jusqu'à 4 métriques, la principale d'abord ; un clic ouvre le compte). Les **paliers** (10, 20, 50, 100…) sont surveillés sur la métrique principale de chaque plugin lorsqu'elle est un simple nombre : notification Windows, son et célébration, comme pour les plateformes intégrées. Une règle enregistrée sous la clé `plugin:<id>.<métrique>` dans les réglages des paliers la remplace.
+Les comptes de plugins apparaissent dans la **vue d'ensemble** (jusqu'à 4 métriques, la principale d'abord ; un clic ouvre le compte). Les **paliers** se règlent dans **Paramètres › Notifications**, métrique par métrique (nombres et pourcentages), pour chaque plugin installé : notification Windows, son et célébration, comme pour les plateformes intégrées. Par défaut : le réglage `milestone` du manifeste s'il existe, sinon la séquence 10, 20, 50, 100… sur la métrique principale quand c'est un simple nombre. Les règles sont enregistrées sous `plugin:<id>.<métrique>` et suivent la sauvegarde de la configuration.
 
 ## Mises à jour d'un plugin
 
@@ -157,11 +159,11 @@ La page d'un compte de plugin affiche l'erreur de la dernière actualisation et 
 
 ## Plugin fourni : Brawlhalla Replays
 
-`examples/brawlhalla-replays-1.7.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
+`examples/brawlhalla-replays-1.8.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
 
 - **Courbe et cartes** : parties, victoires, défaites, taux de victoire, stocks pris et perdus, durée moyenne, appuis par minute.
 - **Bilan** : chiffres clés, tableaux par légende, carte, mode, coéquipier, adversaire, jour et heure, direction de tes esquives, répartition de tes attaques.
-- **Détail d'une partie** : carte, mode, patch, date, durée, vies, réglages ; pour chaque joueur, légende, armes, posture, place, KOs subis, KOs infligés (en 1v1), attaques légères et lourdes par direction, esquives, sauts, lancers, provocations, temps de déplacement, appuis par minute ; grille de direction des esquives, courbe d'activité toutes les 15 s, frise des KOs.
+- **Détail d'une partie** : vignette de la carte (si tu indiques le dossier `images	humbnails` du jeu : WaveDash l'affiche depuis ton installation, aucune image n'est livrée), carte, mode, patch, date, durée, vies, réglages ; pour chaque joueur, légende, armes, posture, place, KOs subis, KOs infligés (en 1v1), attaques légères et lourdes par direction, esquives, sauts, lancers, provocations, temps de déplacement, appuis par minute ; grille de direction des esquives, courbe d'activité toutes les 15 s, frise des KOs.
 
 Toutes les parties du dossier comptent : les totaux, la courbe (datée par la date de chaque fichier) et la liste des parties remontent jusqu'au plus ancien replay. Le plugin décompresse lui-même chaque fichier (inflate en JavaScript à tables de décodage, vérifié identique à zlib sur 9012 fichiers) dans le bac à sable : environ 50 ms par replay dans WaveDash, 2 s de lecture par exécution. À la première installation, il signale le reste (`backlog`) et WaveDash le relance toutes les quelques secondes : environ 20 à 30 minutes pour 9000 replays, une seule fois. Ensuite, seuls les nouveaux fichiers sont lus. Le cache ne garde qu'un résumé de chaque partie (environ 100 octets) ; le détail est envoyé une fois à WaveDash, qui le conserve (`itemsMode: keep`). Le pseudo accepte plusieurs noms séparés par des virgules (utile après un changement de pseudo). Le rattrapage tourne dans le processus des plugins : l'interface reste fluide pendant ce temps.
 
@@ -210,4 +212,4 @@ Le plugin ne lit jamais l'application Discord de l'ordinateur ni un compte perso
 
 ## Pas encore disponible
 
-Réglage des paliers des plugins dans l'interface (la règle par défaut s'applique), rapport PDF.
+Paliers sur les rangs et les durées.

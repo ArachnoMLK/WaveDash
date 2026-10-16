@@ -54,7 +54,7 @@ npm run typecheck  # vérifie les types
 npm test           # tests automatiques (bac à sable, réseau, fichiers, ZIP, base, plugins fournis)
 npm run dist       # installateur dans /dist (sous Windows)
 ```
-Publier une version : incrémenter `package.json`, puis `git tag vX.Y.Z && git push origin vX.Y.Z` ; le workflow *Release* construit et publie l'installateur.
+Chaque envoi sur GitHub lance le workflow *Tests* (types et tests). Publier une version : incrémenter `package.json`, puis `git tag vX.Y.Z && git push origin vX.Y.Z` ; le workflow *Release* relance les tests, puis construit et publie l'installateur.
 
 ---
 

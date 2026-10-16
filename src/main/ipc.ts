@@ -172,6 +172,8 @@ export function registerIpc(win: () => BrowserWindow | null): void {
     if (res.imported) { await plugins.refreshPluginAccount(Number(id)); notifyUpdated() }
     return res
   })
+  ipcMain.handle('plugins:image', (_e, id: number, file: string) => plugins.pluginImage(Number(id), String(file ?? '')))
+  ipcMain.handle('plugins:accountUpdate', async (_e, id: number, inputs: Record<string, string>) => { const r = plugins.updatePluginAccount(Number(id), inputs ?? {}); if (r.ok) await plugins.refreshPluginAccount(Number(id)); notifyUpdated(); return r })
   ipcMain.handle('plugins:openImportDir', async (_e, id: number) => {
     const dir = plugins.importDirOf(Number(id)); mkdirSync(dir, { recursive: true }); await shell.openPath(dir); return dir
   })

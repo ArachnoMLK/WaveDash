@@ -1,10 +1,9 @@
 // Détection des paliers franchis (hausse et baisse) et des changements de rang, puis notification.
 import { Notification } from 'electron'
 import { DEFAULT_TEMPLATES, METRIC_NAMES, PLATFORM_NAMES, renderTemplate, templateVars } from '@shared/labels'
-import { crossedDown, crossedUp, getRule, MILESTONE_METRICS } from '@shared/milestones'
+import { crossedDown, crossedUp, getPluginRule, getRule, MILESTONE_METRICS, pluginMilestoneMetrics } from '@shared/milestones'
 import { Account, LatestMetrics, MilestoneEvent, ProviderResult, Settings, TemplateKey } from '@shared/types'
 import { loc, PluginManifest } from '@shared/plugin'
-import type { MilestoneRule } from '@shared/types'
 import * as db from './db'
 
 let emit: (e: MilestoneEvent) => void = () => {}
@@ -79,11 +78,10 @@ export function fireTest(): void {
 export function processPluginRefresh(accountId: number, account: string, m: PluginManifest, prev: Record<string, number>, next: Record<string, number>): void {
   if (Object.keys(prev).length === 0) return
   const s = db.getSettings(), ts = Date.now()
-  for (const metric of m.metrics) {
+  for (const metric of pluginMilestoneMetrics(m)) {
     const from = prev[metric.key], to = next[metric.key]
     if (from === undefined || to === undefined || from === to) continue
-    const base: MilestoneRule = { enabled: metric.primary && metric.format === 'number', sequence: true, increment: 0, custom: [], notifyDown: false }
-    const rule: MilestoneRule = { ...base, ...s.milestoneRules[`plugin:${m.id}.${metric.key}`] }
+    const rule = getPluginRule(s.milestoneRules, m.id, metric)
     if (!rule.enabled) continue
     const up = crossedUp(rule, from, to), down = rule.notifyDown ? crossedDown(rule, from, to) : null
     const threshold = up ?? down

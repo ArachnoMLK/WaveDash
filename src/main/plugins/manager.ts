@@ -4,13 +4,13 @@ import { createHash, randomUUID } from 'crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync } from 'fs'
 import { basename, extname, join } from 'path'
 import {
-  compareVersions, InstalledPlugin, sanitizeDetail, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
+  compareVersions, IMAGE_FILE_RE, InstalledPlugin, sanitizeDetail, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
 } from '@shared/plugin'
 import * as db from '../db'
 import { processPluginRefresh } from '../milestones'
 import { fetchPackage, getCatalog } from './catalog'
 import * as secrets from '../secrets'
-import { FolderAccess } from './files'
+import { FolderAccess, readFileSafe } from './files'
 import { PluginError, RunRequest } from './sandbox'
 import { runIsolated } from './isolated'
 import { readZip, ZipError } from './zip'
@@ -141,7 +141,8 @@ function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh' | 'search' | 
   const accountId = account?.id
   return {
     manifest, script: row.script, fn,
-    ctx: { inputs, secrets: secretValues, lang: db.getSettings().lang, account: account ? { externalId: account.externalId, displayName: account.displayName } : undefined, query, cross },
+    // Le dossier d'images ne regarde que l'interface : le script ne reçoit même pas son chemin.
+    ctx: { inputs: Object.fromEntries(Object.entries(inputs).filter(([k]) => manifest.inputs.find((i) => i.key === k)?.type !== 'images')), secrets: secretValues, lang: db.getSettings().lang, account: account ? { externalId: account.externalId, displayName: account.displayName } : undefined, query, cross },
     folder: folderOf(manifest, inputs, accountId),
     storage: accountId === undefined
       ? { get: (k) => memory.get(k) ?? null, set: (k, v) => { memory.set(k, v) } }
@@ -163,7 +164,7 @@ function cleanInputs(manifest: PluginManifest, raw: Record<string, string>): { o
     if (v.length > 500) return { ok: false, error: `input_invalid:${i.key}` }
     if (!v) { if (i.required) return { ok: false, error: `input_required:${i.key}` }; continue }
     if (i.type === 'number' && !Number.isFinite(Number(v))) return { ok: false, error: `input_invalid:${i.key}` }
-    if (i.type === 'folder') { try { if (!statSync(v).isDirectory()) throw new Error() } catch { return { ok: false, error: `input_invalid:${i.key}` } } }
+    if (i.type === 'folder' || i.type === 'images') { try { if (!statSync(v).isDirectory()) throw new Error() } catch { return { ok: false, error: `input_invalid:${i.key}` } } }
     inputs[i.key] = v
   }
   return { ok: true, inputs }
@@ -180,7 +181,7 @@ export async function addPluginAccount(pluginId: string, rawInputs: Record<strin
 
   // Le plugin peut valider les saisies et fournir un nom d'affichage (fonction `resolve`, facultative).
   let externalId = createHash('sha1').update(JSON.stringify(c.inputs)).digest('hex').slice(0, 16)
-  let displayName = Object.entries(c.inputs).find(([k]) => manifest.inputs.find((i) => i.key === k)?.type !== 'folder')?.[1] ?? manifest.name
+  let displayName = Object.entries(c.inputs).find(([k]) => !['folder', 'images'].includes(manifest.inputs.find((i) => i.key === k)?.type ?? ''))?.[1] ?? manifest.name
   try {
     const r = await runIsolated(buildRequest(row, 'resolve', c.inputs))
     const res = sanitizeResolveResult(r.value)
@@ -194,6 +195,31 @@ export async function addPluginAccount(pluginId: string, rawInputs: Record<strin
   const id = db.insertPluginAccount(pluginId, displayName, externalId, c.inputs)
   await refreshPluginAccount(id)
   return { ok: true }
+}
+
+/** Modifie les champs d'un compte (ex. ajouter le dossier d'images) ; l'identité du compte ne change pas. */
+export function updatePluginAccount(accountId: number, raw: Record<string, string>): { ok: boolean; error?: string } {
+  const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
+  if (!pa || !row) return { ok: false, error: 'disabled' }
+  const c = cleanInputs(loadManifest(row), raw)
+  if (!c.ok) return c
+  db.setPluginAccountInputs(accountId, c.inputs)
+  return { ok: true }
+}
+
+const MIME: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }
+/** Image du dossier d'images d'un compte (permission `images`) : un simple nom de fichier, image uniquement, 3 Mo au plus.
+ *  Le script du plugin n'y a jamais accès ; seule l'interface l'affiche. */
+export function pluginImage(accountId: number, file: string): string | null {
+  const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
+  if (!pa || !row || !IMAGE_FILE_RE.test(file)) return null
+  try {
+    const m = loadManifest(row), key = m.permissions.images ? m.inputs.find((i) => i.type === 'images')?.key : undefined
+    const dir = key ? (JSON.parse(pa.inputs) as Record<string, string>)[key] : undefined
+    if (!dir) return null
+    const buf = readFileSafe({ dir: realpathSync(dir), extensions: ['.jpg', '.jpeg', '.png', '.webp'] }, file, 3 * 1024 * 1024)
+    return `data:${MIME[extname(file).slice(1).toLowerCase()]};base64,${buf.toString('base64')}`
+  } catch { return null }
 }
 
 export function removePluginAccount(accountId: number): void {
@@ -309,7 +335,7 @@ export const takePendingFile = (): string | null => { const p = pendingFile; pen
 const bundledDir = (): string => (app.isPackaged ? join(process.resourcesPath, 'plugins') : join(app.getAppPath(), 'examples'))
 const samePermissions = (a: PluginManifest, b: PluginManifest): boolean =>
   JSON.stringify([...a.permissions.network].sort()) === JSON.stringify([...b.permissions.network].sort()) &&
-  a.permissions.folder === b.permissions.folder && JSON.stringify([...a.permissions.folderExtensions].sort()) === JSON.stringify([...b.permissions.folderExtensions].sort())
+  a.permissions.folder === b.permissions.folder && a.permissions.images === b.permissions.images && JSON.stringify([...a.permissions.folderExtensions].sort()) === JSON.stringify([...b.permissions.folderExtensions].sort())
 
 export interface BundledPlugin { path: string; id: string; name: string; version: string; description: PluginManifest['description']; installedVersion: string | null }
 

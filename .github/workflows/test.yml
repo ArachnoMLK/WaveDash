@@ -1,0 +1,17 @@
+# Vérifie chaque envoi : types et tests automatiques (bac à sable, réseau, fichiers, ZIP, base, plugins fournis).
+# Les tests tournent dans Electron en mode Node, sous Windows comme l'appli. Sans dossier de replays, le test sur replays réels est sauté.
+name: Tests
+on:
+  push:
+    branches: ['**']
+  pull_request:
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test

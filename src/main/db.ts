@@ -236,6 +236,10 @@ export function deletePlugin(id: string): void {
   })()
 }
 
+export const setPluginAccountInputs = (accountId: number, inputs: Record<string, string>): void => {
+  db.prepare('UPDATE plugin_accounts SET inputs = ? WHERE account_id = ?').run(JSON.stringify(inputs), accountId)
+}
+
 /** Rattache un compte existant (et tout son historique) à un plugin. */
 export function convertToPluginAccount(accountId: number, pluginId: string, inputs: Record<string, string>): void {
   db.transaction(() => {

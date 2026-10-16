@@ -7,11 +7,14 @@ export type LocalText = string | { fr?: string; en?: string }
 export const loc = (t: LocalText | undefined, lang: Lang): string =>
   !t ? '' : typeof t === 'string' ? t : t[lang] ?? t.fr ?? t.en ?? ''
 
-export type InputType = 'text' | 'number' | 'folder'
+/** `images` : dossier d'images que WaveDash affiche (permission `images`) ; le script ne le lit jamais, il donne seulement un nom de fichier. */
+export type InputType = 'text' | 'number' | 'folder' | 'images'
 export interface PluginInput { key: string; label: LocalText; type: InputType; placeholder?: string; required: boolean; help?: LocalText }
 export interface PluginSecret { key: string; label: LocalText; help?: LocalText }
 export type MetricFormat = 'number' | 'percent' | 'rank' | 'duration'
-export interface PluginMetric { key: string; label: LocalText; unit?: string; format: MetricFormat; decimals: number; primary: boolean }
+/** Paliers proposés par défaut pour une métrique (l'utilisateur peut les changer dans Paramètres › Notifications). */
+export interface PluginMilestone { enabled?: boolean; increment?: number; notifyDown?: boolean }
+export interface PluginMetric { key: string; label: LocalText; unit?: string; format: MetricFormat; decimals: number; primary: boolean; milestone?: PluginMilestone }
 export interface PluginColumn { key: string; label: LocalText; unit?: string }
 
 export interface PluginManifest {
@@ -29,6 +32,8 @@ export interface PluginManifest {
     /** Lecture d'un dossier choisi par l'utilisateur (non récursive, jamais en écriture). */
     folder: boolean
     folderExtensions: string[]
+    /** Affichage d'images d'un dossier choisi par l'utilisateur (ex. vignettes du jeu), sans que le script y ait accès. */
+    images: boolean
   }
   inputs: PluginInput[]
   secrets: PluginSecret[]
@@ -114,7 +119,7 @@ export function validateManifest(raw: unknown): Result {
   const inputs: PluginInput[] = []
   for (const i of inputsRaw as Record<string, unknown>[]) {
     const label = text(i?.label, 80)
-    if (!i || typeof i.key !== 'string' || !KEY_RE.test(i.key) || !label || !['text', 'number', 'folder'].includes(i.type as string)) return fail('inputs')
+    if (!i || typeof i.key !== 'string' || !KEY_RE.test(i.key) || !label || !['text', 'number', 'folder', 'images'].includes(i.type as string)) return fail('inputs')
     inputs.push({ key: i.key, label, type: i.type as InputType, required: i.required !== false,
       placeholder: typeof i.placeholder === 'string' ? i.placeholder.slice(0, 80) : undefined, help: text(i.help ?? '-', 200) ?? undefined })
   }
@@ -122,6 +127,11 @@ export function validateManifest(raw: unknown): Result {
   if (new Set(inputs.map((i) => i.key)).size !== inputs.length) return fail('inputs')
   if (folder && folderInputs !== 1) return fail('folder_input')
   if (!folder && folderInputs > 0) return fail('folder_permission')
+  const images = p.images === undefined ? false : p.images
+  if (typeof images !== 'boolean') return fail('permissions.images')
+  const imageInputs = inputs.filter((i) => i.type === 'images').length
+  if (images && imageInputs !== 1) return fail('images_input')
+  if (!images && imageInputs > 0) return fail('images_permission')
 
   const secretsRaw = m.secrets ?? []
   if (!Array.isArray(secretsRaw) || secretsRaw.length > 4) return fail('secrets')
@@ -140,7 +150,16 @@ export function validateManifest(raw: unknown): Result {
     const format = x?.format === undefined ? 'number' : x.format
     if (!x || typeof x.key !== 'string' || !METRIC_RE.test(x.key) || !label || !['number', 'percent', 'rank', 'duration'].includes(format as string)) return fail('metrics')
     const decimals = typeof x.decimals === 'number' && x.decimals >= 0 && x.decimals <= 4 ? Math.floor(x.decimals) : 0
-    metrics.push({ key: x.key, label, unit: typeof x.unit === 'string' ? x.unit.slice(0, 8) : undefined, format: format as MetricFormat, decimals, primary: x.primary === true })
+    let milestone: PluginMilestone | undefined
+    if (x.milestone !== undefined) {
+      const ms = x.milestone as Record<string, unknown>
+      if (!ms || typeof ms !== 'object' || Array.isArray(ms)) return fail('metrics')
+      if (ms.enabled !== undefined && typeof ms.enabled !== 'boolean') return fail('metrics')
+      if (ms.notifyDown !== undefined && typeof ms.notifyDown !== 'boolean') return fail('metrics')
+      if (ms.increment !== undefined && (typeof ms.increment !== 'number' || !Number.isInteger(ms.increment) || ms.increment < 1 || ms.increment > 1e9)) return fail('metrics')
+      milestone = { enabled: ms.enabled as boolean | undefined, increment: ms.increment as number | undefined, notifyDown: ms.notifyDown as boolean | undefined }
+    }
+    metrics.push({ key: x.key, label, unit: typeof x.unit === 'string' ? x.unit.slice(0, 8) : undefined, format: format as MetricFormat, decimals, primary: x.primary === true, milestone })
   }
   if (new Set(metrics.map((x) => x.key)).size !== metrics.length) return fail('metrics')
 
@@ -158,7 +177,7 @@ export function validateManifest(raw: unknown): Result {
 
   const refresh = typeof m.refreshMinutes === 'number' && Number.isFinite(m.refreshMinutes) ? Math.min(1440, Math.max(5, Math.round(m.refreshMinutes))) : 30
   return { ok: true, manifest: { wdsh: 1, id: m.id, name: m.name.trim(), version: m.version, author, description, minAppVersion: m.minAppVersion as string | undefined, entry,
-    permissions: { network: network as string[], folder, folderExtensions: (exts as string[]).map((e) => e.toLowerCase()) },
+    permissions: { network: network as string[], folder, folderExtensions: (exts as string[]).map((e) => e.toLowerCase()), images },
     inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
 }
 
@@ -170,7 +189,11 @@ export interface DetailGrid { title?: string; rows: string[]; cols: string[]; va
 export interface DetailSeries { title?: string; unit?: string; step: number; lines: { name: string; values: number[] }[] }
 /** Barres par catégorie, une couleur par série (groupées, ou empilées avec `stacked`). */
 export interface DetailBars { title?: string; unit?: string; stacked?: boolean; categories: string[]; series: { name: string; values: number[] }[] }
+/** Image affichée en tête du détail : un fichier du dossier d'images du compte (permission `images`). */
+export interface DetailImage { file: string; caption?: string }
+export const IMAGE_FILE_RE = /^[\w .()'&,+-]{1,100}\.(jpg|jpeg|png|webp)$/i
 export interface PluginDetail {
+  image?: DetailImage
   chips?: string[]
   stats?: { label: string; value: string | number }[]
   table?: DetailTable
@@ -211,6 +234,8 @@ export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
     const rows = o.rows.slice(0, L.rows).filter(Array.isArray).map((row) => (row as unknown[]).slice(0, columns.length).map(cell))
     return columns.length && rows.length ? { title: title(o.title), columns, rows } : undefined
   }
+  const im = r.image as Record<string, unknown> | undefined
+  if (im && typeof im.file === 'string' && IMAGE_FILE_RE.test(im.file)) out.image = { file: im.file, caption: typeof im.caption === 'string' && im.caption.trim() ? im.caption.slice(0, L.cell) : undefined }
   if (Array.isArray(r.chips)) { const c = r.chips.slice(0, L.chips).map((x) => str(x, L.chip)).filter(Boolean); if (c.length) out.chips = c }
   if (Array.isArray(r.stats)) {
     const st = (r.stats as Record<string, unknown>[]).slice(0, L.stats).filter((x) => x && typeof x === 'object')

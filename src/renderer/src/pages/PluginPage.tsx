@@ -11,6 +11,7 @@ import { ago, fmtDelta } from '../lib/format'
 import { RangeKey, sinceOf } from '../lib/hooks'
 import { fmtPluginMetric } from '../lib/plugin'
 import { useChartTheme } from '../lib/useChartTheme'
+import { PluginAccountDialog } from '../components/PluginAccountDialog'
 
 const RANGES: RangeKey[] = ['7', '30', '90', 'all']
 const PAGE = 50
@@ -22,6 +23,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const plugin = plugins.find((p) => p.id === account?.pluginId)
   const m = plugin?.manifest
   const [range, setRange] = useState<RangeKey>('30')
+  const [editing, setEditing] = useState(false)
   const [metric, setMetric] = useState<string>(m?.metrics.find((x) => x.primary)?.key ?? m?.metrics[0]?.key ?? '')
   const [latest, setLatest] = useState<RawMetrics>({})
   const [series, setSeries] = useState<Record<string, Point[]>>({})
@@ -103,8 +105,10 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
           <div className="muted small">{m.name} · {t('platform.synced', { time: ago(account.lastSyncAt, settings.lang, t('platform.never')) })}</div></div>
         {m.permissions.folder && <button className="btn" disabled={busy} onClick={() => setImporting(true)}>{t('pp.import')}</button>}
         <button className="btn" disabled={busy} onClick={() => void refresh()}>{t('platform.refresh')}</button>
+        {m.inputs.length > 0 && <button className="btn" onClick={() => setEditing(true)}>{t('pp.edit')}</button>}
         <button className="btn" onClick={() => void window.api.pluginAccountRemove(accountId).then(reloadPlugins)}>{t('pp.removeAccount')}</button>
       </div>
+      {editing && <PluginAccountDialog plugin={plugin} account={account} onClose={() => setEditing(false)} />}
       {importing && (
         <div className="overlay" onClick={() => !busy && setImporting(false)}>
           <div className="glass modal" style={{ width: 'min(560px, 92vw)' }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('pp.import')}>
@@ -130,7 +134,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
         {found && (found.busy ? <p className="muted small" style={{ marginTop: 8 }}>{t('pp.searching')}</p>
           : found.unsupported ? <p className="muted small" style={{ marginTop: 8 }}>{t('pp.topUnsupported')}</p>
           : found.error ? <div className="err" style={{ marginTop: 8 }}>{found.error}</div>
-          : found.detail ? <div style={{ marginTop: 8 }}><DetailView detail={found.detail} th={th} t={t} /></div>
+          : found.detail ? <div style={{ marginTop: 8 }}><DetailView accountId={accountId} detail={found.detail} th={th} t={t} /></div>
           : <p className="muted small" style={{ marginTop: 8 }}>{t('pp.noResult')}</p>)}
       </div>}
       {note && <div className="glass pad small" style={{ marginBottom: 16 }} role="status">{note}</div>}
@@ -166,7 +170,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
       {extra.summary && (
         <Reveal className="glass pad sect" delay={0.14}>
           <h2 style={{ marginBottom: 10 }}>{t('pp.summary')}</h2>
-          <DetailView detail={extra.summary} th={th} t={t} layoutKey={String(accountId)} />
+          <DetailView accountId={accountId} detail={extra.summary} th={th} t={t} layoutKey={String(accountId)} />
         </Reveal>
       )}
 
@@ -212,7 +216,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
                     {m.itemColumns.map((c) => <td key={c.key}>{it.fields[c.key] ?? '—'}{it.fields[c.key] !== undefined && c.unit ? ` ${c.unit}` : ''}</td>)}</tr>
                   {/* Le détail s'ouvre sous la ligne cliquée, pas en bas d'une longue liste. */}
                   {open && it.detail && <tr className="detail-row"><td colSpan={1 + (hasDates ? 1 : 0) + m.itemColumns.length}>
-                    <DetailView detail={it.detail} th={th} t={t} onClose={() => setOpenId(null)} /></td></tr>}
+                    <DetailView accountId={accountId} detail={it.detail} th={th} t={t} onClose={() => setOpenId(null)} /></td></tr>}
                 </Fragment>
               )
             })}</tbody>
@@ -296,7 +300,15 @@ function Heat({ g, caption = true }: { g: DetailGrid; caption?: boolean }): JSX.
 
 /** Détail d'un élément de plugin, ou bilan du compte : badges, chiffres clés, tableaux, grilles, courbes, frise.
  *  Avec `layoutKey` (bilan), chaque bloc devient un module que l'on peut réduire, déplacer (flèches ou glisser) et masquer. */
-function DetailView({ detail, th, t, onClose, layoutKey }: { detail: PluginDetail; th: ChartTheme; t: (k: string, v?: Record<string, string | number>) => string; onClose?: () => void; layoutKey?: string }): JSX.Element {
+/** Image en tête d'un détail (ex. vignette de la carte) : lue dans le dossier d'images du compte, par le processus principal. */
+function DetailImageView({ accountId, file, caption }: { accountId: number; file: string; caption?: string }): JSX.Element | null {
+  const [src, setSrc] = useState<string | null>(null)
+  useEffect(() => { let alive = true; void window.api.pluginImage(accountId, file).then((u) => { if (alive) setSrc(u) }); return () => { alive = false } }, [accountId, file])
+  if (!src) return null
+  return <figure className="detail-image"><img src={src} alt={caption ?? ''} />{caption && <figcaption>{caption}</figcaption>}</figure>
+}
+
+function DetailView({ accountId, detail, th, t, onClose, layoutKey }: { accountId: number; detail: PluginDetail; th: ChartTheme; t: (k: string, v?: Record<string, string | number>) => string; onClose?: () => void; layoutKey?: string }): JSX.Element {
   const tables = [...(detail.table ? [detail.table] : []), ...(detail.tables ?? [])]
   const blocks: { id: string; title: string; node: ReactNode }[] = []
   if (detail.stats) blocks.push({ id: 'stats', title: t('pp.keyFigures'), node: <div className="mini-stats">{detail.stats.map((s, i) => <div key={i}><span className="small muted">{s.label}</span><b>{s.value}</b></div>)}</div> })
@@ -325,7 +337,10 @@ function DetailView({ detail, th, t, onClose, layoutKey }: { detail: PluginDetai
           <button className="btn" onClick={onClose}>{t('pp.close')}</button>
         </div>
       )}
-      {detail.chips && <div className="chips">{detail.chips.map((c, i) => <span key={i} className="chip">{c}</span>)}</div>}
+      {detail.image
+        ? <div className="detail-head"><DetailImageView accountId={accountId} file={detail.image.file} caption={detail.image.caption} />
+            {detail.chips && <div className="chips">{detail.chips.map((c, i) => <span key={i} className="chip">{c}</span>)}</div>}</div>
+        : detail.chips && <div className="chips">{detail.chips.map((c, i) => <span key={i} className="chip">{c}</span>)}</div>}
       {layoutKey && (
         <details className="modules-menu">
           <summary className="small muted">{t('pp.modules', { shown: ordered.filter((b) => !layout.hidden.includes(b.id)).length, all: ordered.length })}</summary>
@@ -408,7 +423,7 @@ function CrossPanel({ accountId, cross, th }: { accountId: number; cross: NonNul
       </div>
       {res && (res.busy ? <p className="muted small" style={{ marginTop: 10 }}>{t('pp.searching')}</p>
         : res.error ? <div className="err" style={{ marginTop: 10 }}>{res.error}</div>
-        : res.detail ? <div style={{ marginTop: 10 }}><DetailView detail={res.detail} th={th} t={t} /></div>
+        : res.detail ? <div style={{ marginTop: 10 }}><DetailView accountId={accountId} detail={res.detail} th={th} t={t} /></div>
         : <p className="muted small" style={{ marginTop: 10 }}>{t('pp.noResult')}</p>)}
     </div>
   )

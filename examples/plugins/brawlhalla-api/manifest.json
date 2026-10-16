@@ -2,7 +2,7 @@
   "wdsh": 1,
   "id": "wavedash.brawlhalla-api",
   "name": "Brawlhalla (API officielle)",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "WaveDash",
   "description": {
     "fr": "Ton profil Brawlhalla par l'API officielle : ELO 1v1 et 2v2, pic, classements, parties, victoires, niveau, et le détail par légende. Demande une clé personnelle de Blue Mammoth Games.",
@@ -18,9 +18,9 @@
       "help": { "fr": "Clé personnelle à demander à Blue Mammoth Games (portail développeur / Discord officiel).", "en": "Personal key to request from Blue Mammoth Games (developer portal / official Discord)." } }
   ],
   "metrics": [
-    { "key": "elo_1v1", "label": { "fr": "ELO 1v1", "en": "1v1 ELO" }, "primary": true },
+    { "key": "elo_1v1", "label": { "fr": "ELO 1v1", "en": "1v1 ELO" }, "primary": true, "milestone": { "increment": 100, "notifyDown": true } },
     { "key": "peak_1v1", "label": { "fr": "ELO max 1v1", "en": "1v1 peak ELO" } },
-    { "key": "elo_2v2", "label": { "fr": "ELO 2v2", "en": "2v2 ELO" } },
+    { "key": "elo_2v2", "label": { "fr": "ELO 2v2", "en": "2v2 ELO" }, "milestone": { "increment": 100, "notifyDown": true } },
     { "key": "games", "label": { "fr": "Parties", "en": "Games" } },
     { "key": "wins", "label": { "fr": "Victoires", "en": "Wins" } },
     { "key": "winrate", "label": { "fr": "Taux de victoire", "en": "Win rate" }, "format": "percent", "decimals": 1 },

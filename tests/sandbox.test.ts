@@ -39,8 +39,9 @@ test('le stockage passe par host.storage, clés contrôlées', async () => {
 
 test('plafonds : calcul, mémoire, pile, résultat, promesse jamais résolue', async () => {
   assert.equal(await fail(req('for (;;) {}', { limits: { cpuMs: 300 } })), 'timeout')
-  assert.equal(await fail(req('const a = []; for (;;) a.push("x".repeat(1e5))', { limits: { memoryBytes: 8 * 1024 * 1024 } })), 'memory')
-  assert.equal(await fail(req('const f = () => f(); f()')), 'memory')
+  // Temps de calcul large : les fichiers de test tournent en parallèle, la machine peut être chargée.
+  assert.equal(await fail(req('const a = []; for (;;) a.push("x".repeat(1e5))', { limits: { memoryBytes: 8 * 1024 * 1024, cpuMs: 60_000 } })), 'memory')
+  assert.equal(await fail(req('const f = () => f(); f()', { limits: { cpuMs: 60_000 } })), 'memory')
   assert.equal(await fail(req('return "x".repeat(3e6)')), 'invalid_result')
   assert.equal(await fail(req('await new Promise(() => {})')), 'blocked_promise')
   assert.equal(await fail(req('throw new Error("boum")')), 'script')

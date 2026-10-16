@@ -2,7 +2,7 @@
   "wdsh": 1,
   "id": "wavedash.brawlhalla-replays",
   "name": "Brawlhalla Replays",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "author": "WaveDash",
   "description": {
     "fr": "Lit tes fichiers .replay Brawlhalla dans un dossier : victoires, défaites, stocks, durée, et le détail de chaque partie (joueurs, scores, frise des KOs). Tout est lu en local, aucun accès réseau.",
@@ -13,7 +13,8 @@
     "folder": true,
     "folderExtensions": [
       ".replay"
-    ]
+    ],
+    "images": true
   },
   "inputs": [
     {
@@ -41,6 +42,19 @@
       "help": {
         "fr": "Sert à savoir quelle partie tu as gagnée. Le tag de clan peut être omis. Plusieurs pseudos : sépare-les par des virgules.",
         "en": "Used to know which matches you won. The clan tag can be omitted. Several names: separate them with commas."
+      }
+    },
+    {
+      "key": "thumbs",
+      "type": "images",
+      "required": false,
+      "label": {
+        "fr": "Vignettes des cartes (facultatif)",
+        "en": "Map thumbnails (optional)"
+      },
+      "help": {
+        "fr": "Le dossier images\\thumbnails de ton jeu, par exemple C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brawlhalla\\images\\thumbnails. WaveDash y affiche la vignette de la carte de chaque partie ; le plugin ne lit pas ce dossier.",
+        "en": "Your game's images\\thumbnails folder, for example C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brawlhalla\\images\\thumbnails. WaveDash shows each match's map thumbnail from it; the plugin does not read this folder."
       }
     }
   ],
