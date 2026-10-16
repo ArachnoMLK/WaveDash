@@ -132,7 +132,7 @@ function folderOf(manifest: PluginManifest, inputs: Record<string, string>, acco
   return { dir: real, extra: accountId === undefined ? undefined : importDirOf(accountId), extensions: manifest.permissions.folderExtensions }
 }
 
-function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh' | 'search', inputs: Record<string, string>, account?: { id: number; externalId: string; displayName: string }, query?: string): RunRequest {
+function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh' | 'search' | 'cross', inputs: Record<string, string>, account?: { id: number; externalId: string; displayName: string }, query?: string, cross?: Record<string, string>): RunRequest {
   const manifest = loadManifest(row)
   const secretValues: Record<string, string> = {}
   for (const s of manifest.secrets) secretValues[s.key] = secrets.getSecret(secretKey(row.id, s.key)) ?? ''
@@ -140,7 +140,7 @@ function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh' | 'search', i
   const accountId = account?.id
   return {
     manifest, script: row.script, fn,
-    ctx: { inputs, secrets: secretValues, lang: db.getSettings().lang, account: account ? { externalId: account.externalId, displayName: account.displayName } : undefined, query },
+    ctx: { inputs, secrets: secretValues, lang: db.getSettings().lang, account: account ? { externalId: account.externalId, displayName: account.displayName } : undefined, query, cross },
     folder: folderOf(manifest, inputs, accountId),
     storage: accountId === undefined
       ? { get: (k) => memory.get(k) ?? null, set: (k, v) => { memory.set(k, v) } }
@@ -371,4 +371,22 @@ export async function pluginAccountSearch(accountId: number, query: string): Pro
     if (e instanceof PluginError && e.code === 'no_function') return { ok: false, unsupported: true }
     return { ok: false, error: msgOf(e) }
   }
+}
+
+/** Outil « Croiser tes données » : la fonction `cross` du plugin reçoit le joueur, la mesure et les deux axes choisis
+ *  (valeurs limitées aux menus du manifeste) et renvoie un détail (barres, tableau). Rien n'est enregistré. */
+export async function pluginAccountCross(accountId: number, req: Record<string, string>): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }> {
+  const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
+  if (!pa || !row || !row.enabled) return { ok: false }
+  let m: PluginManifest
+  try { m = loadManifest(row) } catch { return { ok: false } }
+  if (!m.cross) return { ok: false }
+  const keys = (l: { key: string }[]): string[] => l.map((x) => x.key)
+  const pick = (v: unknown, allowed: string[], fallback: string): string => (typeof v === 'string' && allowed.includes(v) ? v : fallback)
+  const clean = { who: String(req?.who ?? '').trim().slice(0, 60), measure: pick(req?.measure, keys(m.cross.measures), m.cross.measures[0].key),
+    a: pick(req?.a, keys(m.cross.dimensions), m.cross.dimensions[0].key), b: pick(req?.b, ['none', ...keys(m.cross.dimensions)], 'none') }
+  try {
+    const run = await runPlugin(buildRequest(row, 'cross', JSON.parse(pa.inputs) as Record<string, string>, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, undefined, clean))
+    return { ok: true, detail: sanitizeDetail(run.value) }
+  } catch (e) { return { ok: false, error: msgOf(e) } }
 }

@@ -1,11 +1,11 @@
 // Page d'un compte de plugin : cartes de métriques, graphique d'évolution, éléments, journal.
 import { Fragment, ReactNode, useEffect, useState } from 'react'
-import { ColumnStat, DetailGrid, DetailTable, loc, PluginColumn, PluginDetail, PluginItemsPage } from '@shared/plugin'
+import { ColumnStat, DetailGrid, DetailTable, loc, PluginColumn, PluginDetail, PluginItemsPage, PluginManifest } from '@shared/plugin'
 import { ChartType, Lang, Point, RawMetrics } from '@shared/types'
 import { Chart } from '../components/Chart'
 import { Reveal, StatCard, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
-import { ChartTheme, seriesOption, timelineOption, timeOption } from '../lib/charts'
+import { barsOption, ChartTheme, seriesOption, timelineOption, timeOption } from '../lib/charts'
 import { TIME_CHARTS } from '../lib/constants'
 import { ago, fmtDelta } from '../lib/format'
 import { RangeKey, sinceOf } from '../lib/hooks'
@@ -124,6 +124,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
           </div>
         </div>
       )}
+      {m.cross && <CrossPanel accountId={accountId} cross={m.cross} th={th} />}
       {m.search && <div className="glass pad sect top-search">
         <input type="search" className="search" value={topQ} onChange={(e) => setTopQ(e.target.value)} placeholder={t('pp.topSearch')} aria-label={t('pp.topSearch')} />
         {found && (found.busy ? <p className="muted small" style={{ marginTop: 8 }}>{t('pp.searching')}</p>
@@ -302,6 +303,7 @@ function DetailView({ detail, th, t, onClose, layoutKey }: { detail: PluginDetai
   tables.forEach((tb, k) => blocks.push({ id: `table:${tb.title ?? k}`, title: tb.title ?? `${t('pp.table')} ${k + 1}`, node: <SortableTable tb={tb} /> }))
   if (layoutKey) detail.grids?.forEach((g, k) => blocks.push({ id: `grid:${g.title ?? k}`, title: g.title ?? `${t('pp.grid')} ${k + 1}`, node: <div className="grids"><Heat g={g} caption={false} /></div> }))
   else if (detail.grids) blocks.push({ id: 'grids', title: '', node: <div className="grids">{detail.grids.map((g, k) => <Heat key={k} g={g} />)}</div> })
+  detail.bars?.forEach((b, k) => blocks.push({ id: `bars:${b.title ?? k}`, title: b.title ?? '', node: <Chart option={barsOption(b, th)} height={Math.max(260, Math.min(420, 200 + b.categories.length * 6))} /> }))
   detail.series?.forEach((sr, k) => blocks.push({ id: `series:${sr.title ?? k}`, title: sr.title ?? '', node: <Chart option={seriesOption(sr, th)} height={220} /> }))
   if (detail.timeline) blocks.push({ id: 'timeline', title: t('pp.timeline'), node: <Chart option={timelineOption(detail.timeline, th)} height={Math.max(130, 48 + detail.timeline.lanes.length * 36)} /> })
 
@@ -377,6 +379,36 @@ function SearchStats({ stats, total, columns, lang, t }: { stats: ColumnStat[]; 
           )
         })}
       </div>
+    </div>
+  )
+}
+
+/** Croiser tes données : un joueur (vide = toi), une mesure, un axe et un second axe facultatif → graphique en barres et tableau. */
+function CrossPanel({ accountId, cross, th }: { accountId: number; cross: NonNullable<PluginManifest['cross']>; th: ChartTheme }): JSX.Element {
+  const { t, settings } = useApp()
+  const [req, setReq] = useState({ who: '', measure: cross.measures[0].key, a: cross.dimensions[0].key, b: 'none' })
+  const [res, setRes] = useState<{ busy: boolean; detail?: PluginDetail; error?: string } | null>(null)
+  const run = async (): Promise<void> => {
+    setRes({ busy: true })
+    const r = await window.api.pluginAccountCross(accountId, req)
+    setRes({ busy: false, detail: r.detail, error: r.error })
+  }
+  const set = (k: keyof typeof req, v: string): void => setReq((x) => ({ ...x, [k]: v }))
+  return (
+    <div className="glass pad sect cross">
+      <h2 style={{ marginBottom: 10 }}>{t('pp.cross')}</h2>
+      <div className="cross-form">
+        <label className="small muted">{t('pp.crossWho')}<input type="text" value={req.who} placeholder={t('pp.crossMe')} onChange={(e) => set('who', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void run() }} /></label>
+        <label className="small muted">{t('pp.crossMeasure')}<select value={req.measure} onChange={(e) => set('measure', e.target.value)}>{cross.measures.map((x) => <option key={x.key} value={x.key}>{loc(x.label, settings.lang)}</option>)}</select></label>
+        <label className="small muted">{t('pp.crossA')}<select value={req.a} onChange={(e) => set('a', e.target.value)}>{cross.dimensions.map((x) => <option key={x.key} value={x.key}>{loc(x.label, settings.lang)}</option>)}</select></label>
+        <label className="small muted">{t('pp.crossB')}<select value={req.b} onChange={(e) => set('b', e.target.value)}><option value="none">{t('pp.crossNone')}</option>
+          {cross.dimensions.filter((x) => x.key !== req.a).map((x) => <option key={x.key} value={x.key}>{loc(x.label, settings.lang)}</option>)}</select></label>
+        <button className="btn primary" disabled={res?.busy} onClick={() => void run()}>{t('pp.crossRun')}</button>
+      </div>
+      {res && (res.busy ? <p className="muted small" style={{ marginTop: 10 }}>{t('pp.searching')}</p>
+        : res.error ? <div className="err" style={{ marginTop: 10 }}>{res.error}</div>
+        : res.detail ? <div style={{ marginTop: 10 }}><DetailView detail={res.detail} th={th} t={t} /></div>
+        : <p className="muted small" style={{ marginTop: 10 }}>{t('pp.noResult')}</p>)}
     </div>
   )
 }

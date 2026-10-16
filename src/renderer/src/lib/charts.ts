@@ -146,3 +146,18 @@ export function seriesOption(sr: { unit?: string; step: number; lines: { name: s
       data: l.values.map((v, i) => [i * sr.step, v]) }))
   } as EChartsOption
 }
+
+/** Barres par catégorie, une couleur par série (groupées ou empilées) ; étiquettes inclinées si elles sont nombreuses. */
+export function barsOption(b: { unit?: string; stacked?: boolean; categories: string[]; series: { name: string; values: number[] }[] }, th: ChartTheme): EChartsOption {
+  const ax = axisStyle(th), unit = b.unit ? ` ${b.unit}` : ''
+  return {
+    ...base(th),
+    color: palette({ ...th, palette: th.palette === 'mono' ? 'multi' : th.palette }),   // plusieurs séries : toujours en couleurs
+    grid: { left: 8, right: 12, top: b.series.length > 1 ? 34 : 12, bottom: 4, containLabel: true },
+    legend: b.series.length > 1 ? { top: 0, type: 'scroll', textStyle: { color: th.dark ? '#bbb' : '#444' }, icon: 'roundRect' } : undefined,
+    tooltip: { ...(base(th).tooltip as object), trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (v) => `${fmt(Number(v), th.lang, 1)}${unit}` },
+    xAxis: { type: 'category', data: b.categories, ...ax, splitLine: { show: false }, axisLabel: { ...ax.axisLabel, interval: 0, rotate: b.categories.length > 8 ? 35 : 0, width: 110, overflow: 'truncate' } },
+    yAxis: { type: 'value', ...ax },
+    series: b.series.map((sr) => ({ name: sr.name, type: 'bar', stack: b.stacked ? 'total' : undefined, barMaxWidth: 26, itemStyle: { borderRadius: b.stacked ? 0 : [4, 4, 0, 0] }, data: sr.values }))
+  } as EChartsOption
+}

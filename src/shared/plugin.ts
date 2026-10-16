@@ -39,6 +39,8 @@ export interface PluginManifest {
   itemsMode: 'replace' | 'keep'
   /** Le script définit `search` : WaveDash affiche la barre de recherche en haut de la page du compte. */
   search: boolean
+  /** Outil « Croiser tes données » : mesures et axes proposés dans les menus ; le script définit alors `cross`. */
+  cross?: { measures: { key: string; label: LocalText }[]; dimensions: { key: string; label: LocalText }[] }
   refreshMinutes: number
 }
 
@@ -62,6 +64,18 @@ function text(v: unknown, max: number): LocalText | null {
     return out.fr || out.en ? out : null
   }
   return null
+}
+
+/** Menus de l'outil de croisement : 2 à 12 entrées chacun, clés simples, libellés courts ; sinon l'outil est ignoré. */
+function crossOf(raw: unknown): PluginManifest['cross'] {
+  const r = raw as { measures?: unknown; dimensions?: unknown } | undefined
+  const list = (v: unknown): { key: string; label: LocalText }[] | null => {
+    if (!Array.isArray(v) || v.length < 1 || v.length > 12) return null
+    const out = (v as Record<string, unknown>[]).map((x) => ({ key: x?.key, label: text(x?.label, 40) }))
+    return out.every((x) => typeof x.key === 'string' && KEY_RE.test(x.key) && x.label) ? (out as { key: string; label: LocalText }[]) : null
+  }
+  const measures = list(r?.measures), dimensions = list(r?.dimensions)
+  return measures && dimensions ? { measures, dimensions } : undefined
 }
 
 export function compareVersions(a: string, b: string): number {
@@ -145,7 +159,7 @@ export function validateManifest(raw: unknown): Result {
   const refresh = typeof m.refreshMinutes === 'number' && Number.isFinite(m.refreshMinutes) ? Math.min(1440, Math.max(5, Math.round(m.refreshMinutes))) : 30
   return { ok: true, manifest: { wdsh: 1, id: m.id, name: m.name.trim(), version: m.version, author, description, minAppVersion: m.minAppVersion as string | undefined, entry,
     permissions: { network: network as string[], folder, folderExtensions: (exts as string[]).map((e) => e.toLowerCase()) },
-    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, refreshMinutes: refresh } }
+    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
 }
 
 /* ---------- Résultats renvoyés par un plugin ---------- */
@@ -154,6 +168,8 @@ export function validateManifest(raw: unknown): Result {
 export interface DetailTable { title?: string; columns: string[]; rows: (string | number)[][] }
 export interface DetailGrid { title?: string; rows: string[]; cols: string[]; values: number[][] }
 export interface DetailSeries { title?: string; unit?: string; step: number; lines: { name: string; values: number[] }[] }
+/** Barres par catégorie, une couleur par série (groupées, ou empilées avec `stacked`). */
+export interface DetailBars { title?: string; unit?: string; stacked?: boolean; categories: string[]; series: { name: string; values: number[] }[] }
 export interface PluginDetail {
   chips?: string[]
   stats?: { label: string; value: string | number }[]
@@ -161,12 +177,13 @@ export interface PluginDetail {
   tables?: DetailTable[]
   grids?: DetailGrid[]
   series?: DetailSeries[]
+  bars?: DetailBars[]
   timeline?: { duration: number; lanes: string[]; events: { t: number; lane: number; label?: string }[] }
 }
 export interface PluginItem { id: string; title: string; ts?: number; fields: Record<string, string | number>; detail?: PluginDetail }
 export const DETAIL_LIMITS = {
   columns: 10, rows: 80, cell: 80, lanes: 16, events: 400, label: 24,
-  chips: 16, chip: 40, stats: 24, tables: 8, grids: 8, gridSize: 8, series: 4, lines: 16, points: 600
+  chips: 16, chip: 40, stats: 24, tables: 8, grids: 8, gridSize: 8, series: 4, lines: 16, points: 600, bars: 4, categories: 60
 }
 export interface PluginRunResult {
   metrics: Record<string, number>
@@ -222,6 +239,17 @@ export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
       if (lines.length) ss.push({ title: title(x.title), unit: typeof x.unit === 'string' ? x.unit.slice(0, 8) : undefined, step, lines })
     }
     if (ss.length) out.series = ss
+  }
+  if (Array.isArray(r.bars)) {
+    const bs: DetailBars[] = []
+    for (const x of (r.bars as Record<string, unknown>[]).slice(0, L.bars)) {
+      if (!x || !Array.isArray(x.categories) || !Array.isArray(x.series)) continue
+      const categories = x.categories.slice(0, L.categories).map((c) => str(c, L.cell))
+      const series = (x.series as Record<string, unknown>[]).slice(0, L.lines).filter((v) => v && Array.isArray(v.values))
+        .map((v) => ({ name: str(v.name, L.cell), values: categories.map((_, i) => num((v.values as unknown[])[i]) ?? 0) }))
+      if (categories.length && series.length) bs.push({ title: title(x.title), unit: typeof x.unit === 'string' ? x.unit.slice(0, 8) : undefined, stacked: x.stacked === true, categories, series })
+    }
+    if (bs.length) out.bars = bs
   }
   const tl = r.timeline as Record<string, unknown> | undefined
   if (tl && Array.isArray(tl.lanes) && Array.isArray(tl.events)) {

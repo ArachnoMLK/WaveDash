@@ -155,6 +155,7 @@ export function registerIpc(win: () => BrowserWindow | null): void {
     return res
   })
   ipcMain.handle('plugins:bundled', () => plugins.listBundled())
+  ipcMain.handle('plugins:accountCross', (_e, id: number, req: Record<string, string>) => plugins.pluginAccountCross(Number(id), req ?? {}))
   ipcMain.handle('plugins:accountSearch', (_e, id: number, query: string) => plugins.pluginAccountSearch(Number(id), String(query ?? '')))
   ipcMain.handle('plugins:catalog', (_e, force: boolean) => getCatalog(!!force))
   ipcMain.handle('plugins:catalogFetch', async (_e, id: string) => {

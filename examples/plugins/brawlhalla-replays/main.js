@@ -9,7 +9,7 @@ var BUDGET_MS = 2000       // au-delà, on s'arrête : le reste suit à la relan
 var MAX_POINTS = 5000      // points d'historique renvoyés au plus (limite de WaveDash)
 var BUCKETS = 76             // clés de stockage du cache des parties (c0 à c75 ; WaveDash autorise 100 clés de 64 Ko)
 var PLAYER_BUCKETS = 20      // profils des autres joueurs : clés c76 à c95 (mêmes clés qu'avant, rien de plus)
-var CACHE_V = 7            // version du contenu du cache : une entrée plus ancienne est relue
+var CACHE_V = 8            // version du contenu du cache : une entrée plus ancienne est relue
 
 // Légendes : identifiant du replay = legend_id de l'API officielle = HeroID du jeu (table HeroTypes du patch 11.00).
 // Une légende plus récente que cette table s'affiche « #id ».
@@ -501,9 +501,9 @@ function summaryOf(file, c, a, lang) {
   var me = a.me, p = presses(c, me.id), cut = function (n) { return n.slice(0, 24) }
   return { w: a.won === null ? -1 : a.won ? 1 : 0, d: a.lost, tk: a.taken, du: Math.round(a.dur * 1000), a: a.apm === null ? -1 : Math.round(a.apm * 10),
     L: me.hero, m: mapName(file, c, lang === 'fr'), p: modeLabel(c, lang), k: a.kills[me.id] === null ? -1 : a.kills[me.id],
-    // Coéquipiers et adversaires : [pseudo, identifiant] (identifiant 0 pour les bots et les replays d'avant le patch 10.09).
-    tm: a.ents.filter(function (e) { return e.id !== me.id && a.sameTeam(e, me) }).map(function (e) { return [cut(e.name), e.pid] }),
-    op: a.ents.filter(function (e) { return !a.sameTeam(e, me) }).map(function (e) { return [cut(e.name), e.pid] }),
+    // Coéquipiers et adversaires : [pseudo, identifiant, légende] (identifiant 0 pour les bots et les replays d'avant le patch 10.09).
+    tm: a.ents.filter(function (e) { return e.id !== me.id && a.sameTeam(e, me) }).map(function (e) { return [cut(e.name), e.pid, e.hero] }),
+    op: a.ents.filter(function (e) { return !a.sameTeam(e, me) }).map(function (e) { return [cut(e.name), e.pid, e.hero] }),
     g: p ? p.g : null, at: p ? p.l.concat(p.h) : null, j: p ? p.j : 0, dg: p ? p.d : 0, th: p ? p.t : 0 }
 }
 
@@ -707,6 +707,80 @@ function searchGames(query, lang) {
   }
 }
 
+
+/* ───────── croiser tes données (outil « Croiser » de WaveDash) ───────── */
+var CROSS_DIMS = { legend: ['Légendes', 'Legends'], map: ['Cartes', 'Maps'], mode: ['Modes', 'Modes'], result: ['Résultat', 'Result'], side: ['Avec / contre', 'With / against'],
+  month: ['Mois', 'Month'], weekday: ['Jour', 'Day'], hour: ['Heure', 'Hour'] }
+var CROSS_MEASURES = { games: ['Parties', 'Games'], wins: ['Victoires', 'Wins'], losses: ['Défaites', 'Losses'], winrate: ['% de victoire', 'Win %'] }
+
+function crossData(ctx) {
+  var fr = ctx.lang === 'fr', R = ctx.cross || {}, who = String(R.who || '').trim(), mine = wantedList(ctx.inputs.playerName)
+  var cache = loadCache(), games = []
+  for (var k in cache) { var e = cache[k]; if (e && e.v === CACHE_V && e.s) games.push(e) }
+  games.sort(function (a, b) { return a.t - b.t })
+  if (!games.length) return undefined
+  var rows = [], label = tr(fr, 'Toi', 'You')
+  var isMe = !who || exactly(who, mine) || mine.some(function (w) { return bareName(who) === w })
+  if (isMe) rows = games.map(function (g) { return { g: g, L: g.s.L, w: g.s.w, side: '' } })
+  else {
+    // Un autre joueur : par identifiant (les parties d'avant le patch 10.09 rattachées par pseudo), parmi tes parties où il apparaît.
+    var q = bareName(who), pidsOf = {}, count = {}
+    games.forEach(function (g) { g.s.tm.concat(g.s.op).forEach(function (x) { if (x[1]) { var b = bareName(x[0]); (pidsOf[b] = pidsOf[b] || {})[x[1]] = 1 } }) })
+    var keyOf = function (x) { if (x[1]) return 'p' + x[1]; var ids = pidsOf[bareName(x[0])], ks = ids ? Object.keys(ids) : []; return ks.length === 1 ? 'p' + ks[0] : 'n' + bareName(x[0]) }
+    var names = {}
+    games.forEach(function (g) { g.s.tm.concat(g.s.op).forEach(function (x) { if (bareName(x[0]).indexOf(q) < 0) return; var key = keyOf(x); count[key] = (count[key] || 0) + 1; names[key] = x[0] }) })
+    var best = Object.keys(count).sort(function (a, b) { return (bareName(names[b]) === q ? 1 : 0) - (bareName(names[a]) === q ? 1 : 0) || count[b] - count[a] })[0]
+    if (!best) return undefined
+    label = names[best]
+    games.forEach(function (g) {
+      g.s.tm.forEach(function (x) { if (keyOf(x) === best) rows.push({ g: g, L: x[2], w: g.s.w, side: tr(fr, 'Avec toi', 'With you') }) })
+      g.s.op.forEach(function (x) { if (keyOf(x) === best) rows.push({ g: g, L: x[2], w: g.s.w === 1 ? 0 : g.s.w === 0 ? 1 : -1, side: tr(fr, 'Contre toi', 'Against you') }) })
+    })
+  }
+  if (!rows.length) return undefined
+  var days = fr ? ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'] : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  var value = function (dim, r) {
+    var d = new Date(r.g.t)
+    if (dim === 'legend') return r.L ? legendName(r.L) : '—'
+    if (dim === 'map') return r.g.s.m
+    if (dim === 'mode') return r.g.s.p
+    if (dim === 'result') return r.w === 1 ? tr(fr, 'Victoire', 'Win') : r.w === 0 ? tr(fr, 'Défaite', 'Loss') : '—'
+    if (dim === 'side') return r.side || tr(fr, 'Toi', 'You')
+    if (dim === 'month') return d.getFullYear() + '-' + pad(d.getMonth() + 1)
+    if (dim === 'weekday') return days[(d.getDay() + 6) % 7]
+    if (dim === 'hour') return pad(d.getHours()) + 'h'
+    return '—'
+  }
+  var natural = { month: 1, weekday: 1, hour: 1 }
+  var orderOf = function (dim, list, limit) {
+    var n = {}
+    list.forEach(function (r) { var v = value(dim, r); n[v] = (n[v] || 0) + 1 })
+    var keys = Object.keys(n)
+    if (natural[dim]) keys.sort(dim === 'weekday' ? function (a, b) { return days.indexOf(a) - days.indexOf(b) } : undefined)
+    else keys.sort(function (a, b) { return n[b] - n[a] })
+    return keys.slice(0, limit)
+  }
+  var measure = function (list) {
+    var w = 0, l = 0
+    list.forEach(function (r) { if (r.w === 1) w++; else if (r.w === 0) l++ })
+    return R.measure === 'wins' ? w : R.measure === 'losses' ? l : R.measure === 'winrate' ? (w + l ? Math.round(w * 1000 / (w + l)) / 10 : 0) : list.length
+  }
+  var A = CROSS_DIMS[R.a] ? R.a : 'legend', B = R.b && R.b !== 'none' && R.b !== A && CROSS_DIMS[R.b] ? R.b : null
+  var M = CROSS_MEASURES[R.measure] ? R.measure : 'games', name = function (o) { return o[fr ? 0 : 1] }
+  var cats = orderOf(A, rows, 25)
+  var groups = B ? orderOf(B, rows, 8) : [name(CROSS_MEASURES[M])]
+  var series = groups.map(function (gv) {
+    return { name: gv, values: cats.map(function (cv) { return measure(rows.filter(function (r) { return value(A, r) === cv && (!B || value(B, r) === gv) })) }) }
+  })
+  var title = label + ' · ' + name(CROSS_MEASURES[M]) + tr(fr, ' par ', ' by ') + name(CROSS_DIMS[A]).toLowerCase() + (B ? tr(fr, ', séparé par ', ', split by ') + name(CROSS_DIMS[B]).toLowerCase() : '')
+  return {
+    chips: [label, rows.length + tr(fr, ' parties analysées', ' games analysed')].concat(isMe ? [] : [tr(fr, 'Parties de tes replays où il apparaît', 'Games from your replays where they appear')]),
+    bars: [{ title: title, unit: M === 'winrate' ? '%' : undefined, stacked: !!B && M !== 'winrate', categories: cats, series: series }],
+    tables: [{ title: title, columns: [name(CROSS_DIMS[A])].concat(series.map(function (s) { return s.name })),
+      rows: cats.map(function (c, i) { return [c].concat(series.map(function (s) { return M === 'winrate' ? s.values[i] + ' %' : s.values[i] })) }) }]
+  }
+}
+
 var plugin = {
   resolve: async function (ctx) {
     var parts = ctx.inputs.folder.split(/[\\/]/).filter(Boolean)
@@ -717,6 +791,8 @@ var plugin = {
 
   // Barre de recherche du haut : toutes tes stats pour un joueur, une carte, une de tes légendes ou un mode.
   search: async function (ctx) { return searchGames(ctx.query, ctx.lang) },
+  // Outil « Croiser tes données » : un joueur, une mesure, un axe et un second axe facultatif.
+  cross: async function (ctx) { return crossData(ctx) },
 
   refresh: async function (ctx) {
     var lang = ctx.lang, wanted = wantedList(ctx.inputs.playerName)

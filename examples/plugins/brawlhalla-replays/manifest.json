@@ -2,7 +2,7 @@
   "wdsh": 1,
   "id": "wavedash.brawlhalla-replays",
   "name": "Brawlhalla Replays",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "author": "WaveDash",
   "description": {
     "fr": "Lit tes fichiers .replay Brawlhalla dans un dossier : victoires, défaites, stocks, durée, et le détail de chaque partie (joueurs, scores, frise des KOs). Tout est lu en local, aucun accès réseau.",
@@ -153,5 +153,95 @@
   ],
   "itemsMode": "keep",
   "refreshMinutes": 10,
-  "search": true
+  "search": true,
+  "cross": {
+    "measures": [
+      {
+        "key": "games",
+        "label": {
+          "fr": "Parties",
+          "en": "Games"
+        }
+      },
+      {
+        "key": "wins",
+        "label": {
+          "fr": "Victoires",
+          "en": "Wins"
+        }
+      },
+      {
+        "key": "losses",
+        "label": {
+          "fr": "Défaites",
+          "en": "Losses"
+        }
+      },
+      {
+        "key": "winrate",
+        "label": {
+          "fr": "% de victoire",
+          "en": "Win %"
+        }
+      }
+    ],
+    "dimensions": [
+      {
+        "key": "legend",
+        "label": {
+          "fr": "Légendes",
+          "en": "Legends"
+        }
+      },
+      {
+        "key": "map",
+        "label": {
+          "fr": "Cartes",
+          "en": "Maps"
+        }
+      },
+      {
+        "key": "mode",
+        "label": {
+          "fr": "Modes",
+          "en": "Modes"
+        }
+      },
+      {
+        "key": "result",
+        "label": {
+          "fr": "Résultat",
+          "en": "Result"
+        }
+      },
+      {
+        "key": "side",
+        "label": {
+          "fr": "Avec / contre",
+          "en": "With / against"
+        }
+      },
+      {
+        "key": "month",
+        "label": {
+          "fr": "Mois",
+          "en": "Month"
+        }
+      },
+      {
+        "key": "weekday",
+        "label": {
+          "fr": "Jour",
+          "en": "Day"
+        }
+      },
+      {
+        "key": "hour",
+        "label": {
+          "fr": "Heure",
+          "en": "Hour"
+        }
+      }
+    ]
+  }
 }

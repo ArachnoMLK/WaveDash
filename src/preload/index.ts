@@ -22,6 +22,7 @@ const api: WaveApi = {
   pluginsList: () => ipcRenderer.invoke('plugins:list'),
   pluginsBundled: () => ipcRenderer.invoke('plugins:bundled'),
   pluginAccountSearch: (id, query) => ipcRenderer.invoke('plugins:accountSearch', id, query),
+  pluginAccountCross: (id, req) => ipcRenderer.invoke('plugins:accountCross', id, req),
   pluginsCatalog: (force) => ipcRenderer.invoke('plugins:catalog', force),
   pluginsCatalogFetch: (id) => ipcRenderer.invoke('plugins:catalogFetch', id),
   pluginAccountsList: () => ipcRenderer.invoke('plugins:accounts'),
