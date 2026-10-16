@@ -28,7 +28,7 @@ function AccountSummary({ account }: { account: Account }): JSX.Element {
           return (
             <Reveal key={m} delay={i * 0.08}>
               <StatCard label={t(`metric.${m}`)} value={v === undefined ? '—' : fmtMetric(m, v, settings.lang)}
-                delta={delta === undefined ? undefined : `${fmtDelta(delta, settings.lang, m === 'winrate' ? 1 : 0)} · 30 ${settings.lang === 'fr' ? 'j' : 'd'}`} />
+                delta={delta === undefined ? undefined : `${fmtDelta(delta, settings.lang, 0)} · 30 ${settings.lang === 'fr' ? 'j' : 'd'}`} />
             </Reveal>
           )
         })}

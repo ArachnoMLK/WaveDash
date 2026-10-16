@@ -7,7 +7,6 @@ import { useApp } from '../lib/AppContext'
 import { fmt, fmtDelta, fmtMetric } from '../lib/format'
 
 const DAY = 86_400_000
-const ELO: MetricKey[] = ['elo_1v1', 'peak_1v1', 'elo_2v2']
 type SeriesMap = Record<number, Partial<Record<MetricKey, Point[]>>>
 
 /** Dernière valeur connue à l'instant t (ou avant) ; null si l'historique ne remonte pas jusque-là. */
@@ -46,9 +45,9 @@ function Goal({ account, metric, pts }: { account: Account; metric: MetricKey; p
   const prev = prevThreshold(rule, cur) ?? 0
   const pct = Math.max(0, Math.min(100, ((cur - prev) / (next - prev)) * 100))
 
-  // La date estimée n'a de sens que pour les compteurs ; l'ELO monte et descend sans tendance fiable.
+  // Date estimée : d'après la tendance des derniers relevés.
   let eta: string | null = null
-  if (!ELO.includes(metric)) {
+  {
     const slope = slopePerDay(pts)
     if (slope && slope > 0) {
       const days = (next - cur) / slope

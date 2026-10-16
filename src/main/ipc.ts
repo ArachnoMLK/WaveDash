@@ -17,7 +17,7 @@ import { fetchPackage, getCatalog } from './plugins/catalog'
 import { fireTest, initMilestones } from './milestones'
 import { checkUpdate, getUpdateStatus, installUpdate } from './updater'
 
-const DEMO_NAMES = { youtube: 'Chaîne démo', brawlhalla: 'Joueur démo', instagram: 'Compte démo', tiktok: 'Compte démo' }
+const DEMO_NAMES = { youtube: 'Chaîne démo', instagram: 'Compte démo', tiktok: 'Compte démo' }
 
 /** Empreinte simple d'un texte : rend les comptes démo différents selon ce qui est saisi. */
 const hash = (s: string): number => [...s.trim().toLowerCase()].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
@@ -65,7 +65,6 @@ export function registerIpc(win: () => BrowserWindow | null): void {
   ipcMain.handle('data:series', (_e, id: number, metric: MetricKey, since: number) => db.getSeries(id, metric, since))
   ipcMain.handle('data:latest', (_e, id: number) => db.getLatest(id))
   ipcMain.handle('data:items', (_e, id: number) => db.getItems(id))
-  ipcMain.handle('data:legends', (_e, id: number) => db.getLegends(id))
   ipcMain.handle('data:refresh', () => refreshAll())
   /* ---------- Image de fond : copiée dans le dossier de l'appli, relue en data URL ---------- */
   const MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }

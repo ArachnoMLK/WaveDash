@@ -25,7 +25,7 @@ export function sanitizeBackup(raw: unknown): Partial<Settings> {
   Object.assign(out, sanitizeTheme(s))                       // apparence
   if (s.lang === 'fr' || s.lang === 'en') out.lang = s.lang
   const refresh = num(s.refreshMinutes, 5, 1440); if (refresh !== null) out.refreshMinutes = Math.round(refresh)
-  for (const k of ['scrapingEnabled', 'startWithWindows', 'closeToTray', 'autoUpdate', 'notificationsEnabled', 'notifyRank', 'notifySound', 'notifyCelebration'] as const)
+  for (const k of ['seeThroughMaximized', 'scrapingEnabled', 'startWithWindows', 'closeToTray', 'autoUpdate', 'notificationsEnabled', 'notifyRank', 'notifySound', 'notifyCelebration'] as const)
     if (typeof s[k] === 'boolean') out[k] = s[k]
   if (s.notifySoundKind === 'chime' || s.notifySoundKind === 'pulse' || s.notifySoundKind === 'bell') out.notifySoundKind = s.notifySoundKind
   const vol = num(s.notifyVolume, 0, 100); if (vol !== null) out.notifyVolume = vol
@@ -46,18 +46,24 @@ export function sanitizeBackup(raw: unknown): Partial<Settings> {
     const valid = new Set(PLATFORMS.flatMap((p) => MILESTONE_METRICS[p].map((m) => ruleKey(p, m))))
     const rules: Record<string, MilestoneRule> = {}
     for (const [k, v] of Object.entries(s.milestoneRules as Record<string, unknown>)) {
-      const r = valid.has(k) ? sanitizeRule(v) : null
+      // Règles des plateformes, et des métriques de plugins (« plugin:<id>.<métrique> »).
+      const r = valid.has(k) || /^plugin:[a-z0-9][a-z0-9._-]{2,63}\.[a-z][a-z0-9_]{0,31}$/.test(k) ? sanitizeRule(v) : null
       if (r) rules[k] = r
     }
     out.milestoneRules = rules
   }
   if (Array.isArray(s.navOrder)) out.navOrder = s.navOrder.filter((x): x is string => typeof x === 'string' && NAV_IDS.includes(x))
   if (Array.isArray(s.navHidden)) out.navHidden = s.navHidden.filter((x): x is string => typeof x === 'string' && NAV_IDS.includes(x) && x !== 'overview')
+  if (s.navLabels && typeof s.navLabels === 'object') {
+    // Les onglets de plugins sont propres à cette installation : seuls les onglets de base voyagent.
+    out.navLabels = Object.fromEntries(Object.entries(s.navLabels as Record<string, unknown>)
+      .filter(([k, v]) => NAV_IDS.includes(k) && typeof v === 'string' && v.trim()).map(([k, v]) => [k, (v as string).trim().slice(0, 40)]))
+  }
   if (s.themePresets && typeof s.themePresets === 'object') {
     const base: ThemeData = themeFromSettings(DEFAULT_SETTINGS)
     const presets: Record<string, ThemeData> = {}
     for (const [name, v] of Object.entries(s.themePresets as Record<string, unknown>).slice(0, 30))
-      presets[name.slice(0, 40)] = { ...base, ...sanitizeTheme(v) }
+      if (name !== '__proto__') presets[name.slice(0, 40)] = { ...base, ...sanitizeTheme(v) }
     out.themePresets = presets
   }
   return out
@@ -65,9 +71,9 @@ export function sanitizeBackup(raw: unknown): Partial<Settings> {
 
 /** Clés enregistrées dans une sauvegarde (tout sauf image de fond locale). */
 export const BACKUP_KEYS: (keyof Settings)[] = [
-  'theme', 'glassEnabled', 'glass', 'glassOpacity', 'glassSaturation', 'nativeMaterial', 'bgMode', 'bgColor', 'bgColor2', 'bgAngle', 'bgBlur', 'bgDim', 'ambient',
+  'theme', 'glassEnabled', 'glass', 'glassOpacity', 'glassSaturation', 'nativeMaterial', 'seeThroughMaximized', 'bgMode', 'bgColor', 'bgColor2', 'bgAngle', 'bgBlur', 'bgDim', 'ambient',
   'accentEnabled', 'accentColor', 'chartPalette', 'radius', 'density', 'uiScale', 'fontFamily', 'animations',
   'lang', 'refreshMinutes', 'chartTypes', 'scrapingEnabled', 'startWithWindows', 'closeToTray', 'autoUpdate',
   'notificationsEnabled', 'notifyRank', 'notifySound', 'notifySoundKind', 'notifyVolume', 'notifyCelebration', 'notifyTemplates', 'milestoneRules',
-  'navOrder', 'navHidden', 'themePresets'
+  'navOrder', 'navHidden', 'navLabels', 'themePresets'
 ]

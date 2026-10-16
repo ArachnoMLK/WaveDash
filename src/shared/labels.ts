@@ -1,13 +1,11 @@
 // Libellés utilisés par le processus principal (notifications, rapport PDF) et textes par défaut.
 import { Lang, MetricKey, Platform, TemplateKey } from './types'
 
-export const PLATFORM_NAMES: Record<Platform, string> = { youtube: 'YouTube', instagram: 'Instagram', tiktok: 'TikTok', brawlhalla: 'Brawlhalla' }
+export const PLATFORM_NAMES: Record<Platform, string> = { youtube: 'YouTube', instagram: 'Instagram', tiktok: 'TikTok' }
 
 export const METRIC_NAMES: Record<Lang, Record<MetricKey, string>> = {
-  fr: { subscribers: 'Abonnés', views: 'Vues', likes: 'Likes', comments: 'Commentaires', videos: 'Vidéos', elo_1v1: 'ELO 1v1', peak_1v1: 'ELO max 1v1',
-    elo_2v2: 'ELO 2v2 (meilleure équipe)', games: 'Parties', wins: 'Victoires', winrate: 'Taux de victoire', level: 'Niveau', global_rank: 'Classement mondial', region_rank: 'Classement régional' },
-  en: { subscribers: 'Subscribers', views: 'Views', likes: 'Likes', comments: 'Comments', videos: 'Videos', elo_1v1: '1v1 ELO', peak_1v1: '1v1 peak ELO',
-    elo_2v2: '2v2 ELO (best team)', games: 'Games', wins: 'Wins', winrate: 'Win rate', level: 'Level', global_rank: 'Global rank', region_rank: 'Regional rank' }
+  fr: { subscribers: 'Abonnés', views: 'Vues', likes: 'Likes', comments: 'Commentaires', videos: 'Vidéos' },
+  en: { subscribers: 'Subscribers', views: 'Views', likes: 'Likes', comments: 'Comments', videos: 'Videos' }
 }
 
 export const DEFAULT_TEMPLATES: Record<Lang, Record<TemplateKey, string>> = {

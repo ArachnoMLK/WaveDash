@@ -5,7 +5,7 @@ Windows dashboard for your **YouTube, Brawlhalla, TikTok, Discord** stats, and a
 
 Electron · React · TypeScript · SQLite · ECharts — gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
 
-> **Version 1.0.0**
+> **Version 1.0.1**
 >
 > Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit rester **public**.
 
@@ -14,11 +14,11 @@ Electron · React · TypeScript · SQLite · ECharts — gris/noir/blanc, verre 
 ## 🇫🇷 Français
 
 ### Ce que fait WaveDash
-- **Plateformes intégrées** : YouTube (abonnés, vues, vidéos, likes et commentaires des 50 dernières vidéos, meilleures vidéos) et Brawlhalla (ELO 1v1/2v2, classements, victoires, stats par légende).
+- **Plateforme intégrée** : YouTube (abonnés, vues, vidéos, likes et commentaires des 50 dernières vidéos, meilleures vidéos). Tout le reste passe par des plugins.
 - **Historique local** (SQLite) dès le début du suivi ; graphiques courbe, aire, barres, camembert, radar.
 - **Vue d'ensemble**, **objectifs**, **paliers** (10, 20, 50, 100…) avec notification Windows et célébration, **export** des données.
 - **Mode démo** : données simulées pour tout essayer sans clé API.
-- **Personnalisation** : thème, langue, verre, animations, fréquence d'actualisation, type de graphique par statistique, démarrage avec Windows, barre système.
+- **Personnalisation** : thème, langue, verre (et bureau visible même fenêtre agrandie), animations, onglets renommables, réordonnables et masquables (plugins compris), fréquence d'actualisation, type de graphique par statistique, démarrage avec Windows, barre système.
 - **Mises à jour automatiques** silencieuses depuis les Releases GitHub (installateur vérifié par SHA-512).
 
 ### Plugins `.wdsh`
@@ -26,6 +26,7 @@ Un plugin ajoute une source de données. Il tourne dans un **bac à sable QuickJ
 
 - **Catalogue en ligne** ([WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins)) : index **signé** (Ed25519), chaque paquet vérifié par SHA-256, mises à jour silencieuses seulement si les permissions ne changent pas.
 - **Plugins fournis** (`examples/plugins/`) :
+  - **Brawlhalla (API officielle)** : ELO, classements, victoires et légendes avec ta clé Blue Mammoth Games (remplace l'ancienne plateforme intégrée).
   - **Brawlhalla Replays** : lit et importe tes fichiers `.replay` (patchs 10.02 à 11.00). Bilan par légende, arme, carte, mode, coéquipier et adversaire, détail de chaque partie, recherche d'un joueur, d'une carte ou d'une légende, et outil « Croiser tes données » (ex. « Légendes × Modes avec Untel »).
   - **TikTok (profil public)** : abonnés, likes, vidéos depuis la page publique du profil.
   - **Discord (serveurs)** : membres, en ligne, boosts et activité des salons via un bot (API officielle).
@@ -39,7 +40,7 @@ Télécharge `WaveDash-Setup-x.y.z.exe` dans l'onglet **Releases**. L'installate
 | Source | Ce qu'il faut | Limites |
 |---|---|---|
 | YouTube | Clé « YouTube Data API v3 » (Google Cloud Console, gratuit) | Likes/commentaires = 50 dernières vidéos |
-| Brawlhalla | Clé personnelle demandée à Blue Mammoth Games | Recherche par ID Brawlhalla ou Steam ID64 |
+| Brawlhalla (plugin) | Clé personnelle demandée à Blue Mammoth Games | Recherche par ID Brawlhalla ou Steam ID64 |
 | Discord (plugin) | Jeton d'un bot invité sur le serveur | Ne lit jamais le contenu des messages |
 | TikTok (plugin) | Aucune | Page publique, peut casser si TikTok la change |
 
@@ -50,6 +51,7 @@ Les clés ne sont jamais écrites en clair, jamais commitées, et jamais renvoy�
 npm install
 npm run dev        # application avec rechargement à chaud
 npm run typecheck  # vérifie les types
+npm test           # tests automatiques (bac à sable, réseau, fichiers, ZIP, base, plugins fournis)
 npm run dist       # installateur dans /dist (sous Windows)
 ```
 Publier une version : incrémenter `package.json`, puis `git tag vX.Y.Z && git push origin vX.Y.Z` ; le workflow *Release* construit et publie l'installateur.
@@ -58,9 +60,9 @@ Publier une version : incrémenter `package.json`, puis `git tag vX.Y.Z && git p
 
 ## 🇬🇧 English
 
-WaveDash tracks YouTube and Brawlhalla natively, keeps a local SQLite history, and shows it with charts, goals, milestones (Windows notifications) and export. A **demo mode** works without any API key.
+WaveDash tracks YouTube natively, keeps a local SQLite history, and shows it with charts, goals, milestones (Windows notifications) and export. A **demo mode** works without any API key.
 
-**Plugins** (`.wdsh`) add data sources. Each runs in a QuickJS sandbox inside a separate process, limited to the network domains and the read-only folder it declares. The online catalog is **signed** (Ed25519) and every package is checked by SHA-256. Bundled plugins: Brawlhalla Replays (reads your `.replay` files: per legend/map/mode/teammate stats, search, data crossing), TikTok public profile, Discord servers (bot, official API), weather and folder stats examples. Plugin guide (French): [docs/PLUGINS.md](docs/PLUGINS.md).
+**Plugins** (`.wdsh`) add data sources. Each runs in a QuickJS sandbox inside a separate process, limited to the network domains and the read-only folder it declares. The online catalog is **signed** (Ed25519) and every package is checked by SHA-256. Bundled plugins: Brawlhalla official API (ELO, rankings, legends), Brawlhalla Replays (reads your `.replay` files: per legend/map/mode/teammate stats, search, data crossing), TikTok public profile, Discord servers (bot, official API), weather and folder stats examples. Plugin guide (French): [docs/PLUGINS.md](docs/PLUGINS.md).
 
 Download the installer from **Releases** (unsigned: SmartScreen warns on first launch). API keys are entered in Settings › Connected accounts and encrypted with Windows DPAPI. Development: `npm install && npm run dev`.
 
@@ -73,6 +75,7 @@ src/preload     Pont sécurisé exposé à l'interface
 src/renderer    Interface React (pages/, components/, lib/, i18n/)
 src/shared      Types communs et validation des plugins
 examples        Plugins fournis
+tests           Tests automatiques (npm test)
 docs            Guide des plugins, étude du lecteur de replays
 ```
 

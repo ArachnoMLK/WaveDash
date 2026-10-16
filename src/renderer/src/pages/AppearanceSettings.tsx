@@ -6,15 +6,27 @@ import { Row, Section, Slider } from '../components/settingsUi'
 import { Switch, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
 import { navLabelKey, orderedNav } from '../lib/constants'
+import { pluginAccountOfRoute, pluginNavIds, pluginNavLabel } from '../lib/plugin'
 
 const ACCENTS = ['#8ab4ff', '#7ee0a1', '#ff8f8f', '#ffd479', '#c9a0ff', '#ff9ec7']
 
+/** Nom d'un onglet : modifiable sur place, enregistré en quittant le champ (vide = nom par défaut). */
+function NavName({ value, placeholder, aria, onCommit }: { value: string; placeholder: string; aria: string; onCommit: (v: string) => void }): JSX.Element {
+  const [v, setV] = useState(value)
+  return (
+    <input className="grow nav-name" value={v} placeholder={placeholder} aria-label={aria} maxLength={40}
+      onChange={(e) => setV(e.target.value)} onBlur={() => { if (v !== value) onCommit(v) }}
+      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') { setV(value); setTimeout(() => (e.target as HTMLInputElement).blur()) } }} />
+  )
+}
+
 export function AppearanceSettings(): JSX.Element {
-  const { t, settings: s, info, updateSettings: up } = useApp()
+  const { t, settings: s, info, updateSettings: up, plugins, pluginAccounts } = useApp()
   const [presetName, setPresetName] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
   const names = Object.keys(s.themePresets)
-  const order = orderedNav(s.navOrder)
+  const order = orderedNav(s.navOrder, pluginNavIds(plugins, pluginAccounts))
+  const label = (id: string): string => (pluginAccountOfRoute(id) !== null ? pluginNavLabel(id, plugins, pluginAccounts) : t(navLabelKey(id)))
 
   const savePreset = async (): Promise<void> => {
     const name = presetName.trim().slice(0, 40)
@@ -46,6 +58,11 @@ export function AppearanceSettings(): JSX.Element {
     if (j < 0 || j >= next.length) return
     ;[next[i], next[j]] = [next[j], next[i]]
     void up({ navOrder: next })
+  }
+  const rename = (id: string, name: string): void => {
+    const { [id]: _old, ...rest } = s.navLabels
+    const clean = name.trim().slice(0, 40)
+    void up({ navLabels: clean && clean !== label(id) ? { ...rest, [id]: clean } : rest })
   }
   const toggleHidden = (id: string, visible: boolean): void =>
     void up({ navHidden: visible ? s.navHidden.filter((x) => x !== id) : [...s.navHidden, id] })
@@ -92,6 +109,11 @@ export function AppearanceSettings(): JSX.Element {
             <Row title={t('ap.material')} help={t('ap.material.help')}>
               <Tabs<NativeMaterial> value={s.nativeMaterial} onChange={(v) => void up({ nativeMaterial: v })}
                 options={[{ id: 'none', label: t('ap.material.none') }, { id: 'mica', label: 'Mica' }, { id: 'acrylic', label: t('ap.material.acrylic') }]} />
+            </Row>
+          )}
+          {info?.nativeGlass && s.nativeMaterial !== 'none' && (
+            <Row title={t('ap.seeThrough')} help={t('ap.seeThrough.help')}>
+              <Switch on={s.seeThroughMaximized} label={t('ap.seeThrough')} onChange={(v) => void up({ seeThroughMaximized: v })} />
             </Row>
           )}
         </>}
@@ -160,7 +182,7 @@ export function AppearanceSettings(): JSX.Element {
         <p className="muted small" style={{ marginBottom: 6 }}>{t('ap.nav.help')}</p>
         {order.map((id, i) => (
           <div className="order-row" key={id}>
-            <span className="grow">{t(navLabelKey(id))}</span>
+            <NavName key={s.navLabels[id] ?? ''} value={s.navLabels[id] ?? ''} placeholder={label(id)} aria={t('ap.nav.rename')} onCommit={(v) => rename(id, v)} />
             <button className="btn small" disabled={i === 0} aria-label={t('ap.up')} onClick={() => move(i, -1)}>↑</button>
             <button className="btn small" disabled={i === order.length - 1} aria-label={t('ap.down')} onClick={() => move(i, 1)}>↓</button>
             {id === 'overview' ? <span style={{ width: 42 }} /> : <Switch on={!s.navHidden.includes(id)} label={id} onChange={(v) => toggleHidden(id, v)} />}

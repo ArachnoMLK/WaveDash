@@ -43,7 +43,7 @@ function deliver(s: Settings, e: MilestoneEvent): void {
  * Compare les valeurs précédentes aux nouvelles. À appeler AVANT l'enregistrement du nouveau relevé.
  * Le tout premier relevé d'un compte ne déclenche rien (rien à comparer).
  */
-export function processRefresh(a: Account, prev: LatestMetrics, prevTier: string | null, res: ProviderResult): void {
+export function processRefresh(a: Account, prev: LatestMetrics, res: ProviderResult): void {
   if (Object.keys(prev).length === 0) return
   const s = db.getSettings()
   const ts = Date.now()
@@ -60,18 +60,6 @@ export function processRefresh(a: Account, prev: LatestMetrics, prevTier: string
     const base = { accountId: a.id, platform: a.platform, account: a.displayName, metric, threshold, previous: from, value: to,
       direction: (up !== null ? 'up' : 'down') as 'up' | 'down', ts, demo: a.demo }
     const event: MilestoneEvent = { ...base, id: 0, message: message(s, up !== null ? 'up' : 'down', a, base) }
-    event.id = db.insertEvent(event)
-    deliver(s, event)
-  }
-
-  // Changement de rang Brawlhalla : le sens (hausse/baisse) est déduit de l'évolution de l'ELO 1v1.
-  const tier = res.extra?.tier
-  if (a.platform === 'brawlhalla' && s.notifyRank && prevTier && tier && prevTier !== tier) {
-    const eloFrom = prev.elo_1v1 ?? 0, eloTo = res.metrics.elo_1v1 ?? 0
-    const up = eloTo >= eloFrom
-    const base = { accountId: a.id, platform: a.platform, account: a.displayName, metric: 'rank', threshold: eloTo, previous: eloFrom, value: eloTo,
-      direction: (up ? 'up' : 'down') as 'up' | 'down', ts, fromRank: prevTier, toRank: tier, demo: a.demo }
-    const event: MilestoneEvent = { ...base, id: 0, message: message(s, up ? 'rankUp' : 'rankDown', a, base) }
     event.id = db.insertEvent(event)
     deliver(s, event)
   }

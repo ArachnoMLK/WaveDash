@@ -37,7 +37,7 @@ function buildJson(): string {
       const pts = db.getSeries(a.id, m, 0)
       if (pts.length) metrics[m] = pts.map((p) => [p.ts, p.value])
     }
-    return { platform: a.platform, displayName: a.displayName, externalId: a.externalId, demo: a.demo, metrics, items: db.getItems(a.id), legends: db.getLegends(a.id) }
+    return { platform: a.platform, displayName: a.displayName, externalId: a.externalId, demo: a.demo, metrics, items: db.getItems(a.id) }
   })
   // Comptes de plugins : séries des métriques déclarées dans le manifeste du plugin.
   const pluginAccounts = db.listPluginAccountRows().map((pa) => {
@@ -84,8 +84,7 @@ function buildReportHtml(s: Settings): string {
     const rows = METRICS_BY_PLATFORM[a.platform].map((m) => {
       const cur = db.valueAt(a.id, m, now)
       if (cur === null) return ''
-      const rank = m === 'global_rank' || m === 'region_rank'
-      return `<tr><td>${esc(METRIC_NAMES[s.lang][m])}</td><td>${rank ? '#' : ''}${nf.format(cur)}${m === 'winrate' ? ' %' : ''}</td>
+      return `<tr><td>${esc(METRIC_NAMES[s.lang][m])}</td><td>${nf.format(cur)}</td>
         <td>${gain(a.id, m, 7, cur)}</td><td>${gain(a.id, m, 30, cur)}</td><td>${sparkline(db.getSeries(a.id, m, now - 30 * DAY))}</td></tr>`
     }).join('')
     return `<h2>${esc(PLATFORM_NAMES[a.platform])} · ${esc(a.displayName)}${a.demo ? ` <small>(${L.demo})</small>` : ''}</h2>

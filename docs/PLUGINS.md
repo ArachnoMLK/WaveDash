@@ -126,7 +126,7 @@ Le script s'exécute dans **QuickJS**, un moteur JavaScript isolé (WebAssembly)
 
 - **mémoire** : 48 Mo ; **pile** : 256 Ko ;
 - **calcul** : 8 s de temps de calcul cumulé ; **durée totale** : 45 s (réseau compris) ;
-- **réseau** : 30 requêtes, 5 Mo par réponse, 15 s par requête ; HTTPS uniquement ; redirections revérifiées ; adresses locales et privées (`localhost`, `192.168.x.x`, `10.x.x.x`…) **toujours refusées**, y compris si un nom de domaine y pointe ;
+- **réseau** : 30 requêtes, 5 Mo par réponse, 15 s par requête ; HTTPS uniquement ; redirections revérifiées (vers un autre hôte, les en-têtes `Authorization` et `Cookie` ne suivent pas) ; adresses locales et privées (`localhost`, `192.168.x.x`, `10.x.x.x`…) **toujours refusées**, y compris si un nom de domaine y pointe ;
 - **fichiers** : un seul dossier, sans sous-dossiers ni liens symboliques, lecture seule.
 
 Après **5 échecs consécutifs**, le plugin est désactivé automatiquement. À l'installation, WaveDash affiche les permissions demandées et l'utilisateur doit confirmer.
@@ -182,11 +182,17 @@ Hypothèses non vérifiées : la signification exacte de la liste de type 7 ; le
 
 Dégâts infligés et subis, arme tenue, positions (air, sol, mur), combos, dashs, auteur des KOs hors 1v1 : rien de cela n'est **dans** le fichier. Il faudrait rejouer la partie avec le moteur du jeu à partir des inputs, ce que fait Yarralytics sur ses serveurs.
 
+Le format de fichier a été compris grâce aux projets open source BrawlhallaReplayLibrary (allhailcheese) et brawlhalla-replay-reader (itselectroz), tous deux sous licence MIT.
+
+## Plugin fourni : Brawlhalla (API officielle)
+
+`examples/brawlhalla-api-1.0.0.wdsh` remplace, depuis WaveDash 1.0.1, la plateforme Brawlhalla intégrée. Il lit ton profil par l'API officielle (seul domaine permis : `api.brawlhalla.com`) avec ta clé personnelle Blue Mammoth Games, enregistrée comme secret du plugin (chiffrée par Windows). Saisie : ID Brawlhalla, Steam ID64 ou lien `steamcommunity.com/profiles/…`. Métriques : ELO 1v1 (principale) et 2v2, ELO max, classements mondial et régional, parties, victoires, taux de victoire, niveau ; une ligne par légende (parties, victoires, KOs, chutes, niveau, temps de jeu) et un bilan (rang, région, clan, équipes 2v2).
+
+À la mise à jour, un compte Brawlhalla intégré est rattaché à ce plugin avec son historique, sa clé et ses règles de paliers (l'ELO garde un palier tous les 100 points) ; un compte de démo est supprimé. La notification de changement de rang (Or 3 → Platine 0…) disparaît : un plugin ne renvoie que des nombres.
+
 ## Plugin fourni : TikTok (profil public)
 
 `examples/tiktok-profile-1.0.0.wdsh` suit un profil TikTok public (abonnés, abonnements, likes reçus, vidéos, amis) en lisant sa page publique, sans compte ni clé, une fois par heure. Permission réseau : `www.tiktok.com` seulement. Ce n'est pas une API officielle : la lecture peut cesser si TikTok change sa page, et elle n'est pas prévue par ses conditions d'utilisation. En cas de changement, le plugin affiche une erreur au lieu de chiffres faux.
-
-Le format de fichier a été compris grâce aux projets open source BrawlhallaReplayLibrary (allhailcheese) et brawlhalla-replay-reader (itselectroz), tous deux sous licence MIT.
 
 ## Plugin fourni : Discord (serveurs)
 

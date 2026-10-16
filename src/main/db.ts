@@ -3,7 +3,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 import {
-  Account, DEFAULT_SETTINGS, ItemStat, LatestMetrics, LegendStat, MetricKey, MilestoneEvent, Platform, Point, Settings
+  Account, DEFAULT_SETTINGS, ItemStat, LatestMetrics, MetricKey, MilestoneEvent, Platform, Point, Settings
 } from '@shared/types'
 import { ColumnStat, PLUGIN_LIMITS, PluginItem, PluginItemsPage } from '@shared/plugin'
 
@@ -177,20 +177,6 @@ export const getItems = (accountId: number): ItemStat[] =>
   (db.prepare('SELECT * FROM items WHERE account_id = ? ORDER BY views DESC LIMIT 50').all(accountId) as any[])
     .map((r) => ({ externalId: r.external_id, title: r.title, publishedAt: r.published_at, views: r.views, likes: r.likes, comments: r.comments }))
 
-export function saveLegends(accountId: number, legends: LegendStat[]): void {
-  const up = db.prepare(`INSERT INTO legend_stats VALUES (?,?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(account_id, legend_id) DO UPDATE SET name=excluded.name, games=excluded.games, wins=excluded.wins,
-    kos=excluded.kos, falls=excluded.falls, damage_dealt=excluded.damage_dealt, match_time=excluded.match_time, level=excluded.level`)
-  db.transaction(() => {
-    for (const l of legends) up.run(accountId, l.legendId, l.name, l.games, l.wins, l.kos, l.falls, l.damageDealt, l.matchTimeSec, l.level)
-  })()
-}
-
-export const getLegends = (accountId: number): LegendStat[] =>
-  (db.prepare('SELECT * FROM legend_stats WHERE account_id = ? ORDER BY games DESC').all(accountId) as any[])
-    .map((r) => ({ legendId: r.legend_id, name: r.name, games: r.games, wins: r.wins, kos: r.kos, falls: r.falls,
-      damageDealt: r.damage_dealt, matchTimeSec: r.match_time, level: r.level }))
-
 /* ---------- Valeurs propres à un compte (rang précédent) ---------- */
 export const getMeta = (accountId: number, key: string): string | null =>
   (db.prepare('SELECT value FROM account_meta WHERE account_id = ? AND key = ?').get(accountId, key) as { value: string } | undefined)?.value ?? null
@@ -247,6 +233,16 @@ export function deletePlugin(id: string): void {
   db.transaction(() => {
     db.prepare('DELETE FROM accounts WHERE id IN (SELECT account_id FROM plugin_accounts WHERE plugin_id = ?)').run(id)
     db.prepare('DELETE FROM plugins WHERE id = ?').run(id)
+  })()
+}
+
+/** Rattache un compte existant (et tout son historique) à un plugin. */
+export function convertToPluginAccount(accountId: number, pluginId: string, inputs: Record<string, string>): void {
+  db.transaction(() => {
+    db.prepare("UPDATE accounts SET platform = 'plugin', input = '' WHERE id = ?").run(accountId)
+    db.prepare('INSERT OR REPLACE INTO plugin_accounts (account_id, plugin_id, inputs) VALUES (?,?,?)').run(accountId, pluginId, JSON.stringify(inputs))
+    db.prepare('DELETE FROM legend_stats WHERE account_id = ?').run(accountId)
+    db.prepare("DELETE FROM account_meta WHERE account_id = ? AND key = 'tier'").run(accountId)
   })()
 }
 

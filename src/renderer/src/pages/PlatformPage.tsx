@@ -7,7 +7,7 @@ import { categoryOption, Category, timeOption } from '../lib/charts'
 import { CATEGORY_CHARTS, chartKey, CHART_KEYS, DEFAULT_CHART, TIME_CHARTS } from '../lib/constants'
 import { ago, fmt, fmtDelta, fmtMetric } from '../lib/format'
 import { AccountData, RangeKey, useAccountData } from '../lib/hooks'
-import { prettyName, useChartTheme } from '../lib/useChartTheme'
+import { useChartTheme } from '../lib/useChartTheme'
 
 const RANGES: RangeKey[] = ['7', '30', '90', 'all']
 
@@ -45,30 +45,6 @@ function YouTubeExtras({ data }: { data: AccountData }): JSX.Element | null {
       </Reveal>
       <CategoryCard title={t('platform.topVideos')} k={CHART_KEYS.videoViews} data={top.map((v) => ({ name: v.title.slice(0, 18), value: v.views }))} />
     </div>
-  )
-}
-
-function BrawlhallaExtras({ data }: { data: AccountData }): JSX.Element | null {
-  const { t, settings } = useApp()
-  if (!data.legends.length) return null
-  const byGames = data.legends.slice(0, 8)
-  const wr = (l: { wins: number; games: number }): number => (l.games ? (l.wins / l.games) * 100 : 0)
-  return (
-    <>
-      <div className="grid two sect">
-        <CategoryCard title={t('platform.legendGames')} k={CHART_KEYS.legendGames} data={byGames.map((l) => ({ name: prettyName(l.name), value: l.games }))} />
-        <CategoryCard title={t('platform.legendWinrate')} k={CHART_KEYS.legendWinrate} data={byGames.map((l) => ({ name: prettyName(l.name), value: Math.round(wr(l) * 10) / 10 }))} unit=" %" radarMax={100} />
-      </div>
-      <Reveal className="glass pad sect">
-        <h2 style={{ marginBottom: 6 }}>{t('platform.legends')}</h2>
-        {data.legends.map((l) => (
-          <div className="list-item" key={l.legendId}>
-            <span>{prettyName(l.name)}</span>
-            <span className="muted">{fmt(l.games, settings.lang)} · {fmt(wr(l), settings.lang, 1)} %</span>
-          </div>
-        ))}
-      </Reveal>
-    </>
   )
 }
 
@@ -123,7 +99,7 @@ export function PlatformPage({ platform, onAdd }: { platform: Platform; onAdd: (
           return (
             <Reveal key={m} delay={i * 0.06}>
               <StatCard label={t(`metric.${m}`)} value={v === undefined ? '—' : fmtMetric(m, v, settings.lang)} selected={m === metric} onClick={() => setMetric(m)}
-                delta={delta === undefined ? undefined : fmtDelta(delta, settings.lang, m === 'winrate' ? 1 : 0)} />
+                delta={delta === undefined ? undefined : fmtDelta(delta, settings.lang, 0)} />
             </Reveal>
           )
         })}
@@ -139,12 +115,11 @@ export function PlatformPage({ platform, onAdd }: { platform: Platform; onAdd: (
           </div>
         </div>
         {series.length > 1
-          ? <Chart option={timeOption(type, [{ name: t(`metric.${metric}`), points: series }], th, metric === 'winrate' ? ' %' : '')} height={320} />
+          ? <Chart option={timeOption(type, [{ name: t(`metric.${metric}`), points: series }], th, '')} height={320} />
           : <p className="muted" style={{ padding: '60px 0', textAlign: 'center' }}>{t('platform.noData')}</p>}
       </Reveal>
 
       {data && platform === 'youtube' && <YouTubeExtras data={data} />}
-      {data && platform === 'brawlhalla' && <BrawlhallaExtras data={data} />}
     </div>
   )
 }

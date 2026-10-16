@@ -13,7 +13,6 @@ const api: WaveApi = {
   getSeries: (id, m, since) => ipcRenderer.invoke('data:series', id, m, since),
   getLatest: (id) => ipcRenderer.invoke('data:latest', id),
   getItems: (id) => ipcRenderer.invoke('data:items', id),
-  getLegends: (id) => ipcRenderer.invoke('data:legends', id),
   refreshNow: () => ipcRenderer.invoke('data:refresh'),
   hasSecret: (k) => ipcRenderer.invoke('secret:has', k),
   setSecret: (k, v) => ipcRenderer.invoke('secret:set', k, v),

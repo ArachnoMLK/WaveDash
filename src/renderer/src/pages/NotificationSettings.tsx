@@ -9,7 +9,8 @@ import { useApp } from '../lib/AppContext'
 import { fmt } from '../lib/format'
 import { playSound } from '../lib/sound'
 
-const TEMPLATES: TemplateKey[] = ['up', 'down', 'rankUp', 'rankDown']
+// Les modèles de changement de rang servaient au Brawlhalla intégré, devenu un plugin : seuls « hausse » et « baisse » restent.
+const TEMPLATES: TemplateKey[] = ['up', 'down']
 
 /** Éditeur des paliers d'une statistique (séquence, incrément, valeurs précises, baisses). */
 function RuleEditor({ platform, metric }: { platform: Platform; metric: MetricKey }): JSX.Element {
@@ -68,7 +69,6 @@ export function NotificationSettings(): JSX.Element {
     <div>
       <Section title={t('notif.general')}>
         <Row title={t('notif.enabled')} help={t('notif.enabled.help')}><Switch on={s.notificationsEnabled} label={t('notif.enabled')} onChange={(v) => void up({ notificationsEnabled: v })} /></Row>
-        <Row title={t('notif.rank')}><Switch on={s.notifyRank} label={t('notif.rank')} onChange={(v) => void up({ notifyRank: v })} /></Row>
         <Row title={t('notif.sound')}><Switch on={s.notifySound} label={t('notif.sound')} onChange={(v) => void up({ notifySound: v })} /></Row>
         {s.notifySound && <>
           <Row title={t('notif.soundKind')}>

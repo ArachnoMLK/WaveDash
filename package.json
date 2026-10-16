@@ -1,7 +1,7 @@
 {
   "name": "wavedash",
   "productName": "WaveDash",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Dashboard centralisé : TikTok, Instagram, YouTube, Brawlhalla",
   "author": "WaveDash",
   "license": "MIT",
@@ -11,7 +11,8 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "dist": "npm run build && electron-builder --win nsis --publish never",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "test": "node tools/test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.1.0",

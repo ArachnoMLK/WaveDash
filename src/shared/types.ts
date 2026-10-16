@@ -1,9 +1,10 @@
 // Types partagés entre le processus principal, le preload et l'interface.
 
-export type Platform = 'youtube' | 'instagram' | 'tiktok' | 'brawlhalla'
-export const PLATFORMS: Platform[] = ['youtube', 'instagram', 'tiktok', 'brawlhalla']
+// Brawlhalla (API officielle) est un plugin depuis la 1.0.1 : les plateformes intégrées ne sont plus que celles-ci.
+export type Platform = 'youtube' | 'instagram' | 'tiktok'
+export const PLATFORMS: Platform[] = ['youtube', 'instagram', 'tiktok']
 /** Plateformes dont le fournisseur est livré dans cette version. */
-export const AVAILABLE_PLATFORMS: Platform[] = ['youtube', 'brawlhalla']
+export const AVAILABLE_PLATFORMS: Platform[] = ['youtube']
 
 export type ChartType = 'line' | 'area' | 'bar' | 'pie' | 'radar'
 export type ThemeMode = 'dark' | 'light'
@@ -12,22 +13,20 @@ export type Lang = 'fr' | 'en'
 /** Clés de métriques stockées dans la table `snapshots`. */
 export type MetricKey =
   | 'subscribers' | 'views' | 'likes' | 'comments' | 'videos'
-  | 'elo_1v1' | 'peak_1v1' | 'elo_2v2' | 'games' | 'wins' | 'winrate' | 'level' | 'global_rank' | 'region_rank'
 
 export const METRICS_BY_PLATFORM: Record<Platform, MetricKey[]> = {
   youtube: ['subscribers', 'views', 'likes', 'comments', 'videos'],
   instagram: ['subscribers', 'likes', 'comments'],
-  tiktok: ['subscribers', 'views', 'likes'],
-  brawlhalla: ['elo_1v1', 'peak_1v1', 'elo_2v2', 'games', 'wins', 'winrate', 'level', 'global_rank', 'region_rank']
+  tiktok: ['subscribers', 'views', 'likes']
 }
 
 export interface Account {
   id: number
   platform: Platform
-  /** Ce que l'utilisateur a saisi (lien, @handle, ID Brawlhalla…). */
+  /** Ce que l'utilisateur a saisi (lien, @handle…). */
   input: string
   displayName: string
-  /** Identifiant stable côté plateforme (ID de chaîne, brawlhalla_id…). */
+  /** Identifiant stable côté plateforme (ID de chaîne…). */
   externalId: string
   avatar?: string
   /** true = données simulées (mode démo). */
@@ -49,24 +48,10 @@ export interface ItemStat {
   comments: number
 }
 
-export interface LegendStat {
-  legendId: number
-  name: string
-  games: number
-  wins: number
-  kos: number
-  falls: number
-  damageDealt: number
-  matchTimeSec: number
-  level: number
-}
-
 /** Résultat d'une actualisation par un fournisseur. */
 export interface ProviderResult {
   metrics: Partial<Record<MetricKey, number>>
   items?: ItemStat[]
-  legends?: LegendStat[]
-  extra?: { tier?: string; region?: string }
 }
 
 export type SoundKind = 'chime' | 'pulse' | 'bell'
@@ -146,6 +131,8 @@ export interface Settings {
   glassSaturation: number
   /** Matériau natif de la fenêtre (Windows 11 uniquement). */
   nativeMaterial: NativeMaterial
+  /** Fenêtre agrandie : garder le bureau visible à travers (Windows rend opaque une fenêtre réellement maximisée). */
+  seeThroughMaximized: boolean
   bgMode: BgMode
   bgColor: string
   bgColor2: string
@@ -170,6 +157,8 @@ export interface Settings {
   bgImage: string | null
   navOrder: string[]
   navHidden: string[]
+  /** Noms personnalisés des onglets (identifiant d'onglet → nom) ; absent = nom par défaut. */
+  navLabels: Record<string, string>
   themePresets: Record<string, ThemeData>
 }
 
@@ -185,11 +174,11 @@ export type ThemeData = Pick<Settings, ThemeKey>
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark', lang: 'fr', refreshMinutes: 30, chartTypes: {}, scrapingEnabled: false,
   startWithWindows: false, closeToTray: true, autoUpdate: true,
-  glassEnabled: true, glass: 70, glassOpacity: 50, glassSaturation: 120, nativeMaterial: 'acrylic',
+  glassEnabled: true, glass: 70, glassOpacity: 50, glassSaturation: 120, nativeMaterial: 'acrylic', seeThroughMaximized: true,
   bgMode: 'default', bgColor: '#101010', bgColor2: '#2a2a2a', bgAngle: 160, bgBlur: 8, bgDim: 35, ambient: true,
   accentEnabled: false, accentColor: '#8ab4ff', chartPalette: 'multi',
   radius: 18, density: 'comfortable', uiScale: 100, fontFamily: 'inter', animations: 60,
-  bgImage: null, navOrder: ['overview', 'goals', 'youtube', 'instagram', 'tiktok', 'brawlhalla'], navHidden: [], themePresets: {},
+  bgImage: null, navOrder: ['overview', 'goals', 'youtube', 'instagram', 'tiktok'], navHidden: [], navLabels: {}, themePresets: {},
   notificationsEnabled: true, notifyRank: true, notifySound: true, notifySoundKind: 'chime', notifyVolume: 60,
   notifyCelebration: true, notifyTemplates: {}, milestoneRules: {}
 }
@@ -199,7 +188,7 @@ export interface UpdateStatus { state: UpdateState; version?: string; percent?: 
 
 export interface AppInfo { version: string; nativeGlass: boolean; encryptionAvailable: boolean }
 
-export type SecretKey = 'youtube.apiKey' | 'brawlhalla.apiKey'
+export type SecretKey = 'youtube.apiKey'
 
 import type { InstalledPlugin, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage } from './plugin'
 
@@ -226,7 +215,6 @@ export interface WaveApi {
   getSeries(accountId: number, metric: string, sinceMs: number): Promise<Point[]>
   getLatest(accountId: number): Promise<RawMetrics>
   getItems(accountId: number): Promise<ItemStat[]>
-  getLegends(accountId: number): Promise<LegendStat[]>
   refreshNow(): Promise<void>
   hasSecret(key: SecretKey): Promise<boolean>
   setSecret(key: SecretKey, value: string): Promise<void>

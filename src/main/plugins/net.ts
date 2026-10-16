@@ -31,7 +31,10 @@ export function hostAllowed(host: string, patterns: string[]): boolean {
 const BLOCKED = new net.BlockList()
 for (const [a, p] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
   ['192.0.0.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['224.0.0.0', 3]] as [string, number][]) BLOCKED.addSubnet(a, p, 'ipv4')
-for (const [a, p] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8]] as [string, number][]) BLOCKED.addSubnet(a, p, 'ipv6')
+// IPv6 : boucle locale, réseaux privés et de lien, multidiffusion, documentation, et les préfixes qui embarquent une adresse IPv4
+// (NAT64, 6to4, Teredo ; les IPv4 « mappées » sont déjà comparées aux plages IPv4) : ils pourraient mener à une adresse locale.
+for (const [a, p] of [['::', 128], ['::1', 128], ['64:ff9b::', 96], ['64:ff9b:1::', 48], ['2001::', 32], ['2001:db8::', 32],
+  ['2002::', 16], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8]] as [string, number][]) BLOCKED.addSubnet(a, p, 'ipv6')
 
 /** Adresse locale, privée, réservée ou de diffusion : interdite pour un plugin. */
 export function isPrivateAddress(ip: string): boolean {
@@ -43,9 +46,16 @@ export function isPrivateAddress(ip: string): boolean {
 
 const REDIRECTS = new Set([301, 302, 303, 307, 308])
 const DROPPED_HEADERS = new Set(['host', 'content-length', 'connection', 'transfer-encoding', 'upgrade', 'expect'])
+const SECRET_HEADERS = new Set(['authorization', 'cookie', 'proxy-authorization'])
 
 function once(url: URL, o: HttpOptions, cfg: NetConfig): Promise<{ status: number; headers: Record<string, string>; body: Buffer }> {
   return new Promise((resolve, reject) => {
+    // Une seule issue par requête : une erreur tardive (ex. flux coupé après le dépassement de taille) ne doit jamais
+    // devenir une exception non rattrapée, qui arrêterait tout le processus des plugins.
+    let settled = false
+    const fail = (e: unknown): void => { if (settled) return; settled = true; cleanup(); reject(e instanceof NetError ? e : new NetError('network', String((e as Error)?.message ?? e).slice(0, 120))) }
+    const onAbort = (): void => { fail(new NetError('timeout', 'exécution interrompue')); req.destroy() }
+    const cleanup = (): void => cfg.signal?.removeEventListener('abort', onAbort)
     const secure = url.protocol === 'https:'
     const headers: Record<string, string> = { 'user-agent': 'WaveDash-plugin', 'accept-encoding': 'gzip, deflate, br' }
     for (const [k, v] of Object.entries(o.headers ?? {})) if (typeof v === 'string' && !DROPPED_HEADERS.has(k.toLowerCase())) headers[k.toLowerCase()] = v.slice(0, 2000)
@@ -69,20 +79,25 @@ function once(url: URL, o: HttpOptions, cfg: NetConfig): Promise<{ status: numbe
       const chunks: Buffer[] = []
       let size = 0
       res.on('data', (c: Buffer) => {
+        if (settled) return
         size += c.length
-        if (size > cfg.maxBytes) { req.destroy(new NetError('too_large', 'réponse trop volumineuse')); return }
+        if (size > cfg.maxBytes) { fail(new NetError('too_large', 'réponse trop volumineuse')); res.destroy(); req.destroy(); return }
         chunks.push(c)
       })
       res.on('end', () => {
+        if (settled) return
+        settled = true; cleanup()
         const h: Record<string, string> = {}
         for (const [k, v] of Object.entries(res.headers)) h[k] = Array.isArray(v) ? v.join(', ') : String(v ?? '')
         resolve({ status: res.statusCode ?? 0, headers: h, body: Buffer.concat(chunks) })
       })
-      res.on('error', reject)
+      res.on('error', fail)
+      res.on('aborted', () => fail(new NetError('network', 'réponse interrompue')))
     })
-    req.on('timeout', () => req.destroy(new NetError('timeout', 'délai dépassé')))
-    req.on('error', (e) => reject(e instanceof NetError ? e : new NetError('network', e.message.slice(0, 120))))
-    cfg.signal?.addEventListener('abort', () => req.destroy(new NetError('timeout', 'exécution interrompue')), { once: true })
+    req.on('timeout', () => { fail(new NetError('timeout', 'délai dépassé')); req.destroy() })
+    req.on('error', fail)
+    if (cfg.signal?.aborted) { onAbort(); return }
+    cfg.signal?.addEventListener('abort', onAbort, { once: true })
     if (body) req.write(body)
     req.end()
   })
@@ -102,6 +117,7 @@ export async function httpRequest(urlStr: string, o: HttpOptions, cfg: NetConfig
   try { url = new URL(urlStr) } catch { throw new NetError('bad_request', 'URL invalide') }
   let method = (o.method ?? 'GET').toUpperCase()
   let body = o.body
+  let headers: Record<string, string> = o.headers && typeof o.headers === 'object' ? o.headers : {}
   if (!/^[A-Z]{3,7}$/.test(method)) throw new NetError('bad_request', 'méthode invalide')
   if (body !== undefined && (typeof body !== 'string' || body.length > 100_000)) throw new NetError('bad_request', 'corps de requête trop volumineux')
 
@@ -111,9 +127,12 @@ export async function httpRequest(urlStr: string, o: HttpOptions, cfg: NetConfig
     if (net.isIP(url.hostname.replace(/^\[|\]$/g, '')) && !cfg.allowLocalForTests) throw new NetError('blocked', 'adresse IP directe interdite')
     if (!hostAllowed(url.hostname, cfg.allowedHosts)) throw new NetError('blocked', `domaine non autorisé : ${url.hostname}`)
 
-    const r = await once(url, { method, headers: o.headers, body }, cfg)
+    const r = await once(url, { method, headers, body }, cfg)
     if (REDIRECTS.has(r.status) && r.headers.location) {
+      const from = url.host
       try { url = new URL(r.headers.location, url) } catch { throw new NetError('bad_request', 'redirection invalide') }
+      // Vers un autre hôte : les identifiants (jeton de bot, cookies) ne suivent pas la redirection.
+      if (url.host !== from) headers = Object.fromEntries(Object.entries(headers).filter(([k]) => !SECRET_HEADERS.has(k.toLowerCase())))
       if (r.status === 303 || ((r.status === 301 || r.status === 302) && method === 'POST')) { method = 'GET'; body = undefined }
       continue
     }

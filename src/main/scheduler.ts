@@ -13,14 +13,12 @@ let onUpdate: () => void = () => {}
 /** Actualise un compte et enregistre le résultat ; l'erreur éventuelle est conservée pour l'affichage. */
 export async function refreshAccount(a: Account): Promise<void> {
   try {
-    const prev = db.getLatest(a.id), prevTier = db.getMeta(a.id, 'tier')
+    const prev = db.getLatest(a.id)
     const res = a.demo ? nextMetrics(a.platform, prev) : await getProvider(a.platform).fetch(a.externalId)
     // Les paliers sont comparés avant d'enregistrer le nouveau relevé ; une erreur de notification ne doit pas bloquer l'actualisation.
-    try { processRefresh(a, prev, prevTier, res) } catch (e) { console.error('Paliers :', e) }
+    try { processRefresh(a, prev, res) } catch (e) { console.error('Paliers :', e) }
     db.insertSnapshots(a.id, res.metrics)
-    if (res.extra?.tier) db.setMeta(a.id, 'tier', res.extra.tier)
     if (res.items) db.saveItems(a.id, res.items)
-    if (res.legends) db.saveLegends(a.id, res.legends)
     db.markSync(a.id, null)
   } catch (e) {
     db.markSync(a.id, e instanceof ProviderError ? e.code : 'api')

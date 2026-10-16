@@ -1,5 +1,5 @@
 // Processus principal : fenêtre en verre, barre système, mises à jour, démarrage des services.
-import { app, BrowserWindow, Menu, shell, Tray } from 'electron'
+import { app, BrowserWindow, Menu, screen, shell, Tray } from 'electron'
 import { join } from 'path'
 import { getSettings, initDb } from './db'
 import { registerIpc } from './ipc'
@@ -8,6 +8,7 @@ import { applySystemSettings, materialFor, solidBackground } from './system'
 import { setPendingFile, syncBundledPlugins } from './plugins/manager'
 import { initUpdater } from './updater'
 import { stopPluginHost } from './plugins/isolated'
+import { migrateBuiltinBrawlhalla } from './migrations'
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -33,6 +34,20 @@ function createWindow(): void {
   // Après une réduction, certaines configurations (fenêtre translucide) ne repeignent pas le contenu : on force le rendu.
   const repaint = (): void => win?.webContents.invalidate()
   win.on('restore', repaint); win.on('show', repaint); win.on('maximize', repaint); win.on('unmaximize', repaint)
+  // Windows rend opaque le matériau (Mica/Acrylique) d'une fenêtre maximisée. Option « voir le bureau en plein écran » :
+  // la fenêtre occupe alors toute la zone de travail sans être maximisée ; agrandir à nouveau rend la taille d'avant.
+  let before: Electron.Rectangle | null = null
+  win.on('maximize', () => {
+    const w = win, cur = getSettings()
+    if (!w || !cur.seeThroughMaximized || materialFor(cur) === 'none') return
+    const normal = w.getNormalBounds(), area = screen.getDisplayMatching(normal).workArea
+    const filled = normal.x === area.x && normal.y === area.y && normal.width === area.width && normal.height === area.height
+    const target = filled ? before : area
+    before = filled ? null : normal
+    w.unmaximize()
+    // Windows remet la taille d'avant juste après la sortie de l'état maximisé : on redimensionne ensuite.
+    if (target) setTimeout(() => { if (!w.isDestroyed() && !w.isMaximized()) w.setBounds(target) }, 60)
+  })
   // Les liens externes s'ouvrent dans le navigateur, jamais dans l'appli.
   win.webContents.setWindowOpenHandler(({ url }) => { void shell.openExternal(url); return { action: 'deny' } })
   win.on('close', (e) => {
@@ -70,6 +85,7 @@ else {
     app.setAppUserModelId('app.wavedash.desktop')   // requis pour les notifications Windows
     initDb()
     try { const up = syncBundledPlugins(); if (up.length) console.log('Plugins mis à jour :', up.join(', ')) } catch (e) { console.error('Plugins fournis :', e) }
+    try { migrateBuiltinBrawlhalla() } catch (e) { console.error('Migration Brawlhalla :', e) }
     createWindow()
     createTray()
     registerIpc(() => win)

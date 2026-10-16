@@ -1,4 +1,4 @@
-import { PluginMetric } from '@shared/plugin'
+import { InstalledPlugin, PluginAccount, PluginMetric } from '@shared/plugin'
 import { Lang } from '@shared/types'
 
 /** Formate la valeur d'une métrique de plugin selon son manifeste (nombre, pourcentage, rang, durée). */
@@ -17,3 +17,12 @@ export function fmtPluginMetric(m: PluginMetric, v: number, lang: Lang): string 
 /** Route d'une page de compte de plugin. */
 export const pluginRoute = (accountId: number): string => `plugin:${accountId}`
 export const pluginAccountOfRoute = (route: string): number | null => (route.startsWith('plugin:') ? Number(route.slice(7)) || null : null)
+/** Onglets des comptes de plugins installés, dans l'ordre de création. */
+export const pluginNavIds = (plugins: InstalledPlugin[], accounts: PluginAccount[]): string[] =>
+  accounts.filter((a) => plugins.some((p) => p.id === a.pluginId)).map((a) => pluginRoute(a.id))
+/** Nom de l'onglet d'un compte de plugin : le plugin, suivi du compte s'il en a plusieurs. */
+export function pluginNavLabel(route: string, plugins: InstalledPlugin[], accounts: PluginAccount[]): string {
+  const a = accounts.find((x) => x.id === pluginAccountOfRoute(route)), pl = a && plugins.find((p) => p.id === a.pluginId)
+  if (!a || !pl) return route
+  return accounts.filter((x) => x.pluginId === a.pluginId).length > 1 ? `${pl.manifest.name} · ${a.displayName}` : pl.manifest.name
+}

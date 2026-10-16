@@ -1,8 +1,7 @@
 import { motion } from 'framer-motion'
 import { useApp } from '../lib/AppContext'
 import { navLabelKey, orderedNav } from '../lib/constants'
-import { loc } from '@shared/plugin'
-import { pluginRoute } from '../lib/plugin'
+import { pluginAccountOfRoute, pluginNavIds, pluginNavLabel } from '../lib/plugin'
 import logoWhite from '../lib/logo-white.png'
 import logoDark from '../lib/logo-dark.png'
 
@@ -10,8 +9,8 @@ import logoDark from '../lib/logo-dark.png'
 export type Route = string
 
 /** Onglets visibles dans l'ordre choisi (la vue d'ensemble reste toujours présente). */
-export const visibleNav = (order: string[], hidden: string[]): string[] =>
-  orderedNav(order).filter((id) => id === 'overview' || !hidden.includes(id))
+export const visibleNav = (order: string[], hidden: string[], extra: string[] = []): string[] =>
+  orderedNav(order, extra).filter((id) => id === 'overview' || !hidden.includes(id))
 
 export function Sidebar({ route, onRoute }: { route: Route; onRoute: (r: Route) => void }): JSX.Element {
   const { t, accounts, settings, dur, update, plugins, pluginAccounts } = useApp()
@@ -24,13 +23,10 @@ export function Sidebar({ route, onRoute }: { route: Route; onRoute: (r: Route) 
   return (
     <nav className="glass sidebar">
       <div className="brand"><img src={settings.theme === 'dark' ? logoWhite : logoDark} alt="" />WaveDash</div>
-      {visibleNav(settings.navOrder, settings.navHidden).map((id) =>
-        item(id, t(navLabelKey(id)), accounts.some((a) => a.platform === id)))}
-      {pluginAccounts.map((a) => {
-        const pl = plugins.find((p) => p.id === a.pluginId)
-        if (!pl) return null
-        const several = pluginAccounts.filter((x) => x.pluginId === a.pluginId).length > 1
-        return item(pluginRoute(a.id), several ? `${pl.manifest.name} · ${a.displayName}` : pl.manifest.name, true)
+      {visibleNav(settings.navOrder, settings.navHidden, pluginNavIds(plugins, pluginAccounts)).map((id) => {
+        const custom = settings.navLabels[id]
+        return pluginAccountOfRoute(id) !== null ? item(id, custom || pluginNavLabel(id, plugins, pluginAccounts), true)
+          : item(id, custom || t(navLabelKey(id)), accounts.some((a) => a.platform === id))
       })}
       <div className="nav-spacer" />
       {update.state === 'ready' && (

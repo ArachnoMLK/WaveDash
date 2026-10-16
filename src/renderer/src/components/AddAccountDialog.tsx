@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { AVAILABLE_PLATFORMS, Platform, SecretKey } from '@shared/types'
 import { useApp } from '../lib/AppContext'
 
-export const SECRET_OF: Partial<Record<Platform, SecretKey>> = { youtube: 'youtube.apiKey', brawlhalla: 'brawlhalla.apiKey' }
+export const SECRET_OF: Partial<Record<Platform, SecretKey>> = { youtube: 'youtube.apiKey' }
 
 export function AddAccountDialog({ platform, replace = false, onClose }: { platform: Platform; replace?: boolean; onClose: () => void }): JSX.Element {
   const { t, dur, reloadAccounts } = useApp()

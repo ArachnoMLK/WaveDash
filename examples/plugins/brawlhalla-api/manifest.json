@@ -1,0 +1,41 @@
+{
+  "wdsh": 1,
+  "id": "wavedash.brawlhalla-api",
+  "name": "Brawlhalla (API officielle)",
+  "version": "1.0.0",
+  "author": "WaveDash",
+  "description": {
+    "fr": "Ton profil Brawlhalla par l'API officielle : ELO 1v1 et 2v2, pic, classements, parties, victoires, niveau, et le détail par légende. Demande une clé personnelle de Blue Mammoth Games.",
+    "en": "Your Brawlhalla profile through the official API: 1v1 and 2v2 ELO, peak, rankings, games, wins, level, and per-legend stats. Requires a personal key from Blue Mammoth Games."
+  },
+  "permissions": { "network": ["api.brawlhalla.com"], "folder": false },
+  "inputs": [
+    { "key": "player", "type": "text", "required": true, "placeholder": "7656119… / 1234567",
+      "label": { "fr": "ID Brawlhalla, Steam ID ou lien de profil Steam", "en": "Brawlhalla ID, Steam ID or Steam profile link" } }
+  ],
+  "secrets": [
+    { "key": "apiKey", "label": { "fr": "Clé API Brawlhalla", "en": "Brawlhalla API key" },
+      "help": { "fr": "Clé personnelle à demander à Blue Mammoth Games (portail développeur / Discord officiel).", "en": "Personal key to request from Blue Mammoth Games (developer portal / official Discord)." } }
+  ],
+  "metrics": [
+    { "key": "elo_1v1", "label": { "fr": "ELO 1v1", "en": "1v1 ELO" }, "primary": true },
+    { "key": "peak_1v1", "label": { "fr": "ELO max 1v1", "en": "1v1 peak ELO" } },
+    { "key": "elo_2v2", "label": { "fr": "ELO 2v2", "en": "2v2 ELO" } },
+    { "key": "games", "label": { "fr": "Parties", "en": "Games" } },
+    { "key": "wins", "label": { "fr": "Victoires", "en": "Wins" } },
+    { "key": "winrate", "label": { "fr": "Taux de victoire", "en": "Win rate" }, "format": "percent", "decimals": 1 },
+    { "key": "level", "label": { "fr": "Niveau", "en": "Level" } },
+    { "key": "global_rank", "label": { "fr": "Classement mondial", "en": "Global rank" }, "format": "rank" },
+    { "key": "region_rank", "label": { "fr": "Classement régional", "en": "Region rank" }, "format": "rank" }
+  ],
+  "itemColumns": [
+    { "key": "games", "label": { "fr": "Parties", "en": "Games" } },
+    { "key": "wins", "label": { "fr": "Victoires", "en": "Wins" } },
+    { "key": "winrate", "label": { "fr": "% V", "en": "Win %" }, "unit": "%" },
+    { "key": "kos", "label": "KOs" },
+    { "key": "falls", "label": { "fr": "Chutes", "en": "Falls" } },
+    { "key": "level", "label": { "fr": "Niveau", "en": "Level" } },
+    { "key": "time", "label": { "fr": "Temps de jeu", "en": "Play time" }, "unit": "h" }
+  ],
+  "refreshMinutes": 30
+}

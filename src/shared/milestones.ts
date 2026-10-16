@@ -6,20 +6,12 @@ import { MetricKey, MilestoneRule, Platform } from './types'
 export const MILESTONE_METRICS: Record<Platform, MetricKey[]> = {
   youtube: ['subscribers', 'views', 'likes', 'comments', 'videos'],
   instagram: ['subscribers', 'likes', 'comments'],
-  tiktok: ['subscribers', 'views', 'likes'],
-  brawlhalla: ['elo_1v1', 'peak_1v1', 'elo_2v2', 'games', 'wins', 'level']
+  tiktok: ['subscribers', 'views', 'likes']
 }
 
 export const ruleKey = (p: Platform, m: MetricKey): string => `${p}.${m}`
-const ELO: MetricKey[] = ['elo_1v1', 'peak_1v1', 'elo_2v2']
-
-/** Règle par défaut : séquence 10-20-50… pour les compteurs, un palier tous les 100 pour l'ELO. */
-export function defaultRule(p: Platform, m: MetricKey): MilestoneRule {
-  if (p === 'brawlhalla') {
-    return ELO.includes(m)
-      ? { enabled: m !== 'peak_1v1', sequence: false, increment: 100, custom: [], notifyDown: true }
-      : { enabled: false, sequence: true, increment: 0, custom: [], notifyDown: false }
-  }
+/** Règle par défaut : séquence 10-20-50… pour les compteurs principaux. */
+export function defaultRule(_p: Platform, m: MetricKey): MilestoneRule {
   return { enabled: ['subscribers', 'views', 'likes'].includes(m), sequence: true, increment: 0, custom: [], notifyDown: false }
 }
 

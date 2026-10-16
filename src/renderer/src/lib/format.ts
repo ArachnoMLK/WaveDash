@@ -8,10 +8,8 @@ export const fmt = (n: number, l: Lang, digits = 0): string =>
 export const compact = (n: number, l: Lang): string =>
   new Intl.NumberFormat(locale(l), { notation: 'compact', maximumFractionDigits: 1 }).format(n)
 
-/** Formate une valeur selon sa métrique (pourcentage pour le winrate, rangs avec #). */
-export function fmtMetric(k: MetricKey, v: number, l: Lang): string {
-  if (k === 'winrate') return `${fmt(v, l, 1)} %`
-  if (k.endsWith('rank')) return `#${fmt(v, l)}`
+/** Formate la valeur d'une métrique (forme compacte au-delà de 100 000). */
+export function fmtMetric(_k: MetricKey, v: number, l: Lang): string {
   return v >= 100_000 ? compact(v, l) : fmt(v, l)
 }
 

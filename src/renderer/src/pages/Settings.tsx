@@ -65,7 +65,7 @@ function GeneralSettings(): JSX.Element {
 
       <Section title={t('settings.charts')} delay={0.05}>
         <p className="muted small" style={{ marginBottom: 4 }}>{t('settings.charts.hint')}</p>
-        {(['youtube', 'brawlhalla'] as Platform[]).flatMap((p) => METRICS_BY_PLATFORM[p].map((m) => {
+        {(['youtube'] as Platform[]).flatMap((p) => METRICS_BY_PLATFORM[p].map((m) => {
           const k = chartKey(p, m)
           return (
             <Row key={k} title={`${t(`platform.${p}`)} · ${t(`metric.${m}`)}`}>
@@ -75,7 +75,7 @@ function GeneralSettings(): JSX.Element {
             </Row>
           )
         }))}
-        {([[CHART_KEYS.videoViews, 'youtube', 'platform.topVideos'], [CHART_KEYS.legendGames, 'brawlhalla', 'platform.legendGames'], [CHART_KEYS.legendWinrate, 'brawlhalla', 'platform.legendWinrate']] as const).map(([k, p, label]) => (
+        {([[CHART_KEYS.videoViews, 'youtube', 'platform.topVideos']] as const).map(([k, p, label]) => (
           <Row key={k} title={`${t(`platform.${p}`)} · ${t(label)}`}>
             <select value={settings.chartTypes[k] ?? DEFAULT_CHART[k]} onChange={(e) => setChart(k, e.target.value as ChartType)}>
               {CATEGORY_CHARTS.map((c) => <option key={c} value={c}>{t(`chart.${c}`)}</option>)}
