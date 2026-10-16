@@ -1,6 +1,6 @@
 // Page d'un compte de plugin : cartes de métriques, graphique d'évolution, éléments, journal.
-import { Fragment, useEffect, useState } from 'react'
-import { loc, PluginDetail, PluginItemsPage } from '@shared/plugin'
+import { Fragment, ReactNode, useEffect, useState } from 'react'
+import { DetailTable, loc, PluginDetail, PluginItemsPage } from '@shared/plugin'
 import { ChartType, Point, RawMetrics } from '@shared/types'
 import { Chart } from '../components/Chart'
 import { Reveal, StatCard, Tabs } from '../components/ui'
@@ -29,6 +29,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [list, setList] = useState<PluginItemsPage>({ items: [], total: 0, months: [] })
   const [page, setPage] = useState(0)
   const [month, setMonth] = useState('')
+  const [sort, setSort] = useState<{ key: string; desc: boolean }>({ key: 'ts', desc: true })
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
@@ -46,9 +47,9 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   // Éléments lus page par page (un plugin peut en garder des milliers), éventuellement pour un seul mois.
   useEffect(() => {
     let alive = true
-    void window.api.pluginAccountItems(accountId, page * PAGE, PAGE, month || undefined).then((r) => { if (alive) setList(r) })
+    void window.api.pluginAccountItems(accountId, page * PAGE, PAGE, month || undefined, sort.key, sort.desc).then((r) => { if (alive) setList(r) })
     return () => { alive = false }
-  }, [accountId, page, month, dataVersion])
+  }, [accountId, page, month, dataVersion, sort])
   useEffect(() => { setPage(0); setMonth(''); setOpenId(null) }, [accountId])
 
   if (!account || !plugin || !m) return <div className="glass empty"><p>{t('goals.noAccounts')}</p></div>
@@ -66,6 +67,8 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const hasDates = list.items.some((i) => i.ts)
   const hasDetail = list.items.some((i) => i.detail)
   const pages = Math.max(1, Math.ceil(list.total / PAGE))
+  // Un clic trie par la colonne (décroissant d'abord) ; un second clic inverse le sens.
+  const sortBy = (key: string): void => { setSort((s) => ({ key, desc: s.key === key ? !s.desc : true })); setPage(0); setOpenId(null) }
   const monthLabel = (ym: string): string => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)) - 1, 1).toLocaleDateString(settings.lang === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })
   const lang = settings.lang === 'fr' ? 'fr-FR' : 'en-US'
 
@@ -135,7 +138,8 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
           </div>
           {hasDetail && <p className="muted small" style={{ marginBottom: 6 }}>{t('pp.clickHint')}</p>}
           <div className="tbl-wrap"><table className="table">
-            <thead><tr><th>{t('pp.name')}</th>{hasDates && <th>{t('pp.date')}</th>}{m.itemColumns.map((c) => <th key={c.key}>{loc(c.label, settings.lang)}</th>)}</tr></thead>
+            <thead><tr><SortTh k="title" sort={sort} onSort={sortBy}>{t('pp.name')}</SortTh>{hasDates && <SortTh k="ts" sort={sort} onSort={sortBy}>{t('pp.date')}</SortTh>}
+              {m.itemColumns.map((c) => <SortTh key={c.key} k={c.key} sort={sort} onSort={sortBy}>{loc(c.label, settings.lang)}</SortTh>)}</tr></thead>
             <tbody>{list.items.map((it) => {
               const open = it.id === openId && !!it.detail
               return (
@@ -161,6 +165,39 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   )
 }
 
+/** En-tête de colonne cliquable, avec la flèche du sens de tri. */
+function SortTh({ k, sort, onSort, children }: { k: string; sort: { key: string; desc: boolean }; onSort: (k: string) => void; children: ReactNode }): JSX.Element {
+  const on = sort.key === k
+  return <th className="sortable" aria-sort={on ? (sort.desc ? 'descending' : 'ascending') : 'none'} onClick={() => onSort(k)}>{children}{on ? (sort.desc ? ' ▼' : ' ▲') : ''}</th>
+}
+
+/** Valeur comparable : nombre, durée « 3:04 » en secondes, pourcentage, sinon texte. */
+function sortValue(v: string | number): number | string {
+  if (typeof v === 'number') return v
+  const d = /^(\d+):(\d{2})$/.exec(v)
+  if (d) return Number(d[1]) * 60 + Number(d[2])
+  const n = Number(v.replace(/\s|%/g, '').replace(',', '.'))
+  return v.trim() !== '' && Number.isFinite(n) ? n : v.toLowerCase()
+}
+
+/** Tableau du détail ou du bilan, trié au clic sur un en-tête (décroissant d'abord, second clic : croissant). */
+function SortableTable({ tb }: { tb: DetailTable }): JSX.Element {
+  const [sort, setSort] = useState<{ col: number; desc: boolean } | null>(null)
+  const rows = sort === null ? tb.rows : [...tb.rows].sort((a, b) => {
+    const x = sortValue(a[sort.col]), y = sortValue(b[sort.col])
+    const c = typeof x === 'number' && typeof y === 'number' ? x - y : typeof x === 'number' ? 1 : typeof y === 'number' ? -1 : String(x).localeCompare(String(y))
+    return sort.desc ? -c : c
+  })
+  return (
+    <div className="tbl-wrap"><table className="table">
+      <thead><tr>{tb.columns.map((c, i) => (
+        <th key={i} className="sortable" onClick={() => setSort((s) => ({ col: i, desc: s?.col === i ? !s.desc : true }))}>{c}{sort?.col === i ? (sort.desc ? ' ▼' : ' ▲') : ''}</th>
+      ))}</tr></thead>
+      <tbody>{rows.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j}>{v}</td>)}</tr>)}</tbody>
+    </table></div>
+  )
+}
+
 /** Détail d'un élément de plugin, ou bilan du compte : badges, chiffres clés, tableaux, grilles, courbes, frise. */
 function DetailView({ detail, th, t, onClose }: { detail: PluginDetail; th: ChartTheme; t: (k: string) => string; onClose?: () => void }): JSX.Element {
   const tables = [...(detail.table ? [detail.table] : []), ...(detail.tables ?? [])]
@@ -177,10 +214,7 @@ function DetailView({ detail, th, t, onClose }: { detail: PluginDetail; th: Char
       {tables.map((tb, k) => (
         <div key={k} className="detail-block">
           {tb.title && <h3 className="small muted">{tb.title}</h3>}
-          <div className="tbl-wrap"><table className="table">
-            <thead><tr>{tb.columns.map((c, i) => <th key={i}>{c}</th>)}</tr></thead>
-            <tbody>{tb.rows.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j}>{v}</td>)}</tr>)}</tbody>
-          </table></div>
+          <SortableTable tb={tb} />
         </div>
       ))}
       {detail.grids && (

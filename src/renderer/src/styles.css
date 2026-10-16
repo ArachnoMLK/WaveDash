@@ -148,6 +148,7 @@ input[type='color'] { width: 46px; height: 34px; padding: 2px; border-radius: va
 .table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .table th { text-align: left; color: var(--muted); font-weight: 500; padding: 8px 8px; white-space: nowrap; }
 .table td { padding: 10px 8px; border-top: 1px solid var(--line); white-space: nowrap; }
+.table th.sortable { cursor: pointer; user-select: none; } .table th.sortable:hover { color: var(--fg); }
 .table tr.click { cursor: pointer; } .table tr.click:hover td { background: var(--ctrl); } .table tr.sel td { background: var(--ctrl); }
 .table td.wrap { white-space: normal; min-width: 200px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }

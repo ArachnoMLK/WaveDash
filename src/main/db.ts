@@ -306,10 +306,15 @@ export function savePluginItems(accountId: number, items: PluginItem[], mode: 'r
 const MONTH = "strftime('%Y-%m', ts / 1000, 'unixepoch', 'localtime')"
 
 /** Une page d'éléments, du plus récent au plus ancien, éventuellement limitée à un mois (AAAA-MM). */
-export function listPluginItems(accountId: number, offset: number, limit: number, month?: string): PluginItemsPage {
+/** Tri : 'ts' (date), 'title' ou la clé d'une colonne du plugin ; les éléments sans valeur passent en dernier. */
+export function listPluginItems(accountId: number, offset: number, limit: number, month?: string, sortKey = 'ts', desc = true): PluginItemsPage {
   const where = month ? `account_id = ? AND ts > 0 AND ${MONTH} = ?` : 'account_id = ?'
   const args: (number | string)[] = month ? [accountId, month] : [accountId]
-  const rows = db.prepare(`SELECT data FROM plugin_items WHERE ${where} ORDER BY ts DESC, item_id LIMIT ? OFFSET ?`).all(...args, limit, offset) as { data: string }[]
+  const dir = desc ? 'DESC' : 'ASC'
+  const expr = sortKey === 'ts' ? 'ts' : 'json_extract(data, ?)'
+  const sortArgs: string[] = sortKey === 'ts' ? [] : [sortKey === 'title' ? '$.title' : `$.fields.${sortKey}`]
+  const rows = db.prepare(`SELECT data FROM plugin_items WHERE ${where} ORDER BY (${expr}) IS NULL, (${expr}) ${dir}, ts DESC, item_id LIMIT ? OFFSET ?`)
+    .all(...args, ...sortArgs, ...sortArgs, limit, offset) as { data: string }[]
   const total = (db.prepare(`SELECT COUNT(*) AS n FROM plugin_items WHERE ${where}`).get(...args) as { n: number }).n
   const months = db.prepare(`SELECT ${MONTH} AS month, COUNT(*) AS count FROM plugin_items WHERE account_id = ? AND ts > 0 GROUP BY month ORDER BY month DESC`)
     .all(accountId) as { month: string; count: number }[]

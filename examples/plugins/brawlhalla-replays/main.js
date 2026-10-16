@@ -8,7 +8,7 @@ var MAX_NEW = 150          // nouveaux replays lus par actualisation au plus (~2
 var BUDGET_MS = 2000       // au-delà, on s'arrête : le reste suit à la relance (le bac à sable coupe à 8 s ; une lecture courte gêne moins l'interface)
 var MAX_POINTS = 5000      // points d'historique renvoyés au plus (limite de WaveDash)
 var BUCKETS = 96             // clés de stockage du cache (WaveDash en autorise 100, 64 Ko chacune)
-var CACHE_V = 4            // version du contenu du cache : une entrée plus ancienne est relue
+var CACHE_V = 5            // version du contenu du cache : une entrée plus ancienne est relue
 
 // Légendes : identifiant du replay = legend_id de l'API officielle = HeroID du jeu (table HeroTypes du patch 11.00).
 // Une légende plus récente que cette table s'affiche « #id ».
@@ -429,7 +429,7 @@ function buildItem(file, c, a, lang) {
     fields: {
       mode: modeLabel(c, lang),
       result: a.won === null ? '—' : a.won ? tr(fr, 'Victoire', 'Win') : tr(fr, 'Défaite', 'Loss'),
-      duration: fmtDur(a.dur),
+      duration: pad(Math.floor(Math.round(a.dur) / 60)) + fmtDur(a.dur).slice(fmtDur(a.dur).indexOf(':')),   // « 03:04 » : se trie correctement
       kos: c.k.length,
       apm: a.apm === null ? '—' : Math.round(a.apm),
       map: chips[0]
