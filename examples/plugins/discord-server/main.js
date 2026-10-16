@@ -46,8 +46,8 @@ function botError(status, F) {
   return new Error((F ? 'Discord a répondu ' : 'Discord answered ') + status)
 }
 
-/* ───────── état d'un serveur (stockage : « c:<id> » salons et jours, « a:<id> » membres actifs) ───────── */
-function loadGuild(id) { var c = load('c:' + id, { chans: {}, days: {} }); return { id: id, chans: c.chans, days: c.days, authors: load('a:' + id, {}) } }
+/* ───────── état d'un serveur (stockage : « c.<id> » salons et jours, « a.<id> » membres actifs) ───────── */
+function loadGuild(id) { var c = load('c.' + id, { chans: {}, days: {} }); return { id: id, chans: c.chans, days: c.days, authors: load('a.' + id, {}) } }
 function saveGuild(g) {
   var keep = dayKey(Date.now() - KEEP_DAYS * 86400000), keepA = dayKey(Date.now() - AUTHOR_DAYS * 86400000)
   var old = function (o, k) { for (var x in o) if (x < k) delete o[x] }
@@ -56,7 +56,7 @@ function saveGuild(g) {
   var ids = Object.keys(g.authors)
   ids.forEach(function (a) { old(g.authors[a].d, keepA) })
   if (ids.length > MAX_AUTHORS) ids.sort(function (a, b) { return g.authors[a].c - g.authors[b].c }).slice(0, ids.length - MAX_AUTHORS).forEach(function (a) { delete g.authors[a] })
-  save('c:' + g.id, { chans: g.chans, days: g.days }); save('a:' + g.id, g.authors)
+  save('c.' + g.id, { chans: g.chans, days: g.days }); save('a.' + g.id, g.authors)
 }
 
 /** Met à jour la liste des salons textuels d'un serveur. */
@@ -150,11 +150,11 @@ async function allServers(ctx, token, F) {
   var tracked = guilds.slice(0, MAX_GUILDS), states = {}, behind = 0
   tracked.forEach(function (gd) { states[gd.id] = loadGuild(gd.id) })
   // Lecture répartie : chaque serveur à tour de rôle, un salon à la fois, tant qu'il reste des requêtes.
-  var order = tracked.map(function (gd) { return gd.id }).sort(function (a, b) { return (load('t:' + a, 0)) - (load('t:' + b, 0)) })
+  var order = tracked.map(function (gd) { return gd.id }).sort(function (a, b) { return (load('t.' + a, 0)) - (load('t.' + b, 0)) })
   for (var i = 0; i < order.length; i++) {
     var g = states[order[i]]
-    if (!Object.keys(g.chans).length || (load('t:' + g.id, 0) < Date.now() - 6 * 3600000)) {
-      try { if (await syncChannels(g, token, F)) save('t:' + g.id, Date.now()) } catch (e) { host.log(gdName(tracked, g.id) + ' : ' + e.message) }
+    if (!Object.keys(g.chans).length || (load('t.' + g.id, 0) < Date.now() - 6 * 3600000)) {
+      try { if (await syncChannels(g, token, F)) save('t.' + g.id, Date.now()) } catch (e) { host.log(gdName(tracked, g.id) + ' : ' + e.message) }
     }
   }
   // Chaque salon est lu au plus une fois par exécution, sauf s'il lui reste une page de messages.
@@ -205,7 +205,7 @@ async function oneServer(ctx, token, guildId, F) {
   var info = await call('/guilds/' + guildId + '?with_counts=true', token)
   if (info.status) throw botError(info.status, F)
   var g = loadGuild(guildId), behind = 0
-  if (!Object.keys(g.chans).length || load('t:' + guildId, 0) < Date.now() - 6 * 3600000) { if (await syncChannels(g, token, F)) save('t:' + guildId, Date.now()) }
+  if (!Object.keys(g.chans).length || load('t.' + guildId, 0) < Date.now() - 6 * 3600000) { if (await syncChannels(g, token, F)) save('t.' + guildId, Date.now()) }
   var q = queueOf(g)
   for (var i = 0; i < q.length && budget < MAX_REQ; i++) await readChannel(g, q[i], token)
   saveGuild(g)
