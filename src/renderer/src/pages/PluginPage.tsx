@@ -33,6 +33,19 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState('all')
+  // Barre du haut : recherche libre calculée par le plugin (joueur, carte, légende…), 400 ms après la dernière frappe.
+  const [topQ, setTopQ] = useState('')
+  const [found, setFound] = useState<{ q: string; busy: boolean; detail?: PluginDetail; unsupported?: boolean; error?: string } | null>(null)
+  useEffect(() => {
+    const q = topQ.trim()
+    if (q.length < 2) { setFound(null); return }
+    let alive = true
+    const h = setTimeout(() => {
+      setFound((f) => ({ ...(f ?? {}), q, busy: true }))
+      void window.api.pluginAccountSearch(accountId, q).then((r) => { if (alive) setFound({ q, busy: false, detail: r.detail, unsupported: r.unsupported, error: r.error }) })
+    }, 400)
+    return () => { alive = false; clearTimeout(h) }
+  }, [topQ, accountId])
   // La recherche part 300 ms après la dernière frappe.
   useEffect(() => { const h = setTimeout(() => { setQuery(search); setPage(0); setOpenId(null) }, 300); return () => clearTimeout(h) }, [search])
   const [note, setNote] = useState<string | null>(null)
@@ -111,6 +124,14 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
           </div>
         </div>
       )}
+      <div className="glass pad sect top-search">
+        <input type="search" className="search" value={topQ} onChange={(e) => setTopQ(e.target.value)} placeholder={t('pp.topSearch')} aria-label={t('pp.topSearch')} />
+        {found && (found.busy ? <p className="muted small" style={{ marginTop: 8 }}>{t('pp.searching')}</p>
+          : found.unsupported ? <p className="muted small" style={{ marginTop: 8 }}>{t('pp.topUnsupported')}</p>
+          : found.error ? <div className="err" style={{ marginTop: 8 }}>{found.error}</div>
+          : found.detail ? <div style={{ marginTop: 8 }}><DetailView detail={found.detail} th={th} t={t} /></div>
+          : <p className="muted small" style={{ marginTop: 8 }}>{t('pp.noResult')}</p>)}
+      </div>
       {note && <div className="glass pad small" style={{ marginBottom: 16 }} role="status">{note}</div>}
       {extra.backlog > 0 && <div className="glass pad small muted" style={{ marginBottom: 16 }}>{t('pp.backlog', { count: extra.backlog })}</div>}
       {account.lastError && <div className="err" style={{ marginBottom: 16 }}>{t('pp.error', { error: `${t(`plugin.run.${account.lastError}`)}${extra.error ? ` — ${extra.error}` : ''}` })}</div>}
@@ -248,16 +269,25 @@ function useLayout(key: string | undefined): [Layout, (l: Layout) => void] {
   return [layout, save]
 }
 
-function Heat({ g }: { g: DetailGrid }): JSX.Element {
-  const max = Math.max(1, ...g.values.flat())
+/** Grille de chaleur : chaque case montre sa part du total et le nombre en abrégé (exact au survol) ; le texte reste lisible sur fond clair. */
+function Heat({ g, caption = true }: { g: DetailGrid; caption?: boolean }): JSX.Element {
+  const all = g.values.flat(), max = Math.max(1, ...all), total = all.reduce((a, b) => a + b, 0) || 1
+  const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 })
   return (
     <figure className="heat">
-      <div className="heat-grid" style={{ gridTemplateColumns: `auto repeat(${g.cols.length}, 2.6rem)` }}>
+      <div className="heat-grid" style={{ gridTemplateColumns: `auto repeat(${g.cols.length}, minmax(4.4rem, auto))` }}>
         <span />{g.cols.map((c, j) => <span key={j} className="small muted">{c}</span>)}
         {g.rows.map((r, i) => [<span key={`r${i}`} className="small muted">{r}</span>,
-          ...g.cols.map((_, j) => <b key={`${i}-${j}`} style={{ background: `color-mix(in srgb, var(--accent) ${Math.round((g.values[i][j] / max) * 85)}%, var(--ctrl))` }}>{g.values[i][j]}</b>)])}
+          ...g.cols.map((_, j) => {
+            const v = g.values[i][j], k = v / max
+            return (
+              <b key={`${i}-${j}`} title={v.toLocaleString()} style={{ background: `color-mix(in srgb, var(--accent) ${Math.round(k * 85)}%, var(--ctrl))`, color: k > 0.55 ? '#111' : undefined }}>
+                <span>{Math.round((v * 1000) / total) / 10} %</span><small>{compact.format(v)}</small>
+              </b>
+            )
+          })])}
       </div>
-      {g.title && <figcaption className="small muted">{g.title}</figcaption>}
+      {caption && g.title && <figcaption className="small muted">{g.title}</figcaption>}
     </figure>
   )
 }
@@ -269,7 +299,7 @@ function DetailView({ detail, th, t, onClose, layoutKey }: { detail: PluginDetai
   const blocks: { id: string; title: string; node: ReactNode }[] = []
   if (detail.stats) blocks.push({ id: 'stats', title: t('pp.keyFigures'), node: <div className="mini-stats">{detail.stats.map((s, i) => <div key={i}><span className="small muted">{s.label}</span><b>{s.value}</b></div>)}</div> })
   tables.forEach((tb, k) => blocks.push({ id: `table:${tb.title ?? k}`, title: tb.title ?? `${t('pp.table')} ${k + 1}`, node: <SortableTable tb={tb} /> }))
-  if (layoutKey) detail.grids?.forEach((g, k) => blocks.push({ id: `grid:${g.title ?? k}`, title: g.title ?? `${t('pp.grid')} ${k + 1}`, node: <div className="grids"><Heat g={g} /></div> }))
+  if (layoutKey) detail.grids?.forEach((g, k) => blocks.push({ id: `grid:${g.title ?? k}`, title: g.title ?? `${t('pp.grid')} ${k + 1}`, node: <div className="grids"><Heat g={g} caption={false} /></div> }))
   else if (detail.grids) blocks.push({ id: 'grids', title: '', node: <div className="grids">{detail.grids.map((g, k) => <Heat key={k} g={g} />)}</div> })
   detail.series?.forEach((sr, k) => blocks.push({ id: `series:${sr.title ?? k}`, title: sr.title ?? '', node: <Chart option={seriesOption(sr, th)} height={220} /> }))
   if (detail.timeline) blocks.push({ id: 'timeline', title: t('pp.timeline'), node: <Chart option={timelineOption(detail.timeline, th)} height={Math.max(130, 48 + detail.timeline.lanes.length * 36)} /> })

@@ -21,6 +21,7 @@ const api: WaveApi = {
   setZoom: (f) => webFrame.setZoomFactor(f),
   pluginsList: () => ipcRenderer.invoke('plugins:list'),
   pluginsBundled: () => ipcRenderer.invoke('plugins:bundled'),
+  pluginAccountSearch: (id, query) => ipcRenderer.invoke('plugins:accountSearch', id, query),
   pluginsCatalog: (force) => ipcRenderer.invoke('plugins:catalog', force),
   pluginsCatalogFetch: (id) => ipcRenderer.invoke('plugins:catalogFetch', id),
   pluginAccountsList: () => ipcRenderer.invoke('plugins:accounts'),

@@ -155,6 +155,7 @@ export function registerIpc(win: () => BrowserWindow | null): void {
     return res
   })
   ipcMain.handle('plugins:bundled', () => plugins.listBundled())
+  ipcMain.handle('plugins:accountSearch', (_e, id: number, query: string) => plugins.pluginAccountSearch(Number(id), String(query ?? '')))
   ipcMain.handle('plugins:catalog', (_e, force: boolean) => getCatalog(!!force))
   ipcMain.handle('plugins:catalogFetch', async (_e, id: string) => {
     try { return { ok: true, path: await fetchPackage(String(id)) } } catch (e) { return { ok: false, error: (e as Error).message } }

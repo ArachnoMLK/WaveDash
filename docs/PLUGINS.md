@@ -60,6 +60,12 @@ var plugin = {
     return { externalId: 'identifiant-stable', displayName: 'Nom affiché' }
   },
 
+  // Facultatif. Barre de recherche en haut de la page d'un compte : `ctx.query` est le texte tapé ; renvoie un détail
+  // (même format que `detail`, voir plus bas) ou rien. Rien n'est enregistré ; une erreur ici ne désactive pas le plugin.
+  search: async function (ctx) {
+    return { chips: ['Résultat pour ' + ctx.query], stats: [{ label: 'Parties', value: 12 }] }
+  },
+
   // Obligatoire. Appelée à chaque actualisation.
   refresh: async function (ctx) {
     return {
@@ -149,7 +155,7 @@ La page d'un compte de plugin affiche l'erreur de la dernière actualisation et 
 
 ## Plugin fourni : Brawlhalla Replays
 
-`examples/brawlhalla-replays-1.4.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
+`examples/brawlhalla-replays-1.5.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
 
 - **Courbe et cartes** : parties, victoires, défaites, taux de victoire, stocks pris et perdus, durée moyenne, appuis par minute.
 - **Bilan** : chiffres clés, tableaux par légende, carte, mode, coéquipier, adversaire, jour et heure, direction de tes esquives, répartition de tes attaques.

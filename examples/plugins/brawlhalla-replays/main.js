@@ -530,6 +530,109 @@ function buildSummary(games, lang) {
   }
 }
 
+
+/* ───────── recherche (barre du haut de WaveDash) : un joueur, une carte, une légende, un mode ───────── */
+function bareName(n) { var a = String(n || '').toLowerCase(); return (a.indexOf('|') >= 0 ? a.slice(a.indexOf('|') + 1) : a).replace(/•\d+$/, '').trim() }
+function wl(list) {                                                     // bilan d'une liste de parties
+  var o = { n: list.length, w: 0, l: 0, d: 0, du: 0, a: 0, aN: 0 }
+  list.forEach(function (g) { var s = g.s; if (s.w === 1) o.w++; else if (s.w === 0) o.l++; o.d += s.d; o.du += s.du; if (s.a >= 0) { o.a += s.a / 10; o.aN++ } })
+  return o
+}
+function rate(o) { return pct(o.w, o.w + o.l) + ' %' }
+function groupRows(list, keyOf, limit, min) {
+  var by = {}
+  list.forEach(function (g) { var ks = keyOf(g); (Array.isArray(ks) ? ks : [ks]).forEach(function (k) { if (k) (by[k] = by[k] || []).push(g) }) })
+  return Object.keys(by).map(function (k) { return [k, wl(by[k])] }).filter(function (x) { return x[1].n >= (min || 1) })
+    .sort(function (a, b) { return b[1].n - a[1].n }).slice(0, limit || 30)
+}
+function recentRows(list, fr, extra) {
+  return list.slice(-20).reverse().map(function (g) {
+    var s = g.s
+    return [fmtDate(g.t), s.w === 1 ? tr(fr, 'Victoire', 'Win') : s.w === 0 ? tr(fr, 'Défaite', 'Loss') : '—'].concat(extra ? [extra(g)] : [])
+      .concat([s.m, s.p, legendName(s.L), fmtDur(s.du / 1000)])
+  })
+}
+
+function searchGames(query, lang) {
+  var fr = lang === 'fr', q = bareName(query)
+  var cache = loadCache(), games = []
+  for (var k in cache) { var e = cache[k]; if (e && e.v === CACHE_V && e.s) games.push(e) }
+  games.sort(function (a, b) { return a.t - b.t })
+  if (!games.length) return undefined
+
+  // Candidats : joueurs (par identifiant, sinon pseudo), cartes, tes légendes, modes.
+  var people = {}, cands = [], pidsOf = {}
+  // Parties sans identifiant (avant le patch 10.09) : rattachées à l'identifiant unique qui porte le même pseudo sans tag.
+  games.forEach(function (g) { g.s.tm.concat(g.s.op).forEach(function (x) { if (x[1]) { var b = bareName(x[0]); (pidsOf[b] = pidsOf[b] || {})[x[1]] = 1 } }) })
+  var pidOf = function (x) { if (x[1]) return x[1]; var ids = pidsOf[bareName(x[0])], ks = ids ? Object.keys(ids) : []; return ks.length === 1 ? +ks[0] : 0 }
+  games.forEach(function (g) {
+    ['tm', 'op'].forEach(function (side) {
+      g.s[side].forEach(function (x) {
+        if (bareName(x[0]).indexOf(q) < 0) return
+        var pid = pidOf(x), key = pid ? 'p' + pid : 'n' + x[0], p = people[key] || (people[key] = { name: x[0], pid: pid, with: [], against: [] })
+        if (x[1] || !p.named) { p.name = x[0]; p.named = !!x[1] }
+        (side === 'tm' ? p.with : p.against).push(g)
+      })
+    })
+  })
+  for (var key in people) { var p = people[key]; cands.push({ type: 'player', label: p.name, n: p.with.length + p.against.length, exact: bareName(p.name) === q, data: p }) }
+  var simple = function (type, valueOf) {
+    var by = {}
+    games.forEach(function (g) { var v = valueOf(g); if (v && v.toLowerCase().indexOf(q) >= 0) (by[v] = by[v] || []).push(g) })
+    for (var v in by) cands.push({ type: type, label: v, n: by[v].length, exact: v.toLowerCase() === q, data: by[v] })
+  }
+  simple('map', function (g) { return g.s.m })
+  simple('legend', function (g) { return legendName(g.s.L) })
+  simple('mode', function (g) { return g.s.p })
+  if (!cands.length) return undefined
+  cands.sort(function (a, b) { return (b.exact ? 1 : 0) - (a.exact ? 1 : 0) || b.n - a.n })
+  var top = cands[0], kind = { player: tr(fr, 'Joueur', 'Player'), map: tr(fr, 'Carte', 'Map'), legend: tr(fr, 'Ta légende', 'Your legend'), mode: 'Mode' }
+  var chips = [kind[top.type] + ' : ' + top.label + (top.type === 'player' && top.data.pid ? ' · ID ' + top.data.pid : '')]
+  cands.slice(1, 7).forEach(function (c) { chips.push(tr(fr, 'Aussi : ', 'Also: ') + kind[c.type].toLowerCase() + ' ' + c.label + ' (' + c.n + ')') })
+  var cols = fr ? ['Parties', 'V', 'D', '% V'] : ['Games', 'W', 'L', 'Win %']
+  var row = function (k, o) { return [k, o.n, o.w, o.l, rate(o)] }
+
+  if (top.type === 'player') {
+    var P = top.data, W = wl(P.with), A = wl(P.against), all = P.with.concat(P.against).sort(function (a, b) { return a.t - b.t })
+    var side = function (g) { return P.with.indexOf(g) >= 0 ? tr(fr, 'Avec', 'With') : tr(fr, 'Contre', 'Against') }
+    var both = function (label, first, keyOf) {
+      var w = {}, a = {}
+      groupRows(P.with, keyOf, 50).forEach(function (x) { w[x[0]] = x[1] }); groupRows(P.against, keyOf, 50).forEach(function (x) { a[x[0]] = x[1] })
+      var keys = Object.keys(w).concat(Object.keys(a).filter(function (k) { return !w[k] }))
+      return { title: label, columns: [first, tr(fr, 'Avec', 'With'), tr(fr, '% V avec', 'Win % with'), tr(fr, 'Contre', 'Against'), tr(fr, '% V contre', 'Win % against')],
+        rows: keys.map(function (k) { return [k, w[k] ? w[k].n : 0, w[k] ? rate(w[k]) : '—', a[k] ? a[k].n : 0, a[k] ? rate(a[k]) : '—'] })
+          .sort(function (x, y) { return (y[1] + y[3]) - (x[1] + x[3]) }).slice(0, 30) }
+    }
+    return {
+      chips: chips,
+      stats: [{ label: tr(fr, 'Parties ensemble', 'Games together'), value: W.n }, { label: tr(fr, '% V ensemble', 'Win % together'), value: rate(W) },
+        { label: tr(fr, 'Parties contre', 'Games against'), value: A.n }, { label: tr(fr, 'Tes victoires contre', 'Your wins against'), value: A.w + ' (' + rate(A) + ')' },
+        { label: tr(fr, 'Première partie', 'First game'), value: fmtDate(all[0].t).slice(0, 10) }, { label: tr(fr, 'Dernière partie', 'Last game'), value: fmtDate(all[all.length - 1].t).slice(0, 10) }],
+      tables: [both(tr(fr, 'Par carte', 'By map'), tr(fr, 'Carte', 'Map'), function (g) { return g.s.m }), both(tr(fr, 'Par mode', 'By mode'), 'Mode', function (g) { return g.s.p }),
+        both(tr(fr, 'Tes légendes', 'Your legends'), tr(fr, 'Légende', 'Legend'), function (g) { return legendName(g.s.L) }),
+        { title: tr(fr, 'Dernières parties', 'Recent games'), columns: fr ? ['Date', 'Résultat', 'Avec / contre', 'Carte', 'Mode', 'Ta légende', 'Durée'] : ['Date', 'Result', 'With / against', 'Map', 'Mode', 'Your legend', 'Length'],
+          rows: recentRows(all, fr, side) }]
+    }
+  }
+
+  var G = top.data, o = wl(G)
+  var tables = []
+  if (top.type !== 'legend') tables.push({ title: tr(fr, 'Tes légendes', 'Your legends'), columns: [tr(fr, 'Légende', 'Legend')].concat(cols), rows: groupRows(G, function (g) { return legendName(g.s.L) }).map(function (x) { return row(x[0], x[1]) }) })
+  if (top.type !== 'map') tables.push({ title: tr(fr, 'Par carte', 'By map'), columns: [tr(fr, 'Carte', 'Map')].concat(cols), rows: groupRows(G, function (g) { return g.s.m }).map(function (x) { return row(x[0], x[1]) }) })
+  if (top.type !== 'mode') tables.push({ title: tr(fr, 'Par mode', 'By mode'), columns: ['Mode'].concat(cols), rows: groupRows(G, function (g) { return g.s.p }).map(function (x) { return row(x[0], x[1]) }) })
+  tables.push({ title: tr(fr, 'Coéquipiers', 'Teammates'), columns: [tr(fr, 'Joueur', 'Player')].concat(cols), rows: groupRows(G, function (g) { return g.s.tm.map(function (x) { return x[0] }) }, 20, 2).map(function (x) { return row(x[0], x[1]) }) })
+  tables.push({ title: tr(fr, 'Adversaires', 'Opponents'), columns: [tr(fr, 'Joueur', 'Player')].concat(cols), rows: groupRows(G, function (g) { return g.s.op.map(function (x) { return x[0] }) }, 20, 2).map(function (x) { return row(x[0], x[1]) }) })
+  tables.push({ title: tr(fr, 'Dernières parties', 'Recent games'), columns: fr ? ['Date', 'Résultat', 'Carte', 'Mode', 'Ta légende', 'Durée'] : ['Date', 'Result', 'Map', 'Mode', 'Your legend', 'Length'], rows: recentRows(G, fr) })
+  return {
+    chips: chips,
+    stats: [{ label: tr(fr, 'Parties', 'Games'), value: o.n }, { label: tr(fr, 'Victoires', 'Wins'), value: o.w }, { label: tr(fr, 'Défaites', 'Losses'), value: o.l },
+      { label: tr(fr, 'Taux de victoire', 'Win rate'), value: rate(o) }, { label: tr(fr, 'Durée moyenne', 'Average length'), value: fmtDur(o.du / o.n / 1000) },
+      { label: tr(fr, 'KOs subis / partie', 'Stocks lost / game'), value: Math.round(o.d * 10 / o.n) / 10 }, { label: tr(fr, 'Appuis / min', 'Presses / min'), value: o.aN ? Math.round(o.a / o.aN) : '—' },
+      { label: tr(fr, 'Dernière partie', 'Last game'), value: fmtDate(G[G.length - 1].t).slice(0, 10) }],
+    tables: tables.filter(function (t) { return t.rows.length })
+  }
+}
+
 var plugin = {
   resolve: async function (ctx) {
     var parts = ctx.inputs.folder.split(/[\\/]/).filter(Boolean)
@@ -537,6 +640,9 @@ var plugin = {
     if (!name) throw new Error(ctx.lang === 'fr' ? 'Indique ton pseudo en jeu.' : 'Enter your in-game name.')
     return { externalId: ctx.inputs.folder, displayName: 'Replays · ' + name + (parts.length ? ' (' + parts[parts.length - 1] + ')' : '') }
   },
+
+  // Barre de recherche du haut : toutes tes stats pour un joueur, une carte, une de tes légendes ou un mode.
+  search: async function (ctx) { return searchGames(ctx.query, ctx.lang) },
 
   refresh: async function (ctx) {
     var lang = ctx.lang, wanted = wantedList(ctx.inputs.playerName)

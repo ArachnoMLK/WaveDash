@@ -246,6 +246,7 @@ export interface WaveApi {
   pluginAccountRemove(accountId: number): Promise<void>
   pluginAccountRefresh(accountId: number): Promise<void>
   pluginAccountData(accountId: number): Promise<{ logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null }>
+  pluginAccountSearch(accountId: number, query: string): Promise<{ ok: boolean; unsupported?: boolean; detail?: PluginDetail; error?: string }>
   pluginsBundled(): Promise<{ path: string; id: string; name: string; version: string; description: import('./plugin').LocalText; installedVersion: string | null }[]>
   pluginsCatalog(force?: boolean): Promise<{ entries: { id: string; name: string; version: string; author: string; description: import('./plugin').LocalText;
     permissions: { network?: string[]; folder?: boolean }; installedVersion: string | null }[]; fetchedAt: number | null; offline: boolean }>

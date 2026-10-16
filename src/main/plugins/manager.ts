@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync } from 'fs'
 import { basename, extname, join } from 'path'
 import {
-  compareVersions, InstalledPlugin, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
+  compareVersions, InstalledPlugin, sanitizeDetail, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
 } from '@shared/plugin'
 import * as db from '../db'
 import { processPluginRefresh } from '../milestones'
@@ -132,7 +132,7 @@ function folderOf(manifest: PluginManifest, inputs: Record<string, string>, acco
   return { dir: real, extra: accountId === undefined ? undefined : importDirOf(accountId), extensions: manifest.permissions.folderExtensions }
 }
 
-function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh', inputs: Record<string, string>, account?: { id: number; externalId: string; displayName: string }): RunRequest {
+function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh' | 'search', inputs: Record<string, string>, account?: { id: number; externalId: string; displayName: string }, query?: string): RunRequest {
   const manifest = loadManifest(row)
   const secretValues: Record<string, string> = {}
   for (const s of manifest.secrets) secretValues[s.key] = secrets.getSecret(secretKey(row.id, s.key)) ?? ''
@@ -140,7 +140,7 @@ function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh', inputs: Reco
   const accountId = account?.id
   return {
     manifest, script: row.script, fn,
-    ctx: { inputs, secrets: secretValues, lang: db.getSettings().lang, account: account ? { externalId: account.externalId, displayName: account.displayName } : undefined },
+    ctx: { inputs, secrets: secretValues, lang: db.getSettings().lang, account: account ? { externalId: account.externalId, displayName: account.displayName } : undefined, query },
     folder: folderOf(manifest, inputs, accountId),
     storage: accountId === undefined
       ? { get: (k) => memory.get(k) ?? null, set: (k, v) => { memory.set(k, v) } }
@@ -355,4 +355,20 @@ export async function syncCatalogUpdates(): Promise<string[]> {
     } catch (err) { console.error('Catalogue :', e.id, err) }
   }
   return updated
+}
+
+/** Recherche libre (barre du haut) : la fonction `search` du plugin, si elle existe, calcule un détail pour la requête
+ *  (ex. toutes les stats d'un joueur). Aucune donnée n'est enregistrée et un échec ne compte pas comme une panne du plugin. */
+export async function pluginAccountSearch(accountId: number, query: string): Promise<{ ok: boolean; unsupported?: boolean; detail?: PluginDetail; error?: string }> {
+  const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
+  const q = String(query ?? '').trim().slice(0, 100)
+  if (!pa || !row || !row.enabled || q.length < 2) return { ok: false }
+  try {
+    const inputs = JSON.parse(pa.inputs) as Record<string, string>
+    const run = await runPlugin(buildRequest(row, 'search', inputs, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, q))
+    return { ok: true, detail: sanitizeDetail(run.value) }
+  } catch (e) {
+    if (e instanceof PluginError && e.code === 'no_function') return { ok: false, unsupported: true }
+    return { ok: false, error: msgOf(e) }
+  }
 }
