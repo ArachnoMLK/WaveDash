@@ -9,7 +9,7 @@ var BUDGET_MS = 2000       // au-delà, on s'arrête : le reste suit à la relan
 var MAX_POINTS = 5000      // points d'historique renvoyés au plus (limite de WaveDash)
 var BUCKETS = 76             // clés de stockage du cache des parties (c0 à c75 ; WaveDash autorise 100 clés de 64 Ko)
 var PLAYER_BUCKETS = 20      // profils des autres joueurs : clés c76 à c95 (mêmes clés qu'avant, rien de plus)
-var CACHE_V = 9            // version du contenu du cache : une entrée plus ancienne est relue
+var CACHE_V = 10           // version du contenu du cache : une entrée plus ancienne est relue
 
 // Légendes : identifiant du replay = legend_id de l'API officielle = HeroID du jeu (table HeroTypes du patch 11.00).
 // Une légende plus récente que cette table s'affiche « #id ».
@@ -268,7 +268,18 @@ function parseBuffer(buf) {
 // 64 attaque lourde, 128 attaque légère, 256 esquive/dash, 512 ramasser/lancer, 1024 à 8192 provocations.
 var BUCKET_MS = 15000
 // ev : instants (ms) des lancers (0) et provocations (1), 60 au plus par joueur, pour la frise de la partie.
-function newInputs() { return { l: [0, 0, 0], h: [0, 0, 0], g: [0, 0, 0, 0, 0, 0, 0, 0, 0], d: 0, j: 0, t: 0, tt: 0, mv: 0, act: [], ev: [], prev: 0, last: 0 } }
+// La touche esquive sert aussi au dash, au gravity cancel et au chase dodge : chaque appui est classé (voir trackInput).
+// d et g : esquives seulement ; x : [gravity cancels, chase dodges probables, dashs probables].
+function newInputs() { return { l: [0, 0, 0], h: [0, 0, 0], g: [0, 0, 0, 0, 0, 0, 0, 0, 0], d: 0, x: [0, 0, 0], j: 0, t: 0, tt: 0, mv: 0, act: [], ev: [], prev: 0, last: 0, atk: -1e9, jump: -1e9, pend: null } }
+// Règles du jeu (brawlhalla.wiki.gg, page Movement ; 60 images/s, 1 frame ≈ 16,7 ms) et mesures sur 300 replays réels :
+// - gravity cancel : esquive sur place en l'air puis attaque dans les 18 frames (300 ms), ou esquive dirigée puis attaque
+//   dans la même direction dans les 3 frames (50 ms, +1 frame de marge) ;
+// - chase dodge : seulement après une attaque qui a touché, dans les 12 frames après sa fin. Le replay ne dit pas si l'attaque
+//   a touché, ni quelle attaque (arme tenue, sol ou air) : fenêtre de 200 à 850 ms après l'appui, union des « fin d'attaque
+//   + 12 frames » (pic mesuré, puis chute nette après 850 ms). Estimation ;
+// - dash : au sol, esquive + gauche/droite est toujours un dash. Le replay ne dit pas si le joueur est au sol : latéral sans saut
+//   dans les 700 ms précédentes = dash probable. Estimation.
+var GC_SPOT_MS = 300, GC_DIR_MS = 67, CHASE_MIN = 200, CHASE_MAX = 850, AIR_MS = 700
 function dirOf(f) { return f & 2 && !(f & 12) ? 2 : f & 12 ? 1 : 0 }            // 0 neutre, 1 côté, 2 bas (direction tenue)
 function trackInput(a, ts, f) {
   if (a.prev & 12 && ts > a.last) a.mv += ts - a.last                    // temps passé à tenir gauche ou droite
@@ -277,8 +288,21 @@ function trackInput(a, ts, f) {
     var b = Math.floor(ts / BUCKET_MS); while (a.act.length <= b && a.act.length < 600) a.act.push(0); if (b < 600) a.act[b]++
     if (down & 128) a.l[dirOf(f)]++
     if (down & 64) a.h[dirOf(f)]++
-    if (down & 256) { a.d++; a.g[(f & 1 ? 0 : f & 2 ? 6 : 3) + (f & 4 && !(f & 8) ? 0 : f & 8 && !(f & 4) ? 2 : 1)]++ }
-    if (down & 16) a.j++
+    if (down & 256) {
+      var side = !!(f & 4) !== !!(f & 8), cell = (f & 1 ? 0 : f & 2 ? 6 : 3) + (f & 4 && !(f & 8) ? 0 : f & 8 && !(f & 4) ? 2 : 1), since = ts - a.atk
+      var cat = since >= CHASE_MIN && since <= CHASE_MAX ? 1 : side && ts - a.jump > AIR_MS ? 2 : -1
+      if (cat < 0) { a.d++; a.g[cell]++ } else a.x[cat]++
+      // Direction de l'appui (0 sur place, 1 côté, 2 bas, 3 haut) : un chase dodge suivi d'une attaque reste un chase dodge.
+      a.pend = cat === 1 ? null : { ts: ts, cat: cat, cell: cell, dir: side ? 1 : f & 2 ? 2 : f & 1 ? 3 : 0 }
+    }
+    if (down & 192) {
+      // Attaque juste après l'appui : c'était un gravity cancel. Sur place : 300 ms ; dirigé : 50 ms, attaque dans la même direction
+      // (côté → attaque de côté, bas → attaque basse, haut → attaque neutre).
+      var pd = a.pend, gap = pd ? ts - pd.ts : 1e9, adir = (f & 4) !== 0 !== ((f & 8) !== 0) ? 1 : f & 2 ? 2 : 3
+      if (pd && (pd.dir === 0 ? gap <= GC_SPOT_MS : gap <= GC_DIR_MS && adir === pd.dir)) { if (pd.cat < 0) { a.d--; a.g[pd.cell]-- } else a.x[pd.cat]--; a.x[0]++ }
+      a.pend = null; a.atk = ts
+    }
+    if (down & 16) { a.j++; a.jump = ts }
     if (down & 512) { a.t++; if (a.ev.length < 60) a.ev.push([ts, 0]) }
   }
   if (down & 15360) { a.tt++; if (a.ev.length < 60) a.ev.push([ts, 1]) }
@@ -339,7 +363,7 @@ function addPlayers(pl, full, a, t) {
   var best = places.length ? Math.min.apply(null, places) : 0, decided = places.some(function (v) { return v !== best })
   a.ents.forEach(function (e) {
     if (e.bot || (a.me && e.id === a.me.id)) return
-    var k = playerKeyOf(e), x = pl[k] || (pl[k] = { n: '', p: e.pid || 0, t: 0, c: 0, L: {}, w: 0, l: 0, d: 0, g: [0, 0, 0, 0, 0, 0, 0, 0, 0], at: [0, 0, 0, 0, 0, 0], j: 0, dg: 0, th: 0, a: 0, aN: 0, tm: 0, op: 0 })
+    var k = playerKeyOf(e), x = pl[k] || (pl[k] = { n: '', p: e.pid || 0, t: 0, c: 0, L: {}, w: 0, l: 0, d: 0, g: [0, 0, 0, 0, 0, 0, 0, 0, 0], x: [0, 0, 0], at: [0, 0, 0, 0, 0, 0], j: 0, dg: 0, th: 0, a: 0, aN: 0, tm: 0, op: 0 })
     if (t >= x.t) { x.n = e.name.slice(0, 32); x.t = t }
     x.c++; x.L[e.hero] = (x.L[e.hero] || 0) + 1; x.d += a.deaths[e.id].length
     var place = full.s[e.id]
@@ -350,6 +374,7 @@ function addPlayers(pl, full, a, t) {
       for (var i = 0; i < 9; i++) x.g[i] += q.g[i]
       for (i = 0; i < 3; i++) { x.at[i] += q.l[i]; x.at[3 + i] += q.h[i] }
       x.j += q.j; x.dg += q.d; x.th += q.t
+      if (q.x) for (i = 0; i < 3; i++) x.x[i] += q.x[i]
       var apm = apmOf(full, e.id); if (apm !== null) { x.a += apm; x.aN++ }
     }
   })
@@ -357,7 +382,7 @@ function addPlayers(pl, full, a, t) {
 
 function compact(rep) {
   var ins = {}
-  for (var k in rep.inputs) { var a = rep.inputs[k]; ins[k] = { l: a.l, h: a.h, g: a.g, d: a.d, j: a.j, t: a.t, tt: a.tt, mv: a.mv, act: a.act, ev: a.ev } }
+  for (var k in rep.inputs) { var a = rep.inputs[k]; ins[k] = { l: a.l, h: a.h, g: a.g, d: a.d, x: a.x, j: a.j, t: a.t, tt: a.tt, mv: a.mv, act: a.act, ev: a.ev } }
   return { n: rep.ents.map(function (e) { return [e.name, e.team, e.heroes[0], e.bot ? 1 : 0, e.id, e.costume, e.stance, e.pid || 0] }), s: rep.scores, k: rep.kos, l: rep.length,
     m: rep.levelId, p: rep.playlist, pid: rep.playlistId, o: rep.online ? 1 : 0, lv: rep.lives, st: rep.settings || [], i: ins, ver: rep.version }
 }
@@ -428,7 +453,8 @@ function analyse(c, wanted, myPids) {
 function presses(c, id) { return (c.i && c.i[id]) || null }
 function apmOf(c, id) {
   var p = presses(c, id), min = c.l / 60000
-  return p && min > 0 ? (p.l[0] + p.l[1] + p.l[2] + p.h[0] + p.h[1] + p.h[2] + p.d + p.j + p.t) / min : null
+  var x = p && p.x ? p.x[0] + p.x[1] + p.x[2] : 0                       // la touche esquive compte entière (dashs, gravity cancels…)
+  return p && min > 0 ? (p.l[0] + p.l[1] + p.l[2] + p.h[0] + p.h[1] + p.h[2] + p.d + x + p.j + p.t) / min : null
 }
 
 function teamsTitle(ents) {
@@ -472,8 +498,9 @@ function buildItem(file, c, a, lang) {
   })
   var actions = a.ents.map(function (e) {
     var p = presses(c, e.id), apm = apmOf(c, e.id)
-    if (!p) return [e.name, '—', '—', '—', '—', '—', '—', '—', '—']
-    return [e.name, p.l.join(' / '), p.h.join(' / '), p.d, p.j, p.t, p.tt, pct(p.mv, c.l) + ' %', apm === null ? '—' : Math.round(apm)]
+    if (!p) return [e.name, '—', '—', '—', '—', '—', '—', '—', '—', '—', '—', '—']
+    var x = p.x || ['—', '—', '—']
+    return [e.name, p.l.join(' / '), p.h.join(' / '), p.d, x[2], x[0], x[1], p.j, p.t, p.tt, pct(p.mv, c.l) + ' %', apm === null ? '—' : Math.round(apm)]
   })
   var grids = [], lines = []
   a.ents.forEach(function (e) {
@@ -488,8 +515,9 @@ function buildItem(file, c, a, lang) {
       { title: tr(fr, 'Joueurs', 'Players'),
         columns: fr ? ['Joueur', 'ID', 'Équipe', 'Légende', 'Armes', 'Posture', 'Place', 'KOs subis', 'KOs infligés (1v1)'] : ['Player', 'ID', 'Team', 'Legend', 'Weapons', 'Stance', 'Place', 'Stocks lost', 'KOs dealt (1v1)'],
         rows: players },
-      { title: tr(fr, 'Actions (attaques : neutre / côté / bas)', 'Actions (attacks: neutral / side / down)'),
-        columns: fr ? ['Joueur', 'Légères', 'Lourdes', 'Esquives', 'Sauts', 'Lancers', 'Provocations', 'Déplacement', 'Appuis/min'] : ['Player', 'Light', 'Heavy', 'Dodges', 'Jumps', 'Throws', 'Taunts', 'Moving', 'Presses/min'],
+      { title: tr(fr, 'Actions (attaques : neutre / côté / bas ; * estimé)', 'Actions (attacks: neutral / side / down; * estimated)'),
+        columns: fr ? ['Joueur', 'Légères', 'Lourdes', 'Esquives', 'Dashs*', 'Gravity cancels', 'Chase dodges*', 'Sauts', 'Lancers', 'Provocations', 'Déplacement', 'Appuis/min']
+          : ['Player', 'Light', 'Heavy', 'Dodges', 'Dashes*', 'Gravity cancels', 'Chase dodges*', 'Jumps', 'Throws', 'Taunts', 'Moving', 'Presses/min'],
         rows: actions }
     ],
     grids: grids,
@@ -520,14 +548,14 @@ function summaryOf(file, c, a, lang) {
     // Coéquipiers et adversaires : [pseudo, identifiant, légende] (identifiant 0 pour les bots et les replays d'avant le patch 10.09).
     tm: a.ents.filter(function (e) { return e.id !== me.id && a.sameTeam(e, me) }).map(function (e) { return [cut(e.name), e.pid, e.hero] }),
     op: a.ents.filter(function (e) { return !a.sameTeam(e, me) }).map(function (e) { return [cut(e.name), e.pid, e.hero] }),
-    g: p ? p.g : null, at: p ? p.l.concat(p.h) : null, j: p ? p.j : 0, dg: p ? p.d : 0, th: p ? p.t : 0 }
+    g: p ? p.g : null, at: p ? p.l.concat(p.h) : null, j: p ? p.j : 0, dg: p ? p.d : 0, x: p && p.x ? p.x : [0, 0, 0], th: p ? p.t : 0 }
 }
 
 /** Bilan de toutes tes parties : par légende, carte, mode, coéquipier, adversaire, jour et heure ; esquives et attaques. */
 function buildSummary(games, lang) {
   var fr = lang === 'fr', n = games.length
   if (!n) return undefined
-  var tot = { w: 0, l: 0, d: 0, tk: 0, du: 0, a: 0, aN: 0, dg: 0, j: 0 }, g9 = [0, 0, 0, 0, 0, 0, 0, 0, 0], at = [0, 0, 0, 0, 0, 0]
+  var tot = { w: 0, l: 0, d: 0, tk: 0, du: 0, a: 0, aN: 0, dg: 0, j: 0, x: [0, 0, 0] }, g9 = [0, 0, 0, 0, 0, 0, 0, 0, 0], at = [0, 0, 0, 0, 0, 0]
   var by = { L: {}, m: {}, p: {}, tm: {}, op: {}, day: {}, hour: {} }, label = {}
   // Parties d'avant le patch 10.09 (sans identifiant) : rattachées au joueur qui porte le même pseudo (sans tag de clan)
   // dans les parties récentes, si un seul identifiant correspond.
@@ -544,6 +572,7 @@ function buildSummary(games, lang) {
     var s = g.s, dt = new Date(g.t), i
     if (s.w === 1) tot.w++; else if (s.w === 0) tot.l++
     tot.d += s.d; tot.tk += s.tk; tot.du += s.du; tot.dg += s.dg; tot.j += s.j
+    if (s.x) for (i = 0; i < 3; i++) tot.x[i] += s.x[i]
     if (s.a >= 0) { tot.a += s.a / 10; tot.aN++ }
     if (s.g) for (i = 0; i < 9; i++) g9[i] += s.g[i]
     if (s.at) for (i = 0; i < 6; i++) at[i] += s.at[i]
@@ -570,7 +599,9 @@ function buildSummary(games, lang) {
       { label: tr(fr, 'KOs subis / partie', 'Stocks lost / game'), value: Math.round(tot.d * 10 / n) / 10 },
       { label: tr(fr, 'Stocks pris / partie', 'Stocks taken / game'), value: Math.round(tot.tk * 10 / n) / 10 },
       { label: tr(fr, 'Appuis / min', 'Presses / min'), value: tot.aN ? Math.round(tot.a / tot.aN) : '—' },
-      { label: tr(fr, 'Esquives / partie', 'Dodges / game'), value: Math.round(tot.dg / n) }, { label: tr(fr, 'Sauts / partie', 'Jumps / game'), value: Math.round(tot.j / n) },
+      { label: tr(fr, 'Esquives / partie', 'Dodges / game'), value: Math.round(tot.dg / n) }, { label: tr(fr, 'Dashs probables / partie', 'Likely dashes / game'), value: Math.round(tot.x[2] / n) },
+      { label: tr(fr, 'Gravity cancels / partie', 'Gravity cancels / game'), value: Math.round(tot.x[0] * 10 / n) / 10 }, { label: tr(fr, 'Chase dodges probables / partie', 'Likely chase dodges / game'), value: Math.round(tot.x[1] * 10 / n) / 10 },
+      { label: tr(fr, 'Sauts / partie', 'Jumps / game'), value: Math.round(tot.j / n) },
       { label: tr(fr, 'Légende favorite', 'Favourite legend'), value: favourite || '—' }, { label: tr(fr, 'Depuis le', 'Since'), value: fmtDate(games[0].t).slice(0, 10) }
     ],
     tables: [
@@ -664,6 +695,7 @@ function searchGames(query, lang) {
       if (!mine) return
       if (!H) { H = JSON.parse(JSON.stringify(x)); return }
       H.c += x.c; H.w += x.w; H.l += x.l; H.d += x.d; H.j += x.j; H.dg += x.dg; H.th += x.th; H.a += x.a; H.aN += x.aN
+      H.x = H.x || [0, 0, 0]; for (var m = 0; m < 3; m++) H.x[m] += (x.x || [0, 0, 0])[m]
       for (var i = 0; i < 9; i++) H.g[i] += x.g[i]
       for (i = 0; i < 6; i++) H.at[i] += x.at[i]
       for (var l in x.L) H.L[l] = (H.L[l] || 0) + x.L[l]
@@ -684,6 +716,8 @@ function searchGames(query, lang) {
         { label: tr(fr, 'Ses KOs subis / partie', 'Their stocks lost / game'), value: Math.round(H.d * 10 / H.c) / 10 },
         { label: tr(fr, 'Ses appuis / min', 'Their presses / min'), value: H.aN ? Math.round(H.a / H.aN) : '—' },
         { label: tr(fr, 'Ses esquives / partie', 'Their dodges / game'), value: Math.round(H.dg / H.c) },
+        { label: tr(fr, 'Ses dashs probables / partie', 'Their likely dashes / game'), value: Math.round((H.x || [0, 0, 0])[2] / H.c) },
+        { label: tr(fr, 'Ses gravity cancels / partie', 'Their gravity cancels / game'), value: Math.round((H.x || [0, 0, 0])[0] * 10 / H.c) / 10 },
         { label: tr(fr, 'Ses sauts / partie', 'Their jumps / game'), value: Math.round(H.j / H.c) },
         { label: tr(fr, 'Ses lancers / partie', 'Their throws / game'), value: Math.round(H.th * 10 / H.c) / 10 })
     }
