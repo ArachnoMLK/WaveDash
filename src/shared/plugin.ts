@@ -46,6 +46,8 @@ export interface PluginManifest {
   search: boolean
   /** Le plugin peut envoyer des notifications (`notices` dans son résultat), désactivables dans les réglages. */
   notices: boolean
+  /** Le script définit `view` : avec les filtres de la barre du haut (`filters` dans son résultat), il recalcule le bilan. */
+  views: boolean
   /** Outil « Croiser tes données » : mesures et axes proposés dans les menus ; le script définit alors `cross`. */
   cross?: { measures: { key: string; label: LocalText }[]; dimensions: { key: string; label: LocalText }[] }
   refreshMinutes: number
@@ -180,7 +182,7 @@ export function validateManifest(raw: unknown): Result {
   const refresh = typeof m.refreshMinutes === 'number' && Number.isFinite(m.refreshMinutes) ? Math.min(1440, Math.max(5, Math.round(m.refreshMinutes))) : 30
   return { ok: true, manifest: { wdsh: 1, id: m.id, name: m.name.trim(), version: m.version, author, description, minAppVersion: m.minAppVersion as string | undefined, entry,
     permissions: { network: network as string[], folder, folderExtensions: (exts as string[]).map((e) => e.toLowerCase()), images },
-    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, notices: m.notices === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
+    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, notices: m.notices === true, views: m.views === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
 }
 
 /* ---------- Résultats renvoyés par un plugin ---------- */
@@ -222,8 +224,27 @@ export interface PluginRunResult {
   backlog: number
   /** Notifications (manifeste `notices: true`) : 3 au plus, chacune envoyée une seule fois (même `id` = ignorée ensuite). */
   notices: PluginNotice[]
+  /** Filtres de la barre du haut (manifeste `views: true`). */
+  filters: PluginFilter[]
 }
 export interface PluginNotice { id: string; title: string; text: string; direction: 'up' | 'down' }
+/** Filtre de la barre du haut (ex. Mode, Patch, Période). `field` : colonne des éléments filtrée à l'identique ; « $ts » : les
+ *  éléments des N derniers jours (valeur = nombre de jours). Sans `field`, seul le bilan (fonction `view`) est filtré. */
+export interface PluginFilter { key: string; label: string; field?: string; options: { value: string; label: string }[] }
+export const FILTER_LIMITS = { filters: 4, options: 60, text: 60 }
+export function sanitizeFilters(raw: unknown): PluginFilter[] {
+  if (!Array.isArray(raw)) return []
+  const out: PluginFilter[] = [], L = FILTER_LIMITS
+  for (const f of raw.slice(0, L.filters) as Record<string, unknown>[]) {
+    if (!f || typeof f.key !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_]{0,31}$/.test(f.key) || typeof f.label !== 'string' || !Array.isArray(f.options)) continue
+    const field = typeof f.field === 'string' && (f.field === '$ts' || /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/.test(f.field)) ? f.field : undefined
+    const options = (f.options as Record<string, unknown>[]).slice(0, L.options)
+      .filter((o) => o && typeof o.value === 'string' && o.value && (field !== '$ts' || /^\d{1,5}$/.test(o.value)))
+      .map((o) => ({ value: (o.value as string).slice(0, L.text), label: String(o.label ?? o.value).slice(0, L.text) }))
+    if (options.length && !out.some((x) => x.key === f.key)) out.push({ key: f.key, label: f.label.slice(0, 30), field, options })
+  }
+  return out
+}
 export const NOTICE_LIMITS = { perRun: 3, id: 80, title: 40, text: 200 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e15 ? v : null)
@@ -300,7 +321,7 @@ export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
 }
 
 export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.now()): PluginRunResult {
-  const out: PluginRunResult = { metrics: {}, items: [], history: [], backlog: 0, notices: [] }
+  const out: PluginRunResult = { metrics: {}, items: [], history: [], backlog: 0, notices: [], filters: [] }
   if (!raw || typeof raw !== 'object') return out
   const r = raw as Record<string, unknown>
   const keys = new Set(m.metrics.map((x) => x.key))
@@ -311,6 +332,7 @@ export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.no
   }
   out.metrics = pickMetrics(r.metrics)
   out.summary = sanitizeDetail(r.summary)
+  if (m.views) out.filters = sanitizeFilters(r.filters)
   const backlog = num(r.backlog)
   out.backlog = backlog !== null && backlog > 0 ? Math.min(1e7, Math.floor(backlog)) : 0
   if (m.notices && Array.isArray(r.notices)) {

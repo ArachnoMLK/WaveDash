@@ -32,8 +32,8 @@ export const DEFAULT_LIMITS: Limits = {
 export interface RunRequest {
   manifest: PluginManifest
   script: string
-  fn: 'resolve' | 'refresh' | 'search' | 'cross'
-  ctx: { inputs: Record<string, string>; secrets: Record<string, string>; lang: string; account?: { externalId: string; displayName: string }; query?: string; cross?: Record<string, string> }
+  fn: 'resolve' | 'refresh' | 'search' | 'cross' | 'view'
+  ctx: { inputs: Record<string, string>; secrets: Record<string, string>; lang: string; account?: { externalId: string; displayName: string }; query?: string; cross?: Record<string, string>; filters?: Record<string, string> }
   storage: { get(key: string): string | null; set(key: string, value: string): void }
   /** Présent seulement si le manifeste demande la permission « dossier » et que l'utilisateur en a choisi un. */
   folder?: FolderAccess

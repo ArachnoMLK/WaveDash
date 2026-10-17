@@ -1,6 +1,6 @@
 // Page d'un compte de plugin : cartes de métriques, graphique d'évolution, éléments, journal.
 import { Fragment, ReactNode, useEffect, useState } from 'react'
-import { ColumnStat, DetailGrid, DetailTable, loc, PluginColumn, PluginDetail, PluginItemsPage, PluginManifest } from '@shared/plugin'
+import { ColumnStat, DetailGrid, DetailTable, loc, PluginColumn, PluginDetail, PluginFilter, PluginItemsPage, PluginManifest } from '@shared/plugin'
 import { ChartType, Lang, Point, RawMetrics } from '@shared/types'
 import { Chart } from '../components/Chart'
 import { Reveal, StatCard, Tabs } from '../components/ui'
@@ -27,7 +27,27 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [metric, setMetric] = useState<string>(m?.metrics.find((x) => x.primary)?.key ?? m?.metrics[0]?.key ?? '')
   const [latest, setLatest] = useState<RawMetrics>({})
   const [series, setSeries] = useState<Record<string, Point[]>>({})
-  const [extra, setExtra] = useState<{ logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null }>({ logs: [], error: null, backlog: 0, summary: null })
+  const [extra, setExtra] = useState<{ logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null; filters: PluginFilter[] }>({ logs: [], error: null, backlog: 0, summary: null, filters: [] })
+  // Barre des filtres (ex. Mode, Patch, Période) : choix gardé par compte ; un filtre choisi recalcule toute la page pour ce sous-ensemble.
+  const [sel, setSel] = useState<Record<string, string>>({})
+  useEffect(() => { try { setSel(JSON.parse(localStorage.getItem(`wd.filters.${accountId}`) ?? '{}') as Record<string, string>) } catch { setSel({}) } }, [accountId])
+  const choose = (key: string, value: string): void => {
+    const next = { ...sel }; if (value) next[key] = value; else delete next[key]
+    setSel(next); setPage(0); setOpenId(null)
+    try { localStorage.setItem(`wd.filters.${accountId}`, JSON.stringify(next)) } catch { /* facultatif */ }
+  }
+  // Seuls les filtres encore proposés par le plugin comptent (une option disparue est ignorée).
+  const active = Object.fromEntries(Object.entries(sel).filter(([k, v]) => extra.filters.some((f) => f.key === k && f.options.some((o) => o.value === v))))
+  const filtered = !!m?.views && Object.keys(active).length > 0
+  const activeKey = JSON.stringify(active)
+  const [view, setView] = useState<{ key: string; busy: boolean; detail?: PluginDetail; error?: string } | null>(null)
+  useEffect(() => {
+    if (!filtered) { setView(null); return }
+    let alive = true
+    setView((v) => ({ key: activeKey, busy: true, detail: v?.detail }))
+    void window.api.pluginAccountView(accountId, active).then((r) => { if (alive) setView({ key: activeKey, busy: false, detail: r.detail, error: r.error }) })
+    return () => { alive = false }
+  }, [accountId, activeKey, filtered, dataVersion])
   const [list, setList] = useState<PluginItemsPage>({ items: [], total: 0, months: [] })
   const [page, setPage] = useState(0)
   const [month, setMonth] = useState('')
@@ -44,10 +64,10 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
     let alive = true
     const h = setTimeout(() => {
       setFound((f) => ({ ...(f ?? {}), q, busy: true }))
-      void window.api.pluginAccountSearch(accountId, q).then((r) => { if (alive) setFound({ q, busy: false, detail: r.detail, unsupported: r.unsupported, error: r.error }) })
+      void window.api.pluginAccountSearch(accountId, q, active).then((r) => { if (alive) setFound({ q, busy: false, detail: r.detail, unsupported: r.unsupported, error: r.error }) })
     }, 400)
     return () => { alive = false; clearTimeout(h) }
-  }, [topQ, accountId])
+  }, [topQ, accountId, activeKey])
   // La recherche part 300 ms après la dernière frappe.
   useEffect(() => { const h = setTimeout(() => { setQuery(search); setPage(0); setOpenId(null) }, 300); return () => clearTimeout(h) }, [search])
   const [note, setNote] = useState<string | null>(null)
@@ -69,9 +89,9 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   // Éléments lus page par page (un plugin peut en garder des milliers), éventuellement pour un seul mois.
   useEffect(() => {
     let alive = true
-    void window.api.pluginAccountItems(accountId, page * PAGE, PAGE, month || undefined, sort.key, sort.desc, query, scope).then((r) => { if (alive) setList(r) })
+    void window.api.pluginAccountItems(accountId, page * PAGE, PAGE, month || undefined, sort.key, sort.desc, query, scope, active).then((r) => { if (alive) setList(r) })
     return () => { alive = false }
-  }, [accountId, page, month, dataVersion, sort, query, scope])
+  }, [accountId, page, month, dataVersion, sort, query, scope, activeKey])
   useEffect(() => { setPage(0); setMonth(''); setOpenId(null) }, [accountId])
 
   if (!account || !plugin || !m) return <div className="glass empty"><p>{t('goals.noAccounts')}</p></div>
@@ -109,6 +129,20 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
         <button className="btn" onClick={() => void window.api.pluginAccountRemove(accountId).then(reloadPlugins)}>{t('pp.removeAccount')}</button>
       </div>
       {editing && <PluginAccountDialog plugin={plugin} account={account} onClose={() => setEditing(false)} />}
+      {m.views && extra.filters.length > 0 && (
+        <div className="glass filter-bar sect" role="toolbar" aria-label={t('pp.filters')}>
+          {extra.filters.map((f) => (
+            <label key={f.key}>
+              <span>{f.label}</span>
+              <select value={active[f.key] ?? ''} onChange={(e) => choose(f.key, e.target.value)}>
+                <option value="">{t('pp.filterAll')}</option>
+                {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
+          ))}
+          {filtered && <button className="btn small" onClick={() => { setSel({}); try { localStorage.removeItem(`wd.filters.${accountId}`) } catch { /* facultatif */ } }}>{t('pp.filterReset')}</button>}
+        </div>
+      )}
       {importing && (
         <div className="overlay" onClick={() => !busy && setImporting(false)}>
           <div className="glass modal" style={{ width: 'min(560px, 92vw)' }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('pp.import')}>
@@ -128,7 +162,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
           </div>
         </div>
       )}
-      {m.cross && <CrossPanel accountId={accountId} cross={m.cross} th={th} />}
+      {m.cross && <CrossPanel accountId={accountId} cross={m.cross} th={th} filters={active} />}
       {m.search && <div className="glass pad sect top-search">
         <input type="search" className="search" value={topQ} onChange={(e) => setTopQ(e.target.value)} placeholder={t('pp.topSearch')} aria-label={t('pp.topSearch')} />
         {found && (found.busy ? <p className="muted small" style={{ marginTop: 8 }}>{t('pp.searching')}</p>
@@ -141,7 +175,8 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
       {extra.backlog > 0 && <div className="glass pad small muted" style={{ marginBottom: 16 }}>{t('pp.backlog', { count: extra.backlog })}</div>}
       {account.lastError && <div className="err" style={{ marginBottom: 16 }}>{t('pp.error', { error: `${t(`plugin.run.${account.lastError}`)}${extra.error ? ` — ${extra.error}` : ''}` })}</div>}
 
-      <div className="grid cards">
+      {/* Avec un filtre, les compteurs et la courbe (qui portent sur tout le compte) laissent la place au bilan filtré. */}
+      {!filtered && <><div className="grid cards">
         {m.metrics.map((x, i) => {
           const s = series[x.key] ?? [], v = latest[x.key]
           const delta = s.length > 1 ? s[s.length - 1].value - s[0].value : undefined
@@ -165,16 +200,23 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
         {(series[def.key]?.length ?? 0) > 1
           ? <Chart option={timeOption(type, [{ name: loc(def.label, settings.lang), points: series[def.key] }], th, def.format === 'percent' ? ' %' : def.unit ? ` ${def.unit}` : '')} height={320} />
           : <p className="muted" style={{ padding: '60px 0', textAlign: 'center' }}>{t('platform.noData')}</p>}
-      </Reveal>
+      </Reveal></>}
 
-      {extra.summary && (
+      {filtered ? (
+        <Reveal className="glass pad sect" delay={0.04}>
+          <h2 style={{ marginBottom: 10 }}>{t('pp.summary')} · <span className="muted" style={{ fontWeight: 400 }}>{extra.filters.filter((f) => active[f.key]).map((f) => f.options.find((o) => o.value === active[f.key])?.label).join(' · ')}</span></h2>
+          {view?.error ? <div className="err">{view.error}</div>
+            : view?.detail ? <div style={{ opacity: view.busy ? 0.5 : 1 }}><DetailView accountId={accountId} detail={view.detail} th={th} t={t} layoutKey={String(accountId)} /></div>
+            : <p className="muted small">{view?.busy ? t('pp.searching') : t('pp.noResult')}</p>}
+        </Reveal>
+      ) : extra.summary && (
         <Reveal className="glass pad sect" delay={0.14}>
           <h2 style={{ marginBottom: 10 }}>{t('pp.summary')}</h2>
           <DetailView accountId={accountId} detail={extra.summary} th={th} t={t} layoutKey={String(accountId)} />
         </Reveal>
       )}
 
-      {(list.total > 0 || month || query) && (
+      {(list.total > 0 || month || query || filtered) && (
         <Reveal className="glass pad sect" delay={0.16}>
           <div className="row between" style={{ marginBottom: 6, flexWrap: 'wrap', gap: 10 }}>
             <h2>{t('pp.items')} <span className="muted" style={{ fontWeight: 400 }}>· {list.total}</span></h2>
@@ -400,13 +442,13 @@ function SearchStats({ stats, total, columns, lang, t }: { stats: ColumnStat[]; 
 }
 
 /** Croiser tes données : un joueur (vide = toi), une mesure, un axe et un second axe facultatif → graphique en barres et tableau. */
-function CrossPanel({ accountId, cross, th }: { accountId: number; cross: NonNullable<PluginManifest['cross']>; th: ChartTheme }): JSX.Element {
+function CrossPanel({ accountId, cross, th, filters }: { accountId: number; cross: NonNullable<PluginManifest['cross']>; th: ChartTheme; filters: Record<string, string> }): JSX.Element {
   const { t, settings } = useApp()
   const [req, setReq] = useState({ who: '', measure: cross.measures[0].key, a: cross.dimensions[0].key, b: 'none' })
   const [res, setRes] = useState<{ busy: boolean; detail?: PluginDetail; error?: string } | null>(null)
   const run = async (): Promise<void> => {
     setRes({ busy: true })
-    const r = await window.api.pluginAccountCross(accountId, req)
+    const r = await window.api.pluginAccountCross(accountId, req, filters)
     setRes({ busy: false, detail: r.detail, error: r.error })
   }
   const set = (k: keyof typeof req, v: string): void => setReq((x) => ({ ...x, [k]: v }))

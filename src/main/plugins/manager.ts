@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync } from 'fs'
 import { basename, extname, join } from 'path'
 import {
-  compareVersions, IMAGE_FILE_RE, InstalledPlugin, sanitizeDetail, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
+  compareVersions, IMAGE_FILE_RE, InstalledPlugin, PluginFilter, sanitizeDetail, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
 } from '@shared/plugin'
 import * as db from '../db'
 import { processPluginNotices, processPluginRefresh } from '../milestones'
@@ -135,7 +135,7 @@ function folderOf(manifest: PluginManifest, inputs: Record<string, string>, acco
   return { dir: real, extra: accountId === undefined ? undefined : importDirOf(accountId), extensions: manifest.permissions.folderExtensions }
 }
 
-function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh' | 'search' | 'cross', inputs: Record<string, string>, account?: { id: number; externalId: string; displayName: string }, query?: string, cross?: Record<string, string>): RunRequest {
+function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh' | 'search' | 'cross' | 'view', inputs: Record<string, string>, account?: { id: number; externalId: string; displayName: string }, query?: string, cross?: Record<string, string>, filters?: Record<string, string>): RunRequest {
   const manifest = loadManifest(row)
   const secretValues: Record<string, string> = {}
   for (const s of manifest.secrets) secretValues[s.key] = secrets.getSecret(secretKey(row.id, s.key)) ?? ''
@@ -144,7 +144,7 @@ function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh' | 'search' | 
   return {
     manifest, script: row.script, fn,
     // Le dossier d'images ne regarde que l'interface : le script ne reçoit même pas son chemin.
-    ctx: { inputs: Object.fromEntries(Object.entries(inputs).filter(([k]) => manifest.inputs.find((i) => i.key === k)?.type !== 'images')), secrets: secretValues, lang: db.getSettings().lang, account: account ? { externalId: account.externalId, displayName: account.displayName } : undefined, query, cross },
+    ctx: { inputs: Object.fromEntries(Object.entries(inputs).filter(([k]) => manifest.inputs.find((i) => i.key === k)?.type !== 'images')), secrets: secretValues, lang: db.getSettings().lang, account: account ? { externalId: account.externalId, displayName: account.displayName } : undefined, query, cross, filters },
     folder: folderOf(manifest, inputs, accountId),
     storage: accountId === undefined
       ? { get: (k) => memory.get(k) ?? null, set: (k, v) => { memory.set(k, v) } }
@@ -284,6 +284,7 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
     db.setMeta(accountId, 'stalled', String(stalled))
     db.setMeta(accountId, 'backlog', String(result.backlog))
     if (result.summary) db.setMeta(accountId, 'summary', JSON.stringify(result.summary))
+    if (manifest.views) db.setMeta(accountId, 'filters', JSON.stringify(result.filters))
     // Travail restant (ex. fichiers pas encore lus) : on relance bientôt, sans attendre la prochaine actualisation.
     if (result.backlog > 0 && stalled < MAX_STALLED) catchUps.set(accountId, setTimeout(() => { catchUps.delete(accountId); void refreshPluginAccount(accountId).then(() => notify()) }, CATCH_UP_MS))
     db.setMeta(accountId, 'log', JSON.stringify(run.logs))
@@ -316,13 +317,29 @@ export async function refreshAllPlugins(): Promise<void> {
   }
 }
 
-export function pluginAccountData(accountId: number): { logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null } {
+export function pluginAccountData(accountId: number): { logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null; filters: PluginFilter[] } {
   const parse = <T,>(k: string, fallback: T): T => { try { return JSON.parse(db.getMeta(accountId, k) ?? '') as T } catch { return fallback } }
   return { logs: parse<string[]>('log', []), error: db.getMeta(accountId, 'error') || null, backlog: Number(db.getMeta(accountId, 'backlog')) || 0,
-    summary: parse<PluginDetail | null>('summary', null) }
+    summary: parse<PluginDetail | null>('summary', null), filters: parse<PluginFilter[]>('filters', []) }
 }
 
-export function pluginAccountItems(accountId: number, offset: number, limit: number, month?: string, sortKey?: string, desc = true, query = '', scope = 'all'): PluginItemsPage {
+/** Filtres choisis dans la barre du haut, limités à ceux que le plugin a proposés (clé et valeur connues). */
+function cleanFilters(accountId: number, raw: unknown): { sel: Record<string, string>; match: Record<string, string>; since: number } {
+  const out = { sel: {} as Record<string, string>, match: {} as Record<string, string>, since: 0 }
+  if (!raw || typeof raw !== 'object') return out
+  let known: PluginFilter[] = []
+  try { known = JSON.parse(db.getMeta(accountId, 'filters') ?? '[]') as PluginFilter[] } catch { known = [] }
+  for (const f of known) {
+    const v = (raw as Record<string, unknown>)[f.key]
+    if (typeof v !== 'string' || !f.options.some((o) => o.value === v)) continue
+    out.sel[f.key] = v
+    if (f.field === '$ts') out.since = Math.max(out.since, Date.now() - Number(v) * 86_400_000)
+    else if (f.field) out.match[f.field] = v
+  }
+  return out
+}
+
+export function pluginAccountItems(accountId: number, offset: number, limit: number, month?: string, sortKey?: string, desc = true, query = '', scope = 'all', filters?: unknown): PluginItemsPage {
   const page = Math.min(200, Math.max(1, Math.floor(limit) || 50)), from = Math.max(0, Math.floor(offset) || 0)
   const m = typeof month === 'string' && /^\d{4}-\d{2}$/.test(month) ? month : undefined
   const key = sortKey === 'title' || sortKey === 'ts' || (typeof sortKey === 'string' && /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/.test(sortKey)) ? sortKey : 'ts'
@@ -330,7 +347,8 @@ export function pluginAccountItems(accountId: number, offset: number, limit: num
   let cols: string[] = []
   try { if (row) cols = loadManifest(row).itemColumns.map((c) => c.key) } catch { /* manifeste illisible : pas de stats */ }
   const sc = scope === 'all' || scope === 'title' || cols.includes(scope) ? scope : 'all'
-  return db.listPluginItems(accountId, from, page, m, key, desc !== false, typeof query === 'string' ? query.slice(0, 100) : '', sc, cols)
+  const f = cleanFilters(accountId, filters)
+  return db.listPluginItems(accountId, from, page, m, key, desc !== false, typeof query === 'string' ? query.slice(0, 100) : '', sc, cols, f.match, f.since)
 }
 
 /* ---------- Fichier .wdsh reçu à l'ouverture (double-clic) ---------- */
@@ -394,13 +412,13 @@ export async function syncCatalogUpdates(): Promise<string[]> {
 
 /** Recherche libre (barre du haut) : la fonction `search` du plugin, si elle existe, calcule un détail pour la requête
  *  (ex. toutes les stats d'un joueur). Aucune donnée n'est enregistrée et un échec ne compte pas comme une panne du plugin. */
-export async function pluginAccountSearch(accountId: number, query: string): Promise<{ ok: boolean; unsupported?: boolean; detail?: PluginDetail; error?: string }> {
+export async function pluginAccountSearch(accountId: number, query: string, filters?: unknown): Promise<{ ok: boolean; unsupported?: boolean; detail?: PluginDetail; error?: string }> {
   const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
   const q = String(query ?? '').trim().slice(0, 100)
   if (!pa || !row || !row.enabled || q.length < 2) return { ok: false }
   try {
     const inputs = JSON.parse(pa.inputs) as Record<string, string>
-    const run = await runIsolated(buildRequest(row, 'search', inputs, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, q), { pluginId: row.id, accountId })
+    const run = await runIsolated(buildRequest(row, 'search', inputs, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, q, undefined, cleanFilters(accountId, filters).sel), { pluginId: row.id, accountId })
     return { ok: true, detail: sanitizeDetail(run.value) }
   } catch (e) {
     if (e instanceof PluginError && e.code === 'no_function') return { ok: false, unsupported: true }
@@ -410,7 +428,7 @@ export async function pluginAccountSearch(accountId: number, query: string): Pro
 
 /** Outil « Croiser tes données » : la fonction `cross` du plugin reçoit le joueur, la mesure et les deux axes choisis
  *  (valeurs limitées aux menus du manifeste) et renvoie un détail (barres, tableau). Rien n'est enregistré. */
-export async function pluginAccountCross(accountId: number, req: Record<string, string>): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }> {
+export async function pluginAccountCross(accountId: number, req: Record<string, string>, filters?: unknown): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }> {
   const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
   if (!pa || !row || !row.enabled) return { ok: false }
   let m: PluginManifest
@@ -421,7 +439,20 @@ export async function pluginAccountCross(accountId: number, req: Record<string, 
   const clean = { who: String(req?.who ?? '').trim().slice(0, 60), measure: pick(req?.measure, keys(m.cross.measures), m.cross.measures[0].key),
     a: pick(req?.a, keys(m.cross.dimensions), m.cross.dimensions[0].key), b: pick(req?.b, ['none', ...keys(m.cross.dimensions)], 'none') }
   try {
-    const run = await runIsolated(buildRequest(row, 'cross', JSON.parse(pa.inputs) as Record<string, string>, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, undefined, clean), { pluginId: row.id, accountId })
+    const run = await runIsolated(buildRequest(row, 'cross', JSON.parse(pa.inputs) as Record<string, string>, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, undefined, clean, cleanFilters(accountId, filters).sel), { pluginId: row.id, accountId })
+    return { ok: true, detail: sanitizeDetail(run.value) }
+  } catch (e) { return { ok: false, error: msgOf(e) } }
+}
+
+/** Barre du haut : la fonction `view` du plugin recalcule le bilan pour les filtres choisis (ex. un seul mode). Rien n'est enregistré. */
+export async function pluginAccountView(accountId: number, filters: unknown): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }> {
+  const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
+  if (!pa || !row || !row.enabled) return { ok: false }
+  let m: PluginManifest
+  try { m = loadManifest(row) } catch { return { ok: false } }
+  if (!m.views) return { ok: false }
+  try {
+    const run = await runIsolated(buildRequest(row, 'view', JSON.parse(pa.inputs) as Record<string, string>, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, undefined, undefined, cleanFilters(accountId, filters).sel), { pluginId: row.id, accountId })
     return { ok: true, detail: sanitizeDetail(run.value) }
   } catch (e) { return { ok: false, error: msgOf(e) } }
 }

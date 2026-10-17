@@ -45,6 +45,7 @@ Puis dans WaveDash : **Plugins › Installer un plugin** (ou glisse le fichier d
 | `secrets` | jusqu'à 4 valeurs (clés API…) enregistrées **chiffrées** par WaveDash, jamais en clair. |
 | `metrics` | de 1 à 20. `format` : `number` (défaut), `percent`, `rank`, `duration` (secondes → mm:ss). `decimals` de 0 à 4. `primary` : métrique affichée d'abord. `milestone` (facultatif) : paliers proposés par défaut, `{ "increment": 100, "notifyDown": true, "enabled": true }` (incrément entier ≥ 1 ; sans incrément, séquence 10, 20, 50…). |
 | `itemColumns` | colonnes du tableau d'éléments (facultatif). |
+| `views` | `true` si le script définit `view` : la page affiche une **barre de filtres** (menus déroulants) d'après `filters` dans son résultat ; un filtre choisi recalcule le bilan (`view`), filtre la liste des éléments, la recherche et le croisement (`ctx.filters`). |
 | `notices` | `true` si le plugin envoie des notifications (`notices` dans son résultat, voir plus bas). Affiché à l'installation ; chaque plugin peut être coupé dans Paramètres › Notifications. |
 | `search` | `true` si le script définit `search` : la page du compte affiche alors la barre de recherche du haut. |
 | `cross` | Outil « Croiser tes données » : `{ "measures": [{ "key", "label" }], "dimensions": [{ "key", "label" }] }` (2 à 12 chacun). Le script définit `cross(ctx)` ; `ctx.cross` = `{ who, measure, a, b }` (`b` peut valoir `none`) ; il renvoie un détail, en général des `bars` (`{ title, categories, series: [{ name, values }], stacked }`) et un tableau. |
@@ -84,6 +85,8 @@ var plugin = {
 ```
 
 **`backlog`** : si le plugin ne peut pas tout traiter en une fois (budget de calcul), il indique ce qui reste (par exemple le nombre de fichiers pas encore lus). Tant que `backlog` est positif, WaveDash le relance 5 s après la fin de l'exécution, sans attendre `refreshMinutes`, et la page affiche la progression. Si le retard ne baisse pas pendant 3 relances de suite, WaveDash cesse ces relances rapides et attend l'actualisation normale suivante : un retard mal calculé ne peut pas faire tourner un plugin en boucle.
+
+**`filters`** (manifeste `views: true`) : jusqu'à 4 filtres `{ key, label, field, options: [{ value, label }] }` (60 choix au plus). `field` : colonne des éléments filtrée à l'identique ; `"$ts"` : période, la valeur est un nombre de jours ; sans `field`, seul le bilan est filtré. Quand un filtre est choisi, WaveDash appelle `view(ctx)` avec `ctx.filters` (`{ mode: '1v1 Ranked' }`, seulement des valeurs proposées) ; le script renvoie un bilan (même format que `detail`), qui remplace compteurs, courbe et bilan de la page. `search` et `cross` reçoivent aussi `ctx.filters`.
 
 **`notices`** (manifeste `notices: true`) : 3 notifications au plus par exécution (`title` 40 caractères, `text` 200, `direction` `up` ou `down`), envoyées comme un palier (notification Windows, son, célébration, historique). Chaque `id` n'est envoyé **qu'une fois** par compte : donne un identifiant nouveau à chaque événement. L'utilisateur peut couper les notifications d'un plugin dans Paramètres › Notifications.
 
@@ -164,9 +167,10 @@ La page d'un compte de plugin affiche l'erreur de la dernière actualisation et 
 
 ## Plugin fourni : Brawlhalla Replays
 
-`examples/brawlhalla-replays-1.9.1.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
+`examples/brawlhalla-replays-1.10.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
 
 - **Courbe et cartes** : parties, victoires, défaites, taux de victoire, stocks pris et perdus, durée moyenne, appuis par minute.
+- **Barre du haut** : Mode (1v1 Unranked, 1v1 Ranked, 2v2 Friendly, 2v2 Ranked, 3v3 Ranked, puis les autres modes joués), Patch et Période. Tout le bilan, la liste des parties, la recherche et le croisement se limitent au choix.
 - **Bilan** : chiffres clés, tableaux par légende, carte, mode, coéquipier, adversaire, jour et heure, direction de tes esquives, répartition de tes attaques.
 - **Détail d'une partie** : vignette de la carte (si tu indiques le dossier `images	humbnails` du jeu : WaveDash l'affiche depuis ton installation, aucune image n'est livrée), carte, mode, patch, date, durée, vies, réglages ; pour chaque joueur, légende, armes, posture, place, KOs subis, KOs infligés (en 1v1), attaques légères et lourdes par direction, esquives, sauts, lancers, provocations, temps de déplacement, appuis par minute ; grille de direction des esquives, courbe d'activité toutes les 15 s, frise de la partie (KOs, avec leur auteur en 1v1 ; lancers d'arme ; provocations).
 

@@ -59,6 +59,14 @@ test('Brawlhalla Replays sur des replays réels', { skip: !existsSync(source) &&
   assert.ok(kinds.has('ko') && kinds.has('action'), `frise enrichie : ${[...kinds].join(', ')}`)
   assert.ok(games.some((i) => i.detail?.image?.file.endsWith('.jpg')), 'vignette de carte')
 
+  // Barre du haut : filtres proposés, et bilan recalculé pour un seul mode.
+  assert.deepEqual(r.filters.map((f) => f.key), ['mode', 'patch', 'period'])
+  const mode = r.filters[0].options[0].value
+  const view = sanitizeDetail(await run('view', { filters: { mode } }))
+  const nGames = (d: typeof view): number => Number(d?.stats?.find((x) => x.label === 'Parties')?.value ?? -1)
+  assert.ok(nGames(view) > 0 && nGames(view) <= r.metrics.games, `bilan du mode ${mode} : ${nGames(view)} parties`)
+  assert.equal(nGames(view), games.filter((g) => g.fields.mode === mode).length, 'autant de parties que dans la liste filtrée')
+
   const again = sanitizeRunResult(await run('refresh'), m)
   assert.equal(again.metrics.games, r.metrics.games, 'une 2e actualisation ne recompte rien')
 

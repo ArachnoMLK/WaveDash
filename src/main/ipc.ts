@@ -154,8 +154,9 @@ export function registerIpc(win: () => BrowserWindow | null): void {
     return res
   })
   ipcMain.handle('plugins:bundled', () => plugins.listBundled())
-  ipcMain.handle('plugins:accountCross', (_e, id: number, req: Record<string, string>) => plugins.pluginAccountCross(Number(id), req ?? {}))
-  ipcMain.handle('plugins:accountSearch', (_e, id: number, query: string) => plugins.pluginAccountSearch(Number(id), String(query ?? '')))
+  ipcMain.handle('plugins:accountCross', (_e, id: number, req: Record<string, string>, filters?: unknown) => plugins.pluginAccountCross(Number(id), req ?? {}, filters))
+  ipcMain.handle('plugins:accountSearch', (_e, id: number, query: string, filters?: unknown) => plugins.pluginAccountSearch(Number(id), String(query ?? ''), filters))
+  ipcMain.handle('plugins:accountView', (_e, id: number, filters?: unknown) => plugins.pluginAccountView(Number(id), filters))
   ipcMain.handle('plugins:catalog', (_e, force: boolean) => getCatalog(!!force))
   ipcMain.handle('plugins:catalogFetch', async (_e, id: string) => {
     try { return { ok: true, path: await fetchPackage(String(id)) } } catch (e) { return { ok: false, error: (e as Error).message } }
@@ -185,8 +186,8 @@ export function registerIpc(win: () => BrowserWindow | null): void {
   ipcMain.handle('plugins:accountRemove', (_e, id: number) => { plugins.removePluginAccount(Number(id)); notifyUpdated() })
   ipcMain.handle('plugins:accountRefresh', async (_e, id: number) => { await plugins.refreshPluginAccount(Number(id)); notifyUpdated() })
   ipcMain.handle('plugins:accountData', (_e, id: number) => plugins.pluginAccountData(Number(id)))
-  ipcMain.handle('plugins:accountItems', (_e, id: number, offset: number, limit: number, month?: string, sortKey?: string, desc?: boolean, query?: string, scope?: string) =>
-    plugins.pluginAccountItems(Number(id), Number(offset), Number(limit), typeof month === 'string' ? month : undefined, typeof sortKey === 'string' ? sortKey : undefined, desc !== false, typeof query === 'string' ? query : '', typeof scope === 'string' ? scope : 'all'))
+  ipcMain.handle('plugins:accountItems', (_e, id: number, offset: number, limit: number, month?: string, sortKey?: string, desc?: boolean, query?: string, scope?: string, filters?: unknown) =>
+    plugins.pluginAccountItems(Number(id), Number(offset), Number(limit), typeof month === 'string' ? month : undefined, typeof sortKey === 'string' ? sortKey : undefined, desc !== false, typeof query === 'string' ? query : '', typeof scope === 'string' ? scope : 'all', filters))
   ipcMain.handle('plugins:secretSet', (_e, id: string, key: string, value: string) => { const ok = plugins.setPluginSecret(String(id), String(key), String(value)); notifyUpdated(); return ok })
   ipcMain.handle('plugins:secretDelete', (_e, id: string, key: string) => { plugins.deletePluginSecret(String(id), String(key)); notifyUpdated() })
   ipcMain.handle('plugins:takePendingFile', () => plugins.takePendingFile())

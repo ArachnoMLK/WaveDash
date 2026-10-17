@@ -9,7 +9,7 @@ var BUDGET_MS = 2000       // au-delà, on s'arrête : le reste suit à la relan
 var MAX_POINTS = 5000      // points d'historique renvoyés au plus (limite de WaveDash)
 var BUCKETS = 76             // clés de stockage du cache des parties (c0 à c75 ; WaveDash autorise 100 clés de 64 Ko)
 var PLAYER_BUCKETS = 20      // profils des autres joueurs : clés c76 à c95 (mêmes clés qu'avant, rien de plus)
-var CACHE_V = 11           // version du contenu du cache : une entrée plus ancienne est relue
+var CACHE_V = 12           // version du contenu du cache : une entrée plus ancienne est relue
 
 // Légendes : identifiant du replay = legend_id de l'API officielle = HeroID du jeu (table HeroTypes du patch 11.00).
 // Une légende plus récente que cette table s'affiche « #id ».
@@ -536,6 +536,7 @@ function buildItem(file, c, a, lang) {
     ts: file.mtime,
     fields: {
       mode: modeLabel(c, lang),
+      patch: patchOf(file, c),
       result: a.won === null ? '—' : a.won ? tr(fr, 'Victoire', 'Win') : tr(fr, 'Défaite', 'Loss'),
       duration: pad(Math.floor(Math.round(a.dur) / 60)) + fmtDur(a.dur).slice(fmtDur(a.dur).indexOf(':')),   // « 03:04 » : se trie correctement
       kos: c.k.length,
@@ -550,7 +551,7 @@ function buildItem(file, c, a, lang) {
 function summaryOf(file, c, a, lang) {
   var me = a.me, p = presses(c, me.id), cut = function (n) { return n.slice(0, 24) }
   return { w: a.won === null ? -1 : a.won ? 1 : 0, d: a.lost, tk: a.taken, du: Math.round(a.dur * 1000), a: a.apm === null ? -1 : Math.round(a.apm * 10),
-    L: me.hero, m: mapName(file, c, lang === 'fr'), p: modeLabel(c, lang), k: a.kills[me.id] === null ? -1 : a.kills[me.id],
+    L: me.hero, m: mapName(file, c, lang === 'fr'), p: modeLabel(c, lang), v: patchOf(file, c), k: a.kills[me.id] === null ? -1 : a.kills[me.id],
     // Coéquipiers et adversaires : [pseudo, identifiant, légende] (identifiant 0 pour les bots et les replays d'avant le patch 10.09).
     tm: a.ents.filter(function (e) { return e.id !== me.id && a.sameTeam(e, me) }).map(function (e) { return [cut(e.name), e.pid, e.hero] }),
     op: a.ents.filter(function (e) { return !a.sameTeam(e, me) }).map(function (e) { return [cut(e.name), e.pid, e.hero] }),
@@ -653,11 +654,41 @@ function recentRows(list, fr, extra) {
   })
 }
 
-function searchGames(query, lang) {
+/* ───────── barre du haut : modes, patchs, période ───────── */
+// Les cinq modes principaux d'abord (valeur = nom du mode dans les parties, libellé = nom du jeu), puis les autres modes présents.
+var MAIN_MODES = [['1v1 Unranked', '1v1 Unranked'], ['1v1 Ranked', '1v1 Ranked'], ['2v2 Unranked', '2v2 Friendly'], ['2v2 Ranked', '2v2 Ranked'], ['Ranked3v3', '3v3 Ranked']]
+/** Parties lues (cache), du plus ancien au plus récent, limitées aux filtres choisis. */
+function cachedGames(f) {
+  f = f || {}
+  var cache = loadCache(), games = [], since = f.period ? Date.now() - Number(f.period) * 86400000 : 0
+  for (var k in cache) {
+    var e = cache[k]
+    if (!e || e.v !== CACHE_V || !e.s) continue
+    if ((f.mode && e.s.p !== f.mode) || (f.patch && e.s.v !== f.patch) || (since && e.t < since)) continue
+    games.push(e)
+  }
+  return games.sort(function (a, b) { return a.t - b.t })
+}
+/** Choix proposés dans la barre du haut, avec le nombre de parties : « 1v1 Ranked (2143) ». */
+function filtersOf(games, fr) {
+  var modes = {}, patches = {}
+  games.forEach(function (g) { modes[g.s.p] = (modes[g.s.p] || 0) + 1; if (g.s.v) patches[g.s.v] = (patches[g.s.v] || 0) + 1 })
+  var main = MAIN_MODES.filter(function (x) { return modes[x[0]] }).map(function (x) { return { value: x[0], label: x[1] + ' (' + modes[x[0]] + ')' } })
+  var other = Object.keys(modes).filter(function (k) { return !MAIN_MODES.some(function (x) { return x[0] === k }) })
+    .sort(function (a, b) { return modes[b] - modes[a] }).map(function (k) { return { value: k, label: k + ' (' + modes[k] + ')' } })
+  var pts = Object.keys(patches).sort(function (a, b) { return parseFloat(b) - parseFloat(a) || (b < a ? -1 : 1) }).map(function (k) { return { value: k, label: k + ' (' + patches[k] + ')' } })
+  return [
+    { key: 'mode', label: tr(fr, 'Mode', 'Mode'), field: 'mode', options: main.concat(other) },
+    { key: 'patch', label: 'Patch', field: 'patch', options: pts },
+    { key: 'period', label: tr(fr, 'Période', 'Period'), field: '$ts', options: [
+      { value: '7', label: tr(fr, '7 derniers jours', 'Last 7 days') }, { value: '30', label: tr(fr, '30 derniers jours', 'Last 30 days') },
+      { value: '90', label: tr(fr, '3 derniers mois', 'Last 3 months') }, { value: '365', label: tr(fr, '12 derniers mois', 'Last 12 months') }] }
+  ]
+}
+
+function searchGames(query, lang, filters) {
   var fr = lang === 'fr', q = bareName(query)
-  var cache = loadCache(), games = []
-  for (var k in cache) { var e = cache[k]; if (e && e.v === CACHE_V && e.s) games.push(e) }
-  games.sort(function (a, b) { return a.t - b.t })
+  var games = cachedGames(filters)
   if (!games.length) return undefined
 
   // Candidats : joueurs (par identifiant, sinon pseudo), cartes, tes légendes, modes.
@@ -771,9 +802,7 @@ var CROSS_MEASURES = { games: ['Parties', 'Games'], wins: ['Victoires', 'Wins'],
 
 function crossData(ctx) {
   var fr = ctx.lang === 'fr', R = ctx.cross || {}, who = String(R.who || '').trim(), mine = wantedList(ctx.inputs.playerName)
-  var cache = loadCache(), games = []
-  for (var k in cache) { var e = cache[k]; if (e && e.v === CACHE_V && e.s) games.push(e) }
-  games.sort(function (a, b) { return a.t - b.t })
+  var games = cachedGames(ctx.filters)
   if (!games.length) return undefined
   var rows = [], label = tr(fr, 'Toi', 'You')
   var isMe = !who || exactly(who, mine) || mine.some(function (w) { return bareName(who) === w })
@@ -846,7 +875,12 @@ var plugin = {
   },
 
   // Barre de recherche du haut : toutes tes stats pour un joueur, une carte, une de tes légendes ou un mode.
-  search: async function (ctx) { return searchGames(ctx.query, ctx.lang) },
+  search: async function (ctx) { return searchGames(ctx.query, ctx.lang, ctx.filters) },
+  // Barre du haut : le bilan complet, mais seulement pour le mode, le patch ou la période choisis.
+  view: async function (ctx) {
+    var games = cachedGames(ctx.filters)
+    return games.length ? buildSummary(games, ctx.lang) : { chips: [tr(ctx.lang === 'fr', 'Aucune partie pour ces filtres', 'No game for these filters')] }
+  },
   // Outil « Croiser tes données » : un joueur, une mesure, un axe et un second axe facultatif.
   cross: async function (ctx) { return crossData(ctx) },
 
@@ -906,6 +940,6 @@ var plugin = {
     if (decided) metrics.winrate = T.wins * 100 / decided
     if (T.games) metrics.avg_duration = T.dur / T.games
     if (T.apmN) metrics.apm = T.apm / T.apmN
-    return { metrics: metrics, items: items.slice(0, 200), history: history, summary: buildSummary(games, lang), backlog: backlog }
+    return { metrics: metrics, items: items.slice(0, 200), history: history, summary: buildSummary(games, lang), backlog: backlog, filters: filtersOf(games, lang === 'fr') }
   }
 }

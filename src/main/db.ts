@@ -315,10 +315,16 @@ const MONTH = "strftime('%Y-%m', ts / 1000, 'unixepoch', 'localtime')"
 /** Tri : 'ts' (date), 'title' ou la clé d'une colonne du plugin ; les éléments sans valeur passent en dernier.
  *  Recherche : `scope` = 'all' (tout l'élément, détail compris), 'title' ou la clé d'une colonne. Pendant une recherche,
  *  `statKeys` donne les colonnes sur lesquelles calculer tes stats (moyennes, répartitions). */
+/** `match` : colonnes égales à une valeur (filtres de la barre du haut) ; `since` : éléments datés de cet instant ou après. */
 export function listPluginItems(accountId: number, offset: number, limit: number, month?: string, sortKey = 'ts', desc = true, query = '',
-  scope = 'all', statKeys: string[] = []): PluginItemsPage {
+  scope = 'all', statKeys: string[] = [], match: Record<string, string> = {}, since = 0): PluginItemsPage {
   let where = month ? `account_id = ? AND ts > 0 AND ${MONTH} = ?` : 'account_id = ?'
   const args: (number | string)[] = month ? [accountId, month] : [accountId]
+  for (const [k, v] of Object.entries(match)) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_]{0,31}$/.test(k)) continue
+    where += ' AND json_extract(data, ?) = ?'; args.push(`$.fields.${k}`, v)
+  }
+  if (since > 0) { where += ' AND ts >= ?'; args.push(since) }
   const target = scope === 'all' ? 'data' : scope === 'title' ? "json_extract(data, '$.title')" : 'json_extract(data, ?)'
   for (const word of query.trim().split(/\s+/).filter(Boolean).slice(0, 6)) {
     where += ` AND ${target} LIKE ? ESCAPE '\\'`

@@ -216,3 +216,9 @@ details.rule[open] > summary { margin-bottom: 4px; }
 .detail-image { margin: 0; width: 260px; max-width: 100%; }
 .detail-image img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--line); }
 .detail-image figcaption { margin-top: 6px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+
+/* Barre des filtres d'un plugin (Mode, Patch, Période…) : un menu par filtre, libellé au-dessus. */
+.filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; padding: 14px 18px; }
+.filter-bar label { display: flex; flex-direction: column; gap: 5px; min-width: 170px; }
+.filter-bar label > span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.filter-bar select { min-width: 170px; }
