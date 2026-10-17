@@ -40,9 +40,12 @@ test('Brawlhalla Replays sur des replays réels', { skip: !existsSync(source) &&
   for (const { n } of [...names.slice(0, 25), ...names.slice(-15)]) { const s = statSync(join(source, n)); copyFileSync(join(source, n), join(dir, n)); utimesSync(join(dir, n), s.atime, s.mtime) }
   const run = runner('brawlhalla-replays', dir, { folder: dir, playerName: 'Close' }), { m } = load('brawlhalla-replays')
 
-  let r = sanitizeRunResult(await run('refresh'), m), loops = 0
   // Le plugin lit selon un budget de temps : sur une machine chargée (tests en parallèle), il lui faut plus de passages.
-  while (r.backlog > 0 && loops++ < 100) r = sanitizeRunResult(await run('refresh'), m)
+  // Chaque passage ne renvoie que les parties qu'il vient de lire (itemsMode keep) : on les cumule, comme WaveDash.
+  let r = sanitizeRunResult(await run('refresh'), m), loops = 0
+  const items = new Map(r.items.map((i) => [i.id, i]))
+  while (r.backlog > 0 && loops++ < 100) { r = sanitizeRunResult(await run('refresh'), m); r.items.forEach((i) => items.set(i.id, i)) }
+  const games = [...items.values()]
   assert.equal(r.backlog, 0)
   const all = run.logs.join('\n'), failed = [...all.matchAll(/(\d+) illisibles/g)].reduce((s, x) => s + Number(x[1]), 0)
   const ignored = Number(/(\d+) parties sans ton pseudo/.exec([...run.logs].reverse().find((l) => /sans ton pseudo/.test(l)) ?? '')?.[1] ?? 0)
@@ -50,16 +53,16 @@ test('Brawlhalla Replays sur des replays réels', { skip: !existsSync(source) &&
   assert.equal(r.metrics.games + ignored, 40, all)
   assert.ok(r.metrics.games > 0)
   assert.ok(r.summary?.tables?.length, 'bilan avec tableaux')
-  assert.ok(r.items.length > 0 && r.items.every((i) => i.ts && i.detail), 'chaque partie est datée et détaillée')
+  assert.ok(games.length > 0 && games.every((i) => i.ts && i.detail), 'chaque partie est datée et détaillée')
 
-  const kinds = new Set(r.items.flatMap((i) => i.detail?.timeline?.events.map((e) => e.kind ?? 'ko') ?? []))
+  const kinds = new Set(games.flatMap((i) => i.detail?.timeline?.events.map((e) => e.kind ?? 'ko') ?? []))
   assert.ok(kinds.has('ko') && kinds.has('action'), `frise enrichie : ${[...kinds].join(', ')}`)
-  assert.ok(r.items.some((i) => i.detail?.image?.file.endsWith('.jpg')), 'vignette de carte')
+  assert.ok(games.some((i) => i.detail?.image?.file.endsWith('.jpg')), 'vignette de carte')
 
   const again = sanitizeRunResult(await run('refresh'), m)
   assert.equal(again.metrics.games, r.metrics.games, 'une 2e actualisation ne recompte rien')
 
-  const player = r.items[0].detail!.table?.rows.map((row) => String(row[0])).find((n) => n && !/close/i.test(n))
+  const player = games[0].detail!.table?.rows.map((row) => String(row[0])).find((n) => n && !/close/i.test(n))
   if (player) assert.ok(sanitizeDetail(await run('search', { query: player.replace(/^.*\|\s*/, '').slice(0, 20) })), 'recherche d’un joueur')
   const cross = sanitizeDetail(await run('cross', { cross: { who: '', measure: m.cross!.measures[0].key, a: m.cross!.dimensions[0].key, b: 'none' } }))
   assert.ok(cross?.bars?.length || cross?.table, 'croisement')

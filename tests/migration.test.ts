@@ -13,7 +13,8 @@ test('Brawlhalla intégré → plugin : démo supprimée, vrai compte rattaché 
   secrets.setSecret('brawlhalla.apiKey' as never, 'cle-de-test')
   db.setSettings({ milestoneRules: { 'brawlhalla.games': { enabled: true, sequence: true, increment: 0, custom: [], notifyDown: false } } })
 
-  migrateBuiltinBrawlhalla()
+  const refreshed: number[] = []
+  migrateBuiltinBrawlhalla(async (id) => { refreshed.push(id) })      // aucun appel réseau pendant les tests
 
   assert.equal(db.getAccount(demo.id), undefined)
   const pa = listPluginAccounts().find((a) => a.id === real.id)!
@@ -28,7 +29,8 @@ test('Brawlhalla intégré → plugin : démo supprimée, vrai compte rattaché 
   assert.equal(rules['plugin:wavedash.brawlhalla-api.elo_1v1'].increment, 100)
   assert.equal(rules['brawlhalla.games'], undefined)
 
-  migrateBuiltinBrawlhalla()      // deuxième passage : rien ne change
+  assert.deepEqual(refreshed, [real.id], 'le compte converti est actualisé')
+  migrateBuiltinBrawlhalla(async () => {})      // deuxième passage : rien ne change
   assert.equal(listPluginAccounts().filter((a) => a.id === real.id).length, 1)
 })
 

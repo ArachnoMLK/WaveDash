@@ -14,7 +14,8 @@ export function removeSocialPlaceholders(): void {
   for (const a of db.listAccounts().filter((x) => ['instagram', 'tiktok'].includes(x.platform as string))) db.deleteAccount(a.id)
 }
 
-export function migrateBuiltinBrawlhalla(): void {
+/** `refresh` : actualisation du compte converti (remplaçable dans les tests, qui ne doivent pas appeler l'API). */
+export function migrateBuiltinBrawlhalla(refresh: (id: number) => Promise<void> = refreshPluginAccount): void {
   const old = db.listAccounts().filter((a) => (a.platform as string) === 'brawlhalla')
   for (const a of old.filter((x) => x.demo)) db.deleteAccount(a.id)
   const real = old.filter((x) => !x.demo)
@@ -36,7 +37,7 @@ export function migrateBuiltinBrawlhalla(): void {
 
   for (const a of real) {
     db.convertToPluginAccount(a.id, PLUGIN, { player: a.input })
-    void refreshPluginAccount(a.id)
+    void refresh(a.id)
   }
 }
 
