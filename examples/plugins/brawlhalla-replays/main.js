@@ -9,7 +9,7 @@ var BUDGET_MS = 2000       // au-delà, on s'arrête : le reste suit à la relan
 var MAX_POINTS = 5000      // points d'historique renvoyés au plus (limite de WaveDash)
 var BUCKETS = 76             // clés de stockage du cache des parties (c0 à c75 ; WaveDash autorise 100 clés de 64 Ko)
 var PLAYER_BUCKETS = 20      // profils des autres joueurs : clés c76 à c95 (mêmes clés qu'avant, rien de plus)
-var CACHE_V = 10           // version du contenu du cache : une entrée plus ancienne est relue
+var CACHE_V = 11           // version du contenu du cache : une entrée plus ancienne est relue
 
 // Légendes : identifiant du replay = legend_id de l'API officielle = HeroID du jeu (table HeroTypes du patch 11.00).
 // Une légende plus récente que cette table s'affiche « #id ».
@@ -498,9 +498,13 @@ function buildItem(file, c, a, lang) {
   })
   var actions = a.ents.map(function (e) {
     var p = presses(c, e.id), apm = apmOf(c, e.id)
-    if (!p) return [e.name, '—', '—', '—', '—', '—', '—', '—', '—', '—', '—', '—']
-    var x = p.x || ['—', '—', '—']
-    return [e.name, p.l.join(' / '), p.h.join(' / '), p.d, x[2], x[0], x[1], p.j, p.t, p.tt, pct(p.mv, c.l) + ' %', apm === null ? '—' : Math.round(apm)]
+    if (!p) return [e.name, '—', '—', '—', '—', '—', '—', '—', '—']
+    return [e.name, p.l.join(' / '), p.h.join(' / '), p.d, p.j, p.t, p.tt, pct(p.mv, c.l) + ' %', apm === null ? '—' : Math.round(apm)]
+  })
+  // Touche esquive : chaque appui classé (voir trackInput). Tableau à part : un tableau a 10 colonnes au plus.
+  var dodgeKey = a.ents.map(function (e) {
+    var p = presses(c, e.id), x = p && p.x
+    return x ? [e.name, p.d, x[2], x[0], x[1], p.d + x[0] + x[1] + x[2]] : [e.name, '—', '—', '—', '—', '—']
   })
   var grids = [], lines = []
   a.ents.forEach(function (e) {
@@ -515,10 +519,12 @@ function buildItem(file, c, a, lang) {
       { title: tr(fr, 'Joueurs', 'Players'),
         columns: fr ? ['Joueur', 'ID', 'Équipe', 'Légende', 'Armes', 'Posture', 'Place', 'KOs subis', 'KOs infligés (1v1)'] : ['Player', 'ID', 'Team', 'Legend', 'Weapons', 'Stance', 'Place', 'Stocks lost', 'KOs dealt (1v1)'],
         rows: players },
-      { title: tr(fr, 'Actions (attaques : neutre / côté / bas ; * estimé)', 'Actions (attacks: neutral / side / down; * estimated)'),
-        columns: fr ? ['Joueur', 'Légères', 'Lourdes', 'Esquives', 'Dashs*', 'Gravity cancels', 'Chase dodges*', 'Sauts', 'Lancers', 'Provocations', 'Déplacement', 'Appuis/min']
-          : ['Player', 'Light', 'Heavy', 'Dodges', 'Dashes*', 'Gravity cancels', 'Chase dodges*', 'Jumps', 'Throws', 'Taunts', 'Moving', 'Presses/min'],
-        rows: actions }
+      { title: tr(fr, 'Actions (attaques : neutre / côté / bas)', 'Actions (attacks: neutral / side / down)'),
+        columns: fr ? ['Joueur', 'Légères', 'Lourdes', 'Esquives', 'Sauts', 'Lancers', 'Provocations', 'Déplacement', 'Appuis/min'] : ['Player', 'Light', 'Heavy', 'Dodges', 'Jumps', 'Throws', 'Taunts', 'Moving', 'Presses/min'],
+        rows: actions },
+      { title: tr(fr, 'Touche esquive (* estimé)', 'Dodge key (* estimated)'),
+        columns: fr ? ['Joueur', 'Esquives', 'Dashs*', 'Gravity cancels', 'Chase dodges*', 'Appuis'] : ['Player', 'Dodges', 'Dashes*', 'Gravity cancels', 'Chase dodges*', 'Presses'],
+        rows: dodgeKey }
     ],
     grids: grids,
     series: lines.length ? [{ title: tr(fr, 'Actions toutes les 15 s', 'Actions every 15 s'), step: BUCKET_MS / 1000, lines: lines }] : undefined,
