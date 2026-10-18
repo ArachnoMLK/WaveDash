@@ -18,6 +18,18 @@ jobs:
       - run: npm test
         timeout-minutes: 20
       - run: npm run build
+      # Moteur du Studio (BrawlRender + vgmstream) : binaires publiés dans la pré-release studio-engine-r*
+      # (construits avec « npm run studio:engine », le code du moteur est dans le dépôt privé BrawlStudio).
+      - name: Moteur du Studio
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STUDIO_ENGINE_TAG: studio-engine-r1
+        run: |
+          gh release download $env:STUDIO_ENGINE_TAG -R $env:GITHUB_REPOSITORY -p studio-engine.zip -D $env:RUNNER_TEMP
+          Expand-Archive -LiteralPath "$env:RUNNER_TEMP\studio-engine.zip" -DestinationPath resources\studio -Force
+          if (-not (Test-Path resources\studio\engine\BrawlRender.exe)) { throw "BrawlRender.exe absent de l'archive" }
+          if (-not (Test-Path resources\studio\vgmstream\vgmstream-cli.exe)) { throw "vgmstream absent de l'archive" }
       - run: npx electron-builder --win nsis --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

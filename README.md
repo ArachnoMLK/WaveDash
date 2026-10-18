@@ -5,7 +5,7 @@ Windows dashboard for your **YouTube, Brawlhalla, TikTok, Discord** stats, and a
 
 Electron · React · TypeScript · SQLite · ECharts — gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
 
-> **Version 1.2.0**
+> **Version 1.3.0** : nouveau **Studio Brawlhalla** (rendus de légendes, cosmétiques, assets et musiques du jeu installé).
 >
 > Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit rester **public**.
 
@@ -42,6 +42,8 @@ Rendus lus directement dans les fichiers du jeu installé (rien n'est téléchar
 - **Assets** (bannières, avatars, sprites, décors, map art, images) et **musiques** du jeu (Wwise → MP3).
 
 Le rendu est fait par `BrawlRender.exe`, un moteur .NET du dépôt BrawlStudio basé sur [WallyAnmRenderer](https://github.com/allhailcheese/WallyAnmRenderer) (MIT). Avant `npm run dev` ou `npm run dist`, place BrawlStudio à côté de WaveDash (`git clone --recurse-submodules`) et lance `npm run studio:engine` (SDK .NET 8 requis) : le moteur et vgmstream sont copiés dans `resources/studio/` (non versionné). Sans eux, la page Studio indique simplement que le moteur manque.
+
+Les installateurs publiés incluent le moteur : le workflow *Release* télécharge l'archive `studio-engine.zip` de la pré-release `studio-engine-r1` (ignorée par les mises à jour automatiques). Pour publier un nouveau moteur : `npm run studio:engine`, compresser le contenu de `resources/studio/` en `studio-engine.zip`, le publier dans une pré-release `studio-engine-rN`, puis mettre ce nom dans `STUDIO_ENGINE_TAG` (`.github/workflows/release.yml`).
 
 ### Installer
 Télécharge `WaveDash-Setup-x.y.z.exe` dans l'onglet **Releases**. L'installateur n'est **pas signé** : SmartScreen affiche « éditeur inconnu » au premier lancement (« Informations complémentaires » › « Exécuter quand même »).
