@@ -10,10 +10,10 @@ import { pathToFileURL } from 'url'
 import { promisify } from 'util'
 import type {
   StudioAnimGroup, StudioAssetKind, StudioAssetPage, StudioCatalog, StudioExportFormat, StudioItem, StudioJob, StudioKind,
-  StudioRender, StudioRenderRequest, StudioStatus, StudioTrack
+  StudioRender, StudioRenderRequest, StudioStatus, StudioTrack, StudioWeaponSkins
 } from '@shared/studio'
 import { Engine } from './engine'
-import { AnimListing, buildLegendGroups, parseCsv, parseHeroes, WEAPON_ANM } from './presets'
+import { AnimListing, buildLegendGroups, effectItems, heroEffectTest, parseCsv, parseHeroes, WEAPON_ANM } from './presets'
 
 const run = promisify(execFile)
 const DEFAULT_GAME = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brawlhalla'
@@ -106,6 +106,37 @@ async function catalog(): Promise<StudioCatalog> {
 }
 
 let powerMap: Map<string, Record<string, string>> | null = null
+/** Skins d'arme compatibles avec les armes d'une légende : ceux de la légende d'abord, puis les autres par nom. */
+async function weaponSkins(heroName: string): Promise<StudioWeaponSkins> {
+  const hero = (await heroes()).find((h) => h.name === heroName)
+  if (!hero) return {}
+  const rows = await cached('weapon-skins', async () => parseCsv(await swzFile('weaponSkinTypes.csv'))
+    .filter((r) => r['WeaponSkinName'] && r['WeaponSkinName'] !== 'Template')
+    .map((r) => ({ name: r['WeaponSkinName'], base: r['BaseWeapon'], owner: r['OwnerHero'] ?? '', key: r['DisplayNameKey'] ?? '' })))
+  const cat = await cached('catalog', () => call<EngineCatalog & { weapons: { name: string; display: string }[] }>('catalog'))
+  const display = new Map((cat.weapons ?? []).map((w) => [w.name, w.display]))
+  const out: StudioWeaponSkins = {}
+  for (const w of hero.weapons) {
+    out[w] = rows.filter((r) => r.base === w && (display.get(r.name) || r.owner === heroName))
+      .map((r) => ({ name: r.name, display: display.get(r.name) || r.name, own: r.owner === heroName }))
+      .sort((a, b) => Number(b.own) - Number(a.own) || a.display.localeCompare(b.display))
+  }
+  return out
+}
+
+/** Une image précise d'un rendu, enregistrée en PNG. */
+async function exportFrame(win: BrowserWindow | null, id: string, index: number): Promise<{ ok: boolean; path?: string }> {
+  const meta = readRender(id)
+  const file = meta?.files[Math.max(0, Math.min(meta.files.length - 1, Math.floor(index)))]
+  if (!meta || !file) return { ok: false }
+  const name = `${meta.label.replace(/[^\w .-]/g, '_') || id} - image ${Math.floor(index) + 1}.png`
+  const opts = { defaultPath: name, filters: [{ name: 'PNG', extensions: ['png'] }] }
+  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+  if (r.canceled || !r.filePath) return { ok: false }
+  copyFileSync(join(dir('renders'), id, file), r.filePath)
+  return { ok: true, path: r.filePath }
+}
+
 async function legendAnims(heroName: string): Promise<StudioAnimGroup[]> {
   const hero = (await heroes()).find((h) => h.name === heroName)
   if (!hero) return []
@@ -124,9 +155,28 @@ async function items(kind: StudioKind, query = '', file?: string): Promise<Studi
     list = s.symbols.filter((n) => n.startsWith('a_Roster_Pose_') && !/M$/.test(n)).sort()
       .map((n) => ({ name: n, display: n.replace('a_Roster_Pose_', '').replace(/([a-z])([A-Z])/g, '$1 $2'), animClass: `UI_Icons.swf/${n}` }))
   } else if (kind === 'effect') {
-    if (!file || !/^SFX_[\w-]+\.swf$/.test(file)) return []
-    const s = await cached(`symbols-${file}`, () => call<{ symbols: string[] }>('symbols', { file }))
-    list = s.symbols.sort().map((n) => ({ name: n, display: n.replace(/^a_/, ''), animClass: `${file}/${n}` }))
+    // « * » : tous les fichiers ; « hero:Ninja » : les effets d'une légende, rangés par le jeu selon l'arme
+    // (SFX_Sword, SFX_Spear…) et dans les rigs des fichiers d'animation des armes
+    const hero = file?.startsWith('hero:') ? (await heroes()).find((h) => h.name === file.slice(5)) : undefined
+    const files = file === '*' || hero ? effectFiles() : file && /^SFX_[\w-]+\.swf$/.test(file) ? [file] : []
+    list = []
+    for (const f of files) {
+      const s = await cached(`symbols-${f}`, () => call<{ symbols: string[] }>('symbols', { file: f }))
+      list.push(...effectItems(f, s.symbols))
+    }
+    if (hero) {
+      for (const w of hero.weapons) {
+        if (!WEAPON_ANM[w]) continue
+        const l = await listing(WEAPON_ANM[w])
+        for (const cls of Object.keys(l.classes)) {
+          const n = cls.split('/')[1]
+          if (!n.startsWith('a__')) list.push({ name: n, display: n.replace(/^a_/, ''), animClass: cls })
+        }
+      }
+      const mine = heroEffectTest(hero.name)
+      // effets de base d'abord, puis ceux des skins (_SwapAang…)
+      list = list.filter((x) => mine(x.sequence?.[0] ?? x.name)).sort((a, b) => Number(/Swap/.test(a.name)) - Number(/Swap/.test(b.name)) || a.display.localeCompare(b.display))
+    }
   } else {
     const cos = await cached('cosmetics', () => call<Cosmetics>('cosmetics'))
     list = (cos[kind] ?? []).map((x) => ({ ...x, display: x.display || x.name }))
@@ -144,6 +194,7 @@ function engineRequest(req: StudioRenderRequest): Record<string, unknown> {
   const r: Record<string, unknown> = { scale: Math.min(Math.max(Number(req.scale) || 2, 0.5), 8), flip: !!req.flip }
   if (req.kind === 'legend') Object.assign(r, { kind: 'legend', animClass: req.animClass, animation: req.animation, costume: req.costume, color: req.color || undefined, weapon: req.weapon || undefined })
   else if (req.kind === 'portrait' || req.kind === 'effect') Object.assign(r, { kind: 'swf', animClass: req.animClass, animation: '' })
+  if (req.kind === 'effect' && Array.isArray(req.sequence)) r.sequence = req.sequence.filter((n) => typeof n === 'string' && /^[\w-]+$/.test(n)).slice(0, 400)
   else Object.assign(r, { kind: req.kind, item: req.item })
   // Rig d'une seule image (emojis, symboles) dont le dessin peut s'animer seul : on rend une boucle, réduite à 1 image si fixe.
   if (req.kind === 'emoji' || req.kind === 'effect' || req.kind === 'portrait') r.minFrames = 48
@@ -176,10 +227,14 @@ async function thumb(req: StudioRenderRequest): Promise<string | null> {
   const key = createHash('sha1').update(JSON.stringify({ ...req, label: '' }) + gameStamp()).digest('hex').slice(0, 20)
   const out = join(dir('thumbs'), key)
   if (!existsSync(join(out, 'frame_0000.png'))) {
-    try {
-      const scale = req.kind === 'portrait' ? 1 : req.kind === 'legend' ? 0.7 : 0.9
-      await call('render', { ...engineRequest({ ...req, scale }), start: 0, end: 0, outDir: out })
-    } catch { return null }
+    const scale = req.kind === 'portrait' ? 1 : req.kind === 'legend' ? 0.7 : 0.9
+    // certains effets démarrent vides (la 1re image n'a rien) : on essaie quelques images plus loin
+    const tries = req.kind === 'effect' ? [0, 3, 8, 15, 30] : [0]
+    let ok = false
+    for (const f of tries) {
+      try { await call('render', { ...engineRequest({ ...req, scale }), start: f, end: f, outDir: out }); ok = true; break } catch { /* image vide */ }
+    }
+    if (!ok) return null
   }
   return `studio://thumbs/${key}/frame_0000.png`
 }
@@ -327,6 +382,8 @@ export function registerStudio(win: () => BrowserWindow | null): void {
   })
   ipcMain.handle('studio:catalog', () => catalog())
   ipcMain.handle('studio:legendAnims', (_e, hero: string) => legendAnims(String(hero)))
+  ipcMain.handle('studio:weaponSkins', (_e, hero: string) => weaponSkins(String(hero)))
+  ipcMain.handle('studio:exportFrame', (_e, id: string, index: number) => exportFrame(win(), String(id), Number(index) || 0))
   ipcMain.handle('studio:items', (_e, kind: StudioKind, query?: string, file?: string) => items(kind, String(query ?? ''), file ? String(file) : undefined))
   ipcMain.handle('studio:effectFiles', () => effectFiles())
   ipcMain.handle('studio:thumb', (_e, req: StudioRenderRequest) => thumb(req))

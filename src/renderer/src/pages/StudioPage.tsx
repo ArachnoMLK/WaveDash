@@ -2,9 +2,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   StudioAnim, StudioAnimGroup, StudioAssetKind, StudioCatalog, StudioExportFormat, StudioItem, StudioJob, StudioKind,
-  StudioRender, StudioRenderRequest, StudioStatus, StudioTrack
+  StudioRender, StudioRenderRequest, StudioStatus, StudioTrack, StudioWeaponSkins
 } from '@shared/studio'
-import { STUDIO_KINDS } from '@shared/studio'
+import { STUDIO_KINDS, WEAPON_FR, weaponOfAnim } from '@shared/studio'
 import { Reveal, Switch, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
 
@@ -19,23 +19,65 @@ const mem = {
 }
 
 /* ---------------------------------------------------------------- lecteur d'images animées */
-function Player({ render, max = 520 }: { render: StudioRender; max?: number }): JSX.Element {
+/** Rendu image par image : lecture en boucle, ou arrêt sur une image choisie (barre avec un repère par image). */
+function Player({ render, max = 520, controls = false, onFrame }: { render: StudioRender; max?: number; controls?: boolean; onFrame?: (i: number) => void }): JSX.Element {
+  const { t } = useApp()
   const ref = useRef<HTMLCanvasElement>(null)
+  const n = render.files.length
+  const [playing, setPlaying] = useState(true)
+  const [frame, setFrame] = useState(0)
+  const frameRef = useRef(0)
+  frameRef.current = frame
+  const imgs = useMemo(() => render.files.map((f) => { const i = new Image(); i.src = `studio://renders/${render.id}/${f}`; return i }), [render])
+
+  const draw = (i: number): void => {
+    const canvas = ref.current, im = imgs[i]
+    if (!canvas || !im) return
+    if (!im.complete || !im.naturalWidth) { im.onload = () => { if (frameRef.current === i) draw(i) }; return }
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(im, 0, 0, canvas.width, canvas.height)
+  }
   useEffect(() => {
     const canvas = ref.current
     if (!canvas) return
     const s = Math.min(1, max / Math.max(render.width, render.height))
     canvas.width = Math.max(1, Math.round(render.width * s)); canvas.height = Math.max(1, Math.round(render.height * s))
-    const ctx = canvas.getContext('2d')!
-    const imgs = render.files.map((f) => { const i = new Image(); i.src = `studio://renders/${render.id}/${f}`; return i })
-    let i = 0
-    const timer = setInterval(() => {
-      const im = imgs[i++ % imgs.length]
-      if (im.complete && im.naturalWidth) { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(im, 0, 0, canvas.width, canvas.height) }
-    }, 1000 / 24)
-    return () => clearInterval(timer)
+    setFrame(0); setPlaying(true)
   }, [render, max])
-  return <canvas ref={ref} className="st-canvas" />
+  useEffect(() => { draw(frame); onFrame?.(frame) }, [frame, imgs]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!playing || n < 2) return
+    const timer = setInterval(() => setFrame((f) => (f + 1) % n), 1000 / 24)
+    return () => clearInterval(timer)
+  }, [playing, n])
+
+  const go = (i: number): void => { setPlaying(false); setFrame(((i % n) + n) % n) }
+  return (
+    <div className="st-player">
+      <canvas ref={ref} className="st-canvas" />
+      {controls && n > 1 && (
+        <div className="st-ctrl">
+          <div className="row">
+            <button className="btn small" onClick={() => go(frame - 1)} aria-label={t('st.prevFrame')}>‹</button>
+            <button className="btn small primary st-play" onClick={() => setPlaying(!playing)}>{playing ? t('st.pause') : t('st.play')}</button>
+            <button className="btn small" onClick={() => go(frame + 1)} aria-label={t('st.nextFrame')}>›</button>
+            <span className="muted small st-fnum">{t('st.frameOf', { i: frame + 1, n })}</span>
+          </div>
+          <div className="st-scrub">
+            <input type="range" min={0} max={n - 1} step={1} value={frame} onChange={(e) => go(Number(e.target.value))} aria-label={t('st.frame')} />
+            {/* un repère cliquable par image (au-delà de 160 images, la barre seule suffit) */}
+            {n <= 160 && (
+              <div className="st-ticks">
+                {render.files.map((_, i) => (
+                  <button key={i} className={i === frame ? 'on' : ''} style={{ left: `${(i / (n - 1)) * 100}%` }} onClick={() => go(i)} title={t('st.frameOf', { i: i + 1, n })} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** Vignette calculée à la demande quand elle devient visible. */
@@ -56,7 +98,7 @@ function Thumb({ req }: { req: StudioRenderRequest }): JSX.Element {
     return () => { alive = false; io.disconnect() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
-  return <div ref={ref} className="st-thumb">{src ? <img src={src} alt="" /> : src === '' ? <span>—</span> : <i className="st-spin" />}</div>
+  return <div ref={ref} className={`st-thumb${src === '' ? ' empty' : ''}`}>{src ? <img src={src} alt="" /> : src === '' ? <span>—</span> : <i className="st-spin" />}</div>
 }
 
 function ExportBar({ render, onSaved }: { render: StudioRender; onSaved: (msg: string) => void }): JSX.Element {
@@ -79,6 +121,9 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
   const [hero, setHero] = useState<string>(mem.get('hero', 'Valkyrie'))
   const [costume, setCostume] = useState<string>(mem.get('costume', ''))
   const [color, setColor] = useState<string>(mem.get('color', ''))
+  const [wskins, setWskins] = useState<StudioWeaponSkins>({})
+  // skin choisi pour chaque arme de base de la légende ('' = celui du skin de la légende)
+  const [wpick, setWpick] = useState<Record<string, string>>({})
   const [groups, setGroups] = useState<StudioAnimGroup[] | null>(null)
   const [group, setGroup] = useState<string>(mem.get('group', 'emotes'))
   const [anim, setAnim] = useState<StudioAnim | null>(null)
@@ -92,10 +137,11 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
   const [job, setJob] = useState<StudioJob | null>(null)
   const [current, setCurrent] = useState<StudioRender | null>(null)
   const [note, setNote] = useState('')
+  const [shownFrame, setShownFrame] = useState(0)
   const ready = status.state === 'ready'
 
   useEffect(() => { mem.set('kind', kind); setQuery(''); setItem(null) }, [kind])
-  useEffect(() => { if (ready && !cat) void studio.catalog().then(setCat) }, [ready, cat])
+  useEffect(() => { if (ready && !cat) void studio.catalog().then(setCat) }, [ready, cat]) // aussi pour les effets par légende
   useEffect(() => { void studio.library().then((l) => setCurrent((c) => c ?? l[0] ?? null)) }, [])
 
   // Légende : skins de la légende, puis ses animations rangées automatiquement.
@@ -112,7 +158,11 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
       setGroup((cur) => (g.some((x) => x.id === cur) ? cur : g[0]?.id ?? ''))
     })
     mem.set('hero', hero)
+    void studio.weaponSkins(hero).then(setWskins)
+    setWpick(mem.get('weapons:' + hero, {}))
   }, [ready, kind, hero])
+  const pickWeapon = (w: string, v: string): void => { const next = { ...wpick, [w]: v }; setWpick(next); mem.set('weapons:' + hero, next) }
+  const heroWeapons = cat?.heroes.find((h) => h.name === hero)?.weapons ?? []
   useEffect(() => { mem.set('costume', costume); mem.set('color', color); mem.set('group', group); mem.set('scale', scale) }, [costume, color, group, scale])
 
   // Cosmétiques, portraits, effets.
@@ -138,11 +188,14 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
     if (kind === 'legend') {
       if (!anim) return null
       const skin = costumes.find((c) => c.name === costume)
-      return { kind, animClass: anim.animClass, animation: anim.name, costume, color: color || undefined, scale, flip, label: `${skin?.display || hero} — ${anim.label}` }
+      // le skin d'arme suit l'arme de l'animation (épée pour une attaque à l'épée…) ; aucun pour une emote
+      const w = weaponOfAnim(anim.animClass, heroWeapons), weapon = w ? wpick[w] || undefined : undefined
+      const wname = weapon ? wskins[w!]?.find((x) => x.name === weapon)?.display : ''
+      return { kind, animClass: anim.animClass, animation: anim.name, costume, color: color || undefined, weapon, scale, flip, label: `${skin?.display || hero}${wname ? ` (${wname})` : ''} — ${anim.label}` }
     }
     if (!item) return null
     const isSwf = kind === 'portrait' || kind === 'effect'
-    return { kind, item: isSwf ? undefined : item.name, animClass: isSwf ? item.animClass : undefined, scale, flip, label: item.display }
+    return { kind, item: isSwf ? undefined : item.name, animClass: isSwf ? item.animClass : undefined, sequence: item.sequence, scale, flip, label: item.display }
   }
 
   const go = async (): Promise<void> => {
@@ -183,6 +236,18 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
                 </select>
               </label>
             </div>
+            {heroWeapons.length > 0 && (
+              <div className="st-two">
+                {heroWeapons.map((w) => (
+                  <label key={w} className="st-field"><span>{t('st.weaponSkin', { w: WEAPON_FR[w] ?? w })}</span>
+                    <select value={wpick[w] ?? ''} onChange={(e) => pickWeapon(w, e.target.value)}>
+                      <option value="">{t('st.weaponDefault')}</option>
+                      {(wskins[w] ?? []).map((x) => <option key={x.name} value={x.name}>{x.own ? '★ ' : ''}{x.display}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            )}
             {!groups ? <p className="muted small st-wait">{t('st.loadingAnims')}</p> : (
               <>
                 <div className="chips">{groups.map((g) => <button key={g.id} className={`chip ${group === g.id ? 'on' : ''}`} onClick={() => { setGroup(g.id); setAnim(null) }}>{g.label} <small>{g.items.length}</small></button>)}</div>
@@ -203,7 +268,11 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
           <>
             {kind === 'effect' && (
               <label className="st-field"><span>{t('st.file')}</span>
-                <select value={effectFile} onChange={(e) => setEffectFile(e.target.value)}>{effectFiles.map((f) => <option key={f} value={f}>{f.replace(/^SFX_|\.swf$/g, '')}</option>)}</select>
+                <select value={effectFile} onChange={(e) => setEffectFile(e.target.value)}>
+                  <option value="*">{t('st.allFiles')}</option>
+                  {cat && <optgroup label={t('st.byLegend')}>{[...cat.heroes].sort((a, b) => a.bio.localeCompare(b.bio)).map((h) => <option key={h.name} value={`hero:${h.name}`}>{h.bio}</option>)}</optgroup>}
+                  <optgroup label={t('st.byFile')}>{effectFiles.map((f) => <option key={f} value={f}>{f.replace(/^SFX_|\.swf$/g, '')}</option>)}</optgroup>
+                </select>
               </label>
             )}
             <input type="search" placeholder={t('st.search')} value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -212,9 +281,9 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
                 {shownItems.length ? shownItems.map((x) => {
                   const isSwf = kind === 'portrait' || kind === 'effect'
                   return (
-                    <button key={x.animClass + x.name} className={`st-card ${item?.name === x.name && item.animClass === x.animClass ? 'on' : ''}`} onClick={() => setItem(x)} title={x.name}>
+                    <button key={x.animClass + x.name} className={`st-card ${item?.name === x.name && item.animClass === x.animClass ? 'on' : ''}`} onClick={() => setItem(x)} title={x.animClass.replace(/^(SFX_|Animation_)|\.swf\//g, (m) => (m.endsWith('/') ? ' · ' : ''))}>
                       <Thumb req={{ kind, item: isSwf ? undefined : x.name, animClass: isSwf ? x.animClass : undefined }} />
-                      <span>{x.display}</span>
+                      <span>{x.display}{x.sequence && <small className="muted"> · {x.sequence.length}</small>}</span>
                     </button>
                   )
                 }) : <p className="muted small">{t('st.empty')}</p>}
@@ -223,6 +292,8 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
           </>
         )}
 
+        {/* toujours visible en bas du panneau, même avec une longue liste au-dessus */}
+        <div className="st-actions">
         <div className="st-out">
           <label className="st-field grow"><span>{t('st.quality')} · {scale}</span>
             <input type="range" min={0.5} max={6} step={0.5} value={scale} onChange={(e) => setScale(Number(e.target.value))} />
@@ -232,16 +303,22 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
         <button className="btn primary st-go" disabled={!ready || running || !request()} onClick={() => void go()}>
           {running ? t('st.rendering') : t('st.generate')}
         </button>
+        </div>
         {job?.status === 'error' && <div className="err">{job.error}</div>}
         {kind === 'legend' && !anim && groups && <p className="muted small">{t('st.pick')}</p>}
       </div>
 
       <div className="glass pad st-preview">
-        <div className="st-stage">{current ? <Player render={current} /> : <span className="muted">—</span>}</div>
+        <div className="st-stage">{current ? <Player render={current} controls onFrame={setShownFrame} /> : <span className="muted">—</span>}</div>
         {current && (
           <>
             <div className="row between"><h2>{current.label}</h2><span className="badge">{t('st.frames', { n: current.frames })} · {current.width}×{current.height}</span></div>
             <ExportBar render={current} onSaved={setNote} />
+            {current.frames > 1 && (
+              <button className="btn small st-frame-png" onClick={() => void studio.exportFrame(current.id, shownFrame).then((r) => r.ok && r.path && setNote(t('st.saved', { path: r.path })))}>
+                {t('st.exportFrame', { i: shownFrame + 1 })}
+              </button>
+            )}
           </>
         )}
         {note && <p className="muted small">{note}</p>}

@@ -1,18 +1,9 @@
 // Animations d'une légende rangées automatiquement : signatures, attaques de ses deux armes, emotes, postures.
 // Sources : HeroTypes.xml (armes, pouvoirs) et powerTypes.csv (animation de chaque pouvoir) lus dans Game.swz.
-import type { StudioAnim, StudioAnimGroup, StudioHero } from '@shared/studio'
+import type { StudioAnim, StudioAnimGroup, StudioHero, StudioItem } from '@shared/studio'
+import { WEAPON_ANM, WEAPON_FR } from '@shared/studio'
 
-/** Arme (nom HeroTypes) → fichier d'animations. */
-export const WEAPON_ANM: Record<string, string> = {
-  Sword: 'Animation_Sword', Spear: 'Animation_Spear', Hammer: 'Animation_Hammer', Pistol: 'Animation_Pistols',
-  RocketLance: 'Animation_Lance', Katar: 'Animation_Katar', Axe: 'Animation_Axe', Bow: 'Animation_Bow', Fists: 'Animation_Fists',
-  Scythe: 'Animation_Scythe', Cannon: 'Animation_Cannon', Orb: 'Animation_Orb', Boots: 'Animation_Boots',
-  Greatsword: 'Animation_GreatSword', Chakram: 'Animation_Chakram'
-}
-export const WEAPON_FR: Record<string, string> = {
-  Sword: 'Épée', Spear: 'Lance', Hammer: 'Marteau', Pistol: 'Blasters', RocketLance: 'Lance-roquette', Katar: 'Katars', Axe: 'Hache',
-  Bow: 'Arc', Fists: 'Gantelets', Scythe: 'Faux', Cannon: 'Canon', Orb: 'Orbe', Boots: 'Bottes', Greatsword: 'Espadon', Chakram: 'Chakram'
-}
+export { WEAPON_ANM, WEAPON_FR }
 
 export type AnimListing = { classes: Record<string, { name: string; frames: number }[]> }
 
@@ -133,4 +124,29 @@ export function buildLegendGroups(
     groups.push({ id: 'emotes', label: 'Emotes & danses', items })
   }
   return groups
+}
+
+/** Symboles d'un SFX ; ceux numérotés d'une même famille (Sparkle01, Sparkle02…) ne forment qu'un effet joué à la suite. */
+export function effectItems(file: string, symbols: string[]): StudioItem[] {
+  const families = new Map<string, { n: number; name: string }[]>()
+  const single: string[] = []
+  for (const name of symbols) {
+    const m = /^(.*?[A-Za-z_])(\d+)$/.exec(name)
+    if (m) (families.get(m[1]) ?? families.set(m[1], []).get(m[1])!).push({ n: Number(m[2]), name })
+    else single.push(name)
+  }
+  const list: StudioItem[] = single.map((n) => ({ name: n, display: n.replace(/^a_/, ''), animClass: `${file}/${n}` }))
+  for (const [prefix, parts] of families) {
+    if (parts.length < 2) { list.push({ name: parts[0].name, display: parts[0].name.replace(/^a_/, ''), animClass: `${file}/${parts[0].name}` }); continue }
+    parts.sort((a, b) => a.n - b.n)
+    const mid = parts[Math.floor(parts.length / 2)].name   // vignette : une image du milieu, plus parlante que la 1re
+    list.push({ name: prefix, display: prefix.replace(/^a_/, ''), animClass: `${file}/${mid}`, sequence: parts.map((p) => p.name) })
+  }
+  return list.sort((a, b) => a.display.localeCompare(b.display))
+}
+
+/** Le nom interne d'une légende dans ses effets : AttackSpecialMonk2… pour Wu Shang (Monk), sans attraper MonkeyKing. */
+export function heroEffectTest(heroName: string): (symbol: string) => boolean {
+  const re = new RegExp(`${heroName.replace(/[^\w]/g, '')}(?![a-z])`)
+  return (symbol) => re.test(symbol)
 }
