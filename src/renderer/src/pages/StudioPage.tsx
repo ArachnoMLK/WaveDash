@@ -7,9 +7,12 @@ import type {
 import { STUDIO_KINDS, WEAPON_FR, weaponOfAnim } from '@shared/studio'
 import { Reveal, Switch, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
+import { ThumbEditor } from './studio/ThumbEditor'
+import { Thumb } from './studio/Thumb'
+import { Composer, stackItem, type StackItem } from './studio/Composer'
 
 const studio = window.api.studio
-type Tab = 'create' | 'library' | 'assets' | 'music'
+type Tab = 'create' | 'mini' | 'library' | 'assets' | 'music'
 const EXPORTS: StudioExportFormat[] = ['gif', 'apng', 'webm', 'mov', 'mp4', 'png']
 
 /** Mémoire locale de l'interface (dernier choix), sans casser l'affichage si le stockage est indisponible. */
@@ -126,26 +129,6 @@ function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
   )
 }
 
-/** Vignette calculée à la demande quand elle devient visible. */
-function Thumb({ req }: { req: StudioRenderRequest }): JSX.Element {
-  const ref = useRef<HTMLDivElement>(null)
-  const [src, setSrc] = useState<string | null>(null)
-  const key = JSON.stringify(req)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    let alive = true
-    const io = new IntersectionObserver((entries) => {
-      if (!entries.some((e) => e.isIntersecting)) return
-      io.disconnect()
-      void studio.thumb(req).then((s) => { if (alive) setSrc(s ?? '') })
-    })
-    io.observe(el)
-    return () => { alive = false; io.disconnect() }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
-  return <div ref={ref} className={`st-thumb${src === '' ? ' empty' : ''}`}>{src ? <img src={src} alt="" /> : src === '' ? <span>—</span> : <i className="st-spin" />}</div>
-}
 
 function ExportBar({ render, sel, onSaved }: { render: StudioRender; sel?: PlayerSel; onSaved: (msg: string) => void }): JSX.Element {
   const { t } = useApp()
@@ -187,6 +170,9 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
   const [note, setNote] = useState('')
   const [shownFrame, setShownFrame] = useState(0)
   const [sel, setSel] = useState<PlayerSel>({ frames: [], fps: 24 })
+  const [stack, setStack] = useState<StackItem[]>([])
+  const { settings } = useApp() as unknown as { settings: { lang?: string } }
+  const tr = (fr: string, en: string): string => (settings?.lang === 'en' ? en : fr)
   const ready = status.state === 'ready'
 
   useEffect(() => { mem.set('kind', kind); setQuery(''); setItem(null) }, [kind])
@@ -240,7 +226,7 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
       // le skin d'arme suit l'arme de l'animation (épée pour une attaque à l'épée…) ; aucun pour une emote
       const w = weaponOfAnim(anim.animClass, heroWeapons), weapon = w ? wpick[w] || undefined : undefined
       const wname = weapon ? wskins[w!]?.find((x) => x.name === weapon)?.display : ''
-      return { kind, animClass: anim.animClass, animation: anim.name, costume, color: color || undefined, weapon, scale, flip, label: `${skin?.display || hero}${wname ? ` (${wname})` : ''} — ${anim.label}` }
+      return { kind, animClass: anim.animClass, animation: anim.name, animations: anim.parts, costume, color: color || undefined, weapon, scale, flip, label: `${skin?.display || hero}${wname ? ` (${wname})` : ''} — ${anim.label}` }
     }
     if (!item) return null
     const isSwf = kind === 'portrait' || kind === 'effect'
@@ -358,8 +344,16 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
       </div>
 
       <div className="glass pad st-preview">
-        <div className="st-stage">{current ? <Player render={current} controls onFrame={setShownFrame} onSelect={setSel} /> : <span className="muted">—</span>}</div>
+        {stack.length > 0 && (
+          <div className="st-stage cmp-stage"><Composer stack={stack} setStack={setStack} tr={tr} onMerged={(r) => { setCurrent(r); setStack([]) }} /></div>
+        )}
+        {!stack.length && <div className="st-stage">{current ? <Player render={current} controls onFrame={setShownFrame} onSelect={setSel} /> : <span className="muted">—</span>}</div>}
         {current && (
+          <button className="btn small st-stack-add" disabled={stack.some((s) => s.render.id === current.id)} onClick={() => setStack([...stack, stackItem(current, stack.length ? 40 * stack.length : 0, 0)])}>
+            ＋ {stack.length ? tr(`Superposer « ${current.label.slice(0, 40)} »`, `Stack “${current.label.slice(0, 40)}”`) : tr('Superposer d’autres rendus (composition)', 'Stack other renders (composition)')}
+          </button>
+        )}
+        {current && !stack.length && (
           <>
             <div className="row between"><h2>{current.label}</h2><span className="badge">{t('st.frames', { n: current.frames })} · {current.width}×{current.height}</span></div>
             <ExportBar render={current} sel={sel} onSaved={setNote} />
@@ -488,8 +482,9 @@ export function StudioPage(): JSX.Element {
           {status.state === 'missing-game' && <button className="btn small" style={{ marginLeft: 12 }} onClick={() => void studio.setGamePath().then(setStatus)}>{t('st.chooseGame')}</button>}
         </div>
       )}
-      <Reveal><div style={{ marginBottom: 16 }}><Tabs value={tab} onChange={setTab} options={(['create', 'library', 'assets', 'music'] as Tab[]).map((id) => ({ id, label: t(`st.tab.${id}`) }))} /></div></Reveal>
+      <Reveal><div style={{ marginBottom: 16 }}><Tabs value={tab} onChange={setTab} options={(['create', 'mini', 'library', 'assets', 'music'] as Tab[]).map((id) => ({ id, label: t(`st.tab.${id}`) }))} /></div></Reveal>
       {tab === 'create' && status && <CreateTab status={status} />}
+      {tab === 'mini' && status?.state === 'ready' && <ThumbEditor />}
       {tab === 'library' && <LibraryTab />}
       {tab === 'assets' && <AssetsTab />}
       {tab === 'music' && <MusicTab />}
