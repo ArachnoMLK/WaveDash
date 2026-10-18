@@ -44,6 +44,9 @@ export type StudioWeaponSkins = Record<string, { name: string; display: string; 
 /** sequence : effet découpé en symboles numérotés (DragonFireALL01, 02…) joués à la suite */
 export interface StudioItem { name: string; display: string; animClass: string; sequence?: string[] }
 
+/** Export : seulement certaines images (indices dans l'ordre voulu) et vitesse en images par seconde. */
+export interface StudioExportOptions { frames?: number[]; fps?: number }
+
 export interface StudioRenderRequest {
   kind: StudioKind
   item?: string            // nom du cosmétique
@@ -93,7 +96,7 @@ export interface StudioApi {
   job(id: string): Promise<StudioJob | null>
   library(): Promise<StudioRender[]>
   remove(id: string): Promise<void>
-  exportRender(id: string, format: StudioExportFormat): Promise<{ ok: boolean; path?: string; error?: string }>
+  exportRender(id: string, format: StudioExportFormat, opts?: StudioExportOptions): Promise<{ ok: boolean; path?: string; error?: string }>
   exportFrame(id: string, index: number): Promise<{ ok: boolean; path?: string }>
   assets(kind: StudioAssetKind, query: string, offset: number, limit: number): Promise<StudioAssetPage>
   saveAsset(path: string): Promise<boolean>

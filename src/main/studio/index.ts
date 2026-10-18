@@ -9,7 +9,7 @@ import { basename, extname, join, relative, resolve, sep } from 'path'
 import { pathToFileURL } from 'url'
 import { promisify } from 'util'
 import type {
-  StudioAnimGroup, StudioAssetKind, StudioAssetPage, StudioCatalog, StudioExportFormat, StudioItem, StudioJob, StudioKind,
+  StudioAnimGroup, StudioAssetKind, StudioAssetPage, StudioCatalog, StudioExportFormat, StudioExportOptions, StudioItem, StudioJob, StudioKind,
   StudioRender, StudioRenderRequest, StudioStatus, StudioTrack, StudioWeaponSkins
 } from '@shared/studio'
 import { Engine } from './engine'
@@ -243,22 +243,32 @@ function library(): StudioRender[] {
   return readdirSync(dir('renders')).map(readRender).filter((r): r is StudioRender => !!r).sort((a, b) => b.created - a.created)
 }
 
-async function exportRender(win: BrowserWindow | null, id: string, format: StudioExportFormat): Promise<{ ok: boolean; path?: string; error?: string }> {
+async function exportRender(win: BrowserWindow | null, id: string, format: StudioExportFormat, opts: StudioExportOptions = {}): Promise<{ ok: boolean; path?: string; error?: string }> {
   const meta = readRender(id)
   if (!meta) return { ok: false, error: 'introuvable' }
-  const src = join(dir('renders'), id)
   const name = meta.label.replace(/[^\w .-]/g, '_') || id
+  const fps = Math.min(60, Math.max(1, Math.round(Number(opts.fps) || 24)))
+  // images choisies dans la bande : copiées et renumérotées à part, dans l'ordre
+  const picked = (opts.frames ?? []).filter((i) => Number.isInteger(i) && i >= 0 && i < meta.files.length)
+  let src = join(dir('renders'), id)
+  let files = meta.files
+  if (picked.length) {
+    const tmp = join(app.getPath('temp'), `wavedash-sel-${id}`)
+    rmSync(tmp, { recursive: true, force: true }); mkdirSync(tmp, { recursive: true })
+    files = picked.map((i, k) => { const f = `frame_${String(k).padStart(4, '0')}.png`; copyFileSync(join(src, meta.files[i]), join(tmp, f)); return f })
+    src = tmp
+  }
   if (format === 'png') {
     const r = win ? await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] }) : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
     if (r.canceled || !r.filePaths[0]) return { ok: false }
     const target = join(r.filePaths[0], name); mkdirSync(target, { recursive: true })
-    for (const f of meta.files) copyFileSync(join(src, f), join(target, f))
+    for (const f of files) copyFileSync(join(src, f), join(target, f))
     return { ok: true, path: target }
   }
-  const opts = { defaultPath: `${name}.${format}`, filters: [{ name: format.toUpperCase(), extensions: [format] }] }
-  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+  const saveOpts = { defaultPath: `${name}.${format}`, filters: [{ name: format.toUpperCase(), extensions: [format] }] }
+  const r = win ? await dialog.showSaveDialog(win, saveOpts) : await dialog.showSaveDialog(saveOpts)
   if (r.canceled || !r.filePath) return { ok: false }
-  const input = ['-y', '-framerate', '24', '-i', join(src, 'frame_%04d.png')]
+  const input = ['-y', '-framerate', String(fps), '-i', join(src, 'frame_%04d.png')]
   const args: Record<Exclude<StudioExportFormat, 'png'>, string[]> = {
     gif: [...input, '-vf', 'split[a][b];[a]palettegen=reserve_transparent=1[p];[b][p]paletteuse', '-loop', '0', r.filePath],
     apng: [...input, '-plays', '0', '-f', 'apng', r.filePath],
@@ -393,7 +403,7 @@ export function registerStudio(win: () => BrowserWindow | null): void {
   ipcMain.handle('studio:remove', (_e, id: string) => {
     if (/^[\w-]+$/.test(String(id))) rmSync(join(dir('renders'), String(id)), { recursive: true, force: true })
   })
-  ipcMain.handle('studio:export', (_e, id: string, format: StudioExportFormat) => exportRender(win(), String(id), format))
+  ipcMain.handle('studio:export', (_e, id: string, format: StudioExportFormat, opts?: StudioExportOptions) => exportRender(win(), String(id), format, opts ?? {}))
   ipcMain.handle('studio:assets', (_e, kind: StudioAssetKind, query: string, offset: number, limit: number) =>
     assets(kind, String(query ?? ''), Number(offset) || 0, Number(limit) || 120))
   ipcMain.handle('studio:saveAsset', (_e, rel: string) => { const f = gameFile(String(rel)); return f ? saveCopy(win(), f, basename(f)) : false })
