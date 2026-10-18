@@ -194,6 +194,7 @@ export interface AppInfo { version: string; nativeGlass: boolean; encryptionAvai
 export type SecretKey = 'youtube.apiKey'
 
 import type { InstalledPlugin, PluginAccount, PluginDetail, PluginFilter, PluginInspect, PluginItemsPage } from './plugin'
+import type { StudioApi } from './studio'
 
 /** Valeurs de métriques par clé : les plugins définissent leurs propres clés. */
 export type RawMetrics = Record<string, number>
@@ -276,4 +277,5 @@ export interface WaveApi {
   installUpdate(): Promise<void>
   getUpdateStatus(): Promise<UpdateStatus>
   onUpdateStatus(cb: (s: UpdateStatus) => void): () => void
+  studio: StudioApi
 }

@@ -2,6 +2,7 @@ appId: app.wavedash.desktop
 productName: WaveDash
 directories: { buildResources: resources, output: dist }
 files: ["out/**/*", "package.json"]
+asarUnpack: ["node_modules/ffmpeg-static/**"]                  # ffmpeg du Studio : un exécutable ne peut pas tourner depuis l'archive asar
 extraResources:
   - { from: resources, to: resources }                         # icônes lues à l'exécution (barre système)
   - { from: examples, to: plugins, filter: ['*.wdsh'] }        # plugins fournis avec l'appli

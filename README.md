@@ -34,6 +34,15 @@ Un plugin ajoute une source de données. Il tourne dans un **bac à sable QuickJ
 - Pages de plugin modulables : modules à réduire, déplacer, masquer ; tableaux triables ; cartes de chaleur.
 - Paliers réglables pour chaque métrique de plugin, et notifications envoyées par les plugins (ex. changement de rang Brawlhalla).
 
+### Studio Brawlhalla
+Rendus lus directement dans les fichiers du jeu installé (rien n'est téléchargé) :
+- **Légendes** : légende, skin, couleur, puis animations rangées automatiquement — signatures (neutre / côté / bas de chaque arme, enchaînements compris), attaques et postures des deux armes, 277 emotes et danses.
+- **Cosmétiques** : emojis, compagnons, sidekicks, podiums, cadres, insignes ; **portraits** des légendes ; **effets** visuels (fichiers `SFX_*.swf`, ex. les flammes de Yumiko).
+- **Exports** : GIF, APNG, WebM et MOV transparents, MP4 sur fond vert (CapCut), ou images PNG.
+- **Assets** (bannières, avatars, sprites, décors, map art, images) et **musiques** du jeu (Wwise → MP3).
+
+Le rendu est fait par `BrawlRender.exe`, un moteur .NET du dépôt BrawlStudio basé sur [WallyAnmRenderer](https://github.com/allhailcheese/WallyAnmRenderer) (MIT). Avant `npm run dev` ou `npm run dist`, place BrawlStudio à côté de WaveDash (`git clone --recurse-submodules`) et lance `npm run studio:engine` (SDK .NET 8 requis) : le moteur et vgmstream sont copiés dans `resources/studio/` (non versionné). Sans eux, la page Studio indique simplement que le moteur manque.
+
 ### Installer
 Télécharge `WaveDash-Setup-x.y.z.exe` dans l'onglet **Releases**. L'installateur n'est **pas signé** : SmartScreen affiche « éditeur inconnu » au premier lancement (« Informations complémentaires » › « Exécuter quand même »).
 
@@ -71,7 +80,7 @@ Download the installer from **Releases** (unsigned: SmartScreen warns on first l
 
 ## Structure
 ```
-src/main        Processus principal : base SQLite, secrets, planificateur, fournisseurs (providers/), plugins (plugins/), IPC
+src/main        Processus principal : base SQLite, secrets, planificateur, fournisseurs (providers/), plugins (plugins/), Studio (studio/), IPC
 src/preload     Pont sécurisé exposé à l'interface
 src/renderer    Interface React (pages/, components/, lib/, i18n/)
 src/shared      Types communs et validation des plugins

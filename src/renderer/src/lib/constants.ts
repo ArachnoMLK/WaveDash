@@ -15,9 +15,10 @@ export const DEFAULT_CHART: Record<string, ChartType> = {
 export const chartKey = (platform: Platform, metric: MetricKey): string => `${platform}.${metric}`
 
 /** Onglets de navigation personnalisables (les paramètres restent toujours en bas). */
-export const NAV_IDS: string[] = ['overview', 'goals', ...PLATFORMS]
+export const NAV_IDS: string[] = ['overview', 'goals', 'studio', ...PLATFORMS]
 /** Clé de traduction du libellé d'un onglet. */
-export const navLabelKey = (id: string): string => (id === 'overview' ? 'nav.overview' : id === 'goals' ? 'nav.goals' : `platform.${id}`)
+export const navLabelKey = (id: string): string =>
+  (id === 'overview' ? 'nav.overview' : id === 'goals' ? 'nav.goals' : id === 'studio' ? 'nav.studio' : `platform.${id}`)
 /** Ordre enregistré ; un onglet apparu depuis (ex. Objectifs en 0.4) s'insère après la vue d'ensemble.
  *  `extra` : onglets des comptes de plugins (« plugin:<id> ») ; un nouveau compte s'ajoute à la fin. */
 export const orderedNav = (saved: string[], extra: string[] = []): string[] => {

@@ -9,6 +9,9 @@ import { setPendingFile, syncBundledPlugins } from './plugins/manager'
 import { initUpdater } from './updater'
 import { stopPluginHost } from './plugins/isolated'
 import { migrateBuiltinBrawlhalla, removeSocialPlaceholders } from './migrations'
+import { registerStudio, registerStudioScheme, stopStudio } from './studio'
+
+registerStudioScheme()
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -89,11 +92,12 @@ else {
     createWindow()
     createTray()
     registerIpc(() => win)
+    registerStudio(() => win)
     setPendingFile(wdshArg(process.argv) ?? null)
     applySystemSettings(getSettings(), win)
     void refreshAll()
     initUpdater(() => win)
   })
-  app.on('before-quit', () => { quitting = true; stopPluginHost() })
+  app.on('before-quit', () => { quitting = true; stopPluginHost(); stopStudio() })
   app.on('window-all-closed', () => { /* l'appli reste dans la barre système */ })
 }

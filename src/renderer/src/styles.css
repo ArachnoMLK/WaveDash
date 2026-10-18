@@ -222,3 +222,54 @@ details.rule[open] > summary { margin-bottom: 4px; }
 .filter-bar label { display: flex; flex-direction: column; gap: 5px; min-width: 170px; }
 .filter-bar label > span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .filter-bar select { min-width: 170px; }
+
+/* Studio Brawlhalla */
+.st-create { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .st-create { grid-template-columns: 1fr; } }
+.st-side { display: flex; flex-direction: column; gap: 12px; }
+.st-kinds { margin: 0; }
+.chip { cursor: pointer; color: var(--muted); font: inherit; font-size: 12.5px; transition: color .3s var(--ease), background .3s var(--ease); }
+.chip:hover { color: var(--fg); }
+.chip.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.chip small { opacity: .7; margin-left: 2px; }
+.st-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.st-field > span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.st-field.grow { flex: 1; }
+.st-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.st-list { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.st-list button { display: flex; width: 100%; justify-content: space-between; gap: 10px; padding: 8px 12px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--fg); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.st-list button:first-child { border-top: 0; }
+.st-list button:hover { background: var(--ctrl); }
+.st-list button.on { background: var(--ctrl-hover); }
+.st-list small { color: var(--muted); white-space: nowrap; }
+.st-list::-webkit-scrollbar, .st-grid::-webkit-scrollbar { width: 8px; } .st-list::-webkit-scrollbar-thumb, .st-grid::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; }
+.st-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; max-height: 420px; overflow-y: auto; overflow-x: hidden; padding-right: 2px; }
+.st-grid.assets { max-height: none; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.st-card { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--ctrl); color: var(--fg); font: inherit; cursor: pointer; transition: border-color .3s var(--ease), transform .3s var(--ease); }
+.st-card:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+.st-card.on { border-color: var(--accent); }
+.st-card > span { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-card { min-width: 0; overflow: hidden; }
+.st-thumb { height: 84px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.st-grid.assets .st-thumb { height: 100px; }
+.st-thumb img { max-width: 100%; max-height: 84px; object-fit: contain; }
+.st-grid.assets .st-thumb img { max-height: 100px; }
+.st-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--fg); animation: st-spin 0.9s linear infinite; }
+@keyframes st-spin { to { transform: rotate(360deg); } }
+.st-out { display: flex; align-items: flex-end; gap: 16px; }
+.st-go { justify-content: center; width: 100%; padding: 12px; }
+.st-wait { padding: 12px 0; }
+.st-preview { position: sticky; top: 0; display: flex; flex-direction: column; gap: 12px; }
+.st-stage { display: grid; place-items: center; min-height: 380px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: repeating-conic-gradient(rgba(var(--panel-rgb), .05) 0 25%, transparent 0 50%) 0 0 / 22px 22px; overflow: hidden; }
+.st-stage.small { min-height: 200px; }
+.st-canvas { max-width: 100%; max-height: 62vh; }
+.st-exports { display: flex; flex-wrap: wrap; gap: 6px; }
+.st-lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.st-libcard { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.st-libcard b { font-weight: 500; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-toolbar { flex-wrap: wrap; margin-bottom: 14px; }
+.st-toolbar input { flex: 1; min-width: 180px; width: auto; }
+.st-more { margin: 16px auto 0; display: flex; }
+.st-audio { width: 100%; margin-bottom: 12px; }
+.st-state.ready { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--fg); }

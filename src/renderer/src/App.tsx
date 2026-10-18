@@ -12,6 +12,7 @@ import { pluginAccountOfRoute } from './lib/plugin'
 import { Overview } from './pages/Overview'
 import { PlatformPage } from './pages/PlatformPage'
 import { Settings } from './pages/Settings'
+import { StudioPage } from './pages/StudioPage'
 
 /** Style de la couche de fond selon le mode choisi (null = fond par défaut du thème). */
 function backgroundStyle(s: AppSettings, bgUrl: string | null): CSSProperties | null {
@@ -43,6 +44,7 @@ export function App(): JSX.Element {
 
   const page = current === 'overview' ? <Overview onAdd={openAdd} onOpen={setRoute} />
     : current === 'goals' ? <Goals />
+    : current === 'studio' ? <StudioPage />
     : current === 'plugins' ? <PluginsPage openPath={incoming} onOpenHandled={() => setIncoming(null)} />
     : pluginAccountOfRoute(current) !== null ? <PluginPage accountId={pluginAccountOfRoute(current)!} />
     : current === 'settings' ? <Settings />

@@ -315,7 +315,27 @@ const fr = {
   "pp.prev": "Page précédente",
   "pp.next": "Page suivante",
   "pp.pageOf": "Page {page} / {pages}",
-  "pp.backlog": "Lecture des données passées en cours : encore {count} à traiter. La page se met à jour toute seule."
+  "pp.backlog": "Lecture des données passées en cours : encore {count} à traiter. La page se met à jour toute seule.",
+  "nav.studio": "Studio",
+  "st.title": "Studio Brawlhalla",
+  "st.sub": "Rendus des légendes, cosmétiques et assets, lus directement dans les fichiers du jeu.",
+  "st.tab.create": "Créer", "st.tab.library": "Bibliothèque", "st.tab.assets": "Assets", "st.tab.music": "Musiques",
+  "st.kind.legend": "Légendes", "st.kind.emoji": "Emojis", "st.kind.companion": "Compagnons", "st.kind.sidekick": "Sidekicks",
+  "st.kind.podium": "Podiums", "st.kind.frame": "Cadres", "st.kind.insignia": "Insignes", "st.kind.portrait": "Portraits", "st.kind.effect": "Effets",
+  "st.legend": "Légende", "st.skin": "Skin", "st.color": "Couleur", "st.noColor": "Couleurs d’origine", "st.search": "Rechercher…",
+  "st.quality": "Qualité", "st.flip": "Retourner", "st.generate": "Générer le rendu", "st.rendering": "Rendu en cours…",
+  "st.pick": "Choisis une animation dans la liste.", "st.frames": "{n} image(s)", "st.file": "Fichier d’effets",
+  "st.loadingAnims": "Lecture des animations du jeu… (la première fois, jusqu’à une minute)",
+  "st.empty": "Aucun résultat.", "st.libEmpty": "Aucun rendu pour l’instant : crée-en un dans l’onglet Créer.",
+  "st.delete": "Supprimer", "st.saved": "Enregistré : {path}", "st.save": "Enregistrer", "st.listen": "Écouter",
+  "st.track": "Piste {n}", "st.more": "Afficher plus", "st.count": "{n} fichiers",
+  "st.asset.sprites": "Tous les sprites", "st.asset.banners": "Bannières", "st.asset.avatars": "Avatars", "st.asset.backgrounds": "Décors", "st.asset.maps": "Map art", "st.asset.images": "Images UI",
+  "st.export.mp4": "MP4 fond vert", "st.export.png": "Images PNG",
+  "st.state.starting": "Chargement des fichiers du jeu…", "st.state.ready": "Moteur prêt",
+  "st.state.missingEngine": "Le moteur de rendu n’est pas installé. Dans le dossier de WaveDash, lance « npm run studio:engine ».",
+  "st.state.missingGame": "Dossier Brawlhalla introuvable.", "st.state.error": "Le moteur a rencontré une erreur : {e}",
+  "st.chooseGame": "Choisir le dossier Brawlhalla",
+  "st.defaultSkin": "Défaut"
 }
 const en: typeof fr = {
   'nav.overview': 'Overview', 'nav.settings': 'Settings',
@@ -631,7 +651,27 @@ const en: typeof fr = {
   "pp.prev": "Previous page",
   "pp.next": "Next page",
   "pp.pageOf": "Page {page} / {pages}",
-  "pp.backlog": "Reading past data: {count} still to process. This page updates on its own."
+  "pp.backlog": "Reading past data: {count} still to process. This page updates on its own.",
+  "nav.studio": "Studio",
+  "st.title": "Brawlhalla Studio",
+  "st.sub": "Renders of legends, cosmetics and assets, read straight from the game files.",
+  "st.tab.create": "Create", "st.tab.library": "Library", "st.tab.assets": "Assets", "st.tab.music": "Music",
+  "st.kind.legend": "Legends", "st.kind.emoji": "Emojis", "st.kind.companion": "Companions", "st.kind.sidekick": "Sidekicks",
+  "st.kind.podium": "Podiums", "st.kind.frame": "Frames", "st.kind.insignia": "Insignias", "st.kind.portrait": "Portraits", "st.kind.effect": "Effects",
+  "st.legend": "Legend", "st.skin": "Skin", "st.color": "Color", "st.noColor": "Original colors", "st.search": "Search…",
+  "st.quality": "Quality", "st.flip": "Flip", "st.generate": "Render", "st.rendering": "Rendering…",
+  "st.pick": "Pick an animation in the list.", "st.frames": "{n} frame(s)", "st.file": "Effects file",
+  "st.loadingAnims": "Reading the game animations… (up to a minute the first time)",
+  "st.empty": "No result.", "st.libEmpty": "No render yet: create one in the Create tab.",
+  "st.delete": "Delete", "st.saved": "Saved: {path}", "st.save": "Save", "st.listen": "Play",
+  "st.track": "Track {n}", "st.more": "Show more", "st.count": "{n} files",
+  "st.asset.sprites": "All sprites", "st.asset.banners": "Banners", "st.asset.avatars": "Avatars", "st.asset.backgrounds": "Backgrounds", "st.asset.maps": "Map art", "st.asset.images": "UI images",
+  "st.export.mp4": "MP4 green screen", "st.export.png": "PNG frames",
+  "st.state.starting": "Loading the game files…", "st.state.ready": "Engine ready",
+  "st.state.missingEngine": "The render engine is not installed. In the WaveDash folder, run \"npm run studio:engine\".",
+  "st.state.missingGame": "Brawlhalla folder not found.", "st.state.error": "The engine hit an error: {e}",
+  "st.chooseGame": "Choose the Brawlhalla folder",
+  "st.defaultSkin": "Default"
 }
 
 export type TKey = keyof typeof fr

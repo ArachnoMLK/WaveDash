@@ -1,0 +1,54 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { buildLegendGroups, mainClass, parseCsv, parseHeroes, powerAnims } from '../src/main/studio/presets'
+
+const HEROES = `<HeroTypes><HeroType HeroName="Template"><BioName>T</BioName></HeroType>
+<HeroType HeroName="Ninja"><HeroDisplayName>HATTORI</HeroDisplayName><BaseWeapon1>Sword</BaseWeapon1><SpecialPower1>SwordSmashNeutralNinja</SpecialPower1>
+<SpecialPower1_Forward>SwordSmashSideNinja</SpecialPower1_Forward><BaseWeapon2>Spear</BaseWeapon2><BioName>Hattori</BioName></HeroType>
+<HeroType HeroName="Bot"><HeroDisplayName>BOT</HeroDisplayName><BaseWeapon1>--</BaseWeapon1></HeroType></HeroTypes>`
+
+test('HeroTypes : nom, armes et pouvoirs de signature', () => {
+  const hs = parseHeroes(HEROES)
+  const h = hs.find((x) => x.name === 'Ninja')!
+  assert.equal(h.bio, 'Hattori')
+  assert.deepEqual(h.weapons, ['Sword', 'Spear'])
+  assert.equal(h.powers['SpecialPower1_Forward'], 'SwordSmashSideNinja')
+  assert.equal(hs.find((x) => x.name === 'Bot')!.bio, 'Bot')          // nom affiché en minuscules faute de BioName
+  assert.deepEqual(hs.find((x) => x.name === 'Bot')!.weapons, [])     // « -- » = pas d'arme
+})
+
+test('CSV du jeu : 1re ligne ignorée, guillemets et virgules dans les champs', () => {
+  const rows = parseCsv('junk line\r\nPowerName,CastAnim,ComboName\r\nA,"L:One,L:Two",B\r\nB,"say ""hi""",\r\n')
+  assert.deepEqual(rows, [{ PowerName: 'A', CastAnim: 'L:One,L:Two', ComboName: 'B' }, { PowerName: 'B', CastAnim: 'say "hi"', ComboName: '' }])
+})
+
+test('pouvoir → animations jouées, enchaînements compris, sans boucle infinie', () => {
+  const powers = new Map([
+    ['A', { CastAnim: 'L:AttackSpecialNinja2Charge', ComboName: 'B' }],
+    ['B', { CastAnim: 'L:AttackSpecialNinja2', ComboName: 'A' }]
+  ])
+  assert.deepEqual(powerAnims('A', powers), ['AttackSpecialNinja2Charge', 'AttackSpecialNinja2'])
+  assert.deepEqual(powerAnims('inconnu', powers), [])
+})
+
+test('groupes d’une légende : signatures, attaques sans variantes, emotes triées', () => {
+  const sword = { classes: {
+    'Animation_Sword.swf/a__1HandRearAnimation': [
+      { name: 'AttackSpecialNinja3', frames: 30 }, { name: 'AttackSpecialNinja1', frames: 20 }, { name: 'AttackCombo1', frames: 12 },
+      { name: 'AttackCombo1_SwapPatrick', frames: 12 }, { name: 'Ready', frames: 40 }
+    ],
+    'Animation_Sword.swf/a_SFXSmoke': [{ name: 'Ready', frames: 3 }]
+  } }
+  const emotes = { classes: { 'Animation_Emote.swf/a__EmoteAnimation': [
+    { name: 'TauntRobotDance', frames: 69 }, { name: 'TauntBreakdance', frames: 41 }, { name: 'TauntBreakdanceSwapSpongebob', frames: 41 }
+  ] } }
+  assert.equal(mainClass(sword), 'Animation_Sword.swf/a__1HandRearAnimation')
+  const powers = new Map([['SwordSmashNeutralNinja', { CastAnim: 'L:AttackSpecialNinja3' }], ['SwordSmashSideNinja', { CastAnim: 'L:AttackSpecialNinja1' }]])
+  const hero = { name: 'Ninja', weapons: ['Sword'], powers: { SpecialPower1: 'SwordSmashNeutralNinja', SpecialPower1_Forward: 'SwordSmashSideNinja' } }
+  const groups = buildLegendGroups(hero, powers, { Animation_Sword: sword }, emotes)
+  const by = Object.fromEntries(groups.map((g) => [g.id, g]))
+  assert.deepEqual(by['sigs'].items.map((a) => [a.label, a.name]), [['Épée — Neutre', 'AttackSpecialNinja3'], ['Épée — Côté', 'AttackSpecialNinja1']])
+  assert.deepEqual(by['atk-Sword'].items.map((a) => a.name), ['AttackCombo1'])
+  assert.deepEqual(by['mv-Sword'].items.map((a) => a.name), ['Ready'])
+  assert.deepEqual(by['emotes'].items.map((a) => a.label), ['Breakdance', 'Robot Dance'])
+})

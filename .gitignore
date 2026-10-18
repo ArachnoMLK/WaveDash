@@ -8,3 +8,6 @@ secrets.json
 *.sqlite
 *.db
 *.tsbuildinfo
+
+# Binaires du Studio (npm run studio:engine)
+resources/studio/

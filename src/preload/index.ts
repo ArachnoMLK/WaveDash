@@ -75,6 +75,24 @@ const api: WaveApi = {
     ipcRenderer.on('update:status', h)
     return () => ipcRenderer.removeListener('update:status', h)
   },
+  studio: {
+    status: () => ipcRenderer.invoke('studio:status'),
+    setGamePath: () => ipcRenderer.invoke('studio:setGamePath'),
+    catalog: () => ipcRenderer.invoke('studio:catalog'),
+    legendAnims: (hero) => ipcRenderer.invoke('studio:legendAnims', hero),
+    items: (kind, query, file) => ipcRenderer.invoke('studio:items', kind, query, file),
+    effectFiles: () => ipcRenderer.invoke('studio:effectFiles'),
+    thumb: (req) => ipcRenderer.invoke('studio:thumb', req),
+    render: (req) => ipcRenderer.invoke('studio:render', req),
+    job: (id) => ipcRenderer.invoke('studio:job', id),
+    library: () => ipcRenderer.invoke('studio:library'),
+    remove: (id) => ipcRenderer.invoke('studio:remove', id),
+    exportRender: (id, format) => ipcRenderer.invoke('studio:export', id, format),
+    assets: (kind, query, offset, limit) => ipcRenderer.invoke('studio:assets', kind, query, offset, limit),
+    saveAsset: (path) => ipcRenderer.invoke('studio:saveAsset', path),
+    tracks: () => ipcRenderer.invoke('studio:tracks'),
+    saveTrack: (id) => ipcRenderer.invoke('studio:saveTrack', id)
+  },
   onDataUpdated: (cb) => {
     const h = (): void => cb()
     ipcRenderer.on('data:updated', h)
