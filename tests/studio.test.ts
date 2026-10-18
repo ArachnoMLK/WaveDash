@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildLegendGroups, mainClass, parseCsv, parseHeroes, powerAnims } from '../src/main/studio/presets'
+import { buildLegendGroups, effectItems, heroEffectTest, mainClass, parseCsv, parseHeroes, powerAnims } from '../src/main/studio/presets'
 
 const HEROES = `<HeroTypes><HeroType HeroName="Template"><BioName>T</BioName></HeroType>
 <HeroType HeroName="Ninja"><HeroDisplayName>HATTORI</HeroDisplayName><BaseWeapon1>Sword</BaseWeapon1><SpecialPower1>SwordSmashNeutralNinja</SpecialPower1>
@@ -51,4 +51,21 @@ test('groupes d’une légende : signatures, attaques sans variantes, emotes tri
   assert.deepEqual(by['atk-Sword'].items.map((a) => a.name), ['AttackCombo1'])
   assert.deepEqual(by['mv-Sword'].items.map((a) => a.name), ['Ready'])
   assert.deepEqual(by['emotes'].items.map((a) => a.label), ['Breakdance', 'Robot Dance'])
+})
+
+test('effets en plusieurs parties : symboles numérotés regroupés et triés', () => {
+  const items = effectItems('SFX_X.swf', ['a_Glow', 'DragonFireALL10', 'DragonFireALL2', 'DragonFireALL1', 'Sparkle01', 'Lone7'])
+  const by = Object.fromEntries(items.map((x) => [x.name, x]))
+  assert.deepEqual(by['DragonFireALL'].sequence, ['DragonFireALL1', 'DragonFireALL2', 'DragonFireALL10'])
+  assert.equal(by['DragonFireALL'].animClass, 'SFX_X.swf/DragonFireALL2')
+  assert.equal(by['Sparkle01'].sequence, undefined)     // une seule partie : effet normal
+  assert.equal(by['a_Glow'].display, 'Glow')
+  assert.equal(items.length, 4)
+})
+
+test('effets d’une légende : nom interne sans attraper les noms plus longs', () => {
+  const monk = heroEffectTest('Monk')
+  assert.ok(monk('a_SFXAttackSpecialMonkNeutral2_IW'))
+  assert.ok(monk('a_FFXAttackSpecialMonk2_IW_SwapAang'))
+  assert.ok(!monk('a_Jaw_MonkeyKing'))
 })

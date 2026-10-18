@@ -5,6 +5,8 @@ Windows dashboard for your **YouTube, Brawlhalla, TikTok, Discord** stats, and a
 
 Electron · React · TypeScript · SQLite · ECharts — gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
 
+> **Version 1.3.1** : Studio : skins d'arme, lecture image par image (barre, repères, PNG d'une image), effets classés par légende et effets en plusieurs parties.
+>
 > **Version 1.3.0** : nouveau **Studio Brawlhalla** (rendus de légendes, cosmétiques, assets et musiques du jeu installé).
 >
 > Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit rester **public**.
