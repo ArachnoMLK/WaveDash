@@ -1,5 +1,5 @@
 // Studio Brawlhalla : rendus de légendes et de cosmétiques, bibliothèque, assets et musiques du jeu.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type {
   StudioAnim, StudioAnimGroup, StudioAssetKind, StudioCatalog, StudioExportFormat, StudioItem, StudioJob, StudioKind,
   StudioRender, StudioRenderRequest, StudioStatus, StudioTrack, StudioWeaponSkins
@@ -7,9 +7,12 @@ import type {
 import { STUDIO_KINDS, WEAPON_FR, weaponOfAnim } from '@shared/studio'
 import { Reveal, Switch, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
+import { ThumbEditor } from './studio/ThumbEditor'
+import { Thumb } from './studio/Thumb'
+import { Composer, stackItem, type StackItem } from './studio/Composer'
 
 const studio = window.api.studio
-type Tab = 'create' | 'library' | 'assets' | 'music'
+type Tab = 'create' | 'mini' | 'library' | 'assets' | 'music'
 const EXPORTS: StudioExportFormat[] = ['gif', 'apng', 'webm', 'mov', 'mp4', 'png']
 
 /** Mémoire locale de l'interface (dernier choix), sans casser l'affichage si le stockage est indisponible. */
@@ -19,16 +22,27 @@ const mem = {
 }
 
 /* ---------------------------------------------------------------- lecteur d'images animées */
-/** Rendu image par image : lecture en boucle, ou arrêt sur une image choisie (barre avec un repère par image). */
-function Player({ render, max = 520, controls = false, onFrame }: { render: StudioRender; max?: number; controls?: boolean; onFrame?: (i: number) => void }): JSX.Element {
+/** Rendu image par image, comme la timeline de MiniaMaker : lecture (vitesse, boucle), barre, bande de vignettes numérotées.
+ *  Dans la bande : clic = afficher l'image, Ctrl+clic = ajouter / retirer, Maj+clic = plage, Ctrl+A = tout. */
+interface PlayerSel { frames: number[]; fps: number }
+const FPS = [6, 12, 24, 30, 60]
+function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
+  render: StudioRender; max?: number; controls?: boolean; onFrame?: (i: number) => void; onSelect?: (s: PlayerSel) => void
+}): JSX.Element {
   const { t } = useApp()
   const ref = useRef<HTMLCanvasElement>(null)
+  const strip = useRef<HTMLDivElement>(null)
   const n = render.files.length
   const [playing, setPlaying] = useState(true)
   const [frame, setFrame] = useState(0)
+  const [fps, setFps] = useState<number>(mem.get('fps', 24))
+  const [loop, setLoop] = useState<boolean>(mem.get('loop', true))
+  const [sel, setSel] = useState<number[]>([])
+  const anchor = useRef(0)
   const frameRef = useRef(0)
   frameRef.current = frame
-  const imgs = useMemo(() => render.files.map((f) => { const i = new Image(); i.src = `studio://renders/${render.id}/${f}`; return i }), [render])
+  const src = (i: number): string => `studio://renders/${render.id}/${render.files[i]}`
+  const imgs = useMemo(() => render.files.map((_, i) => { const im = new Image(); im.src = src(i); return im }), [render]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const draw = (i: number): void => {
     const canvas = ref.current, im = imgs[i]
@@ -42,72 +56,89 @@ function Player({ render, max = 520, controls = false, onFrame }: { render: Stud
     if (!canvas) return
     const s = Math.min(1, max / Math.max(render.width, render.height))
     canvas.width = Math.max(1, Math.round(render.width * s)); canvas.height = Math.max(1, Math.round(render.height * s))
-    setFrame(0); setPlaying(true)
+    setFrame(0); setPlaying(true); setSel([]); anchor.current = 0
   }, [render, max])
-  useEffect(() => { draw(frame); onFrame?.(frame) }, [frame, imgs]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    draw(frame); onFrame?.(frame)
+    // garde l'image courante visible dans la bande
+    // (sans scrollIntoView, qui ferait aussi défiler la page)
+    const box = strip.current, cell = box?.querySelector<HTMLElement>(`[data-i="${frame}"]`)
+    if (box && cell) {
+      if (cell.offsetLeft < box.scrollLeft) box.scrollLeft = cell.offsetLeft - 4
+      else if (cell.offsetLeft + cell.offsetWidth > box.scrollLeft + box.clientWidth) box.scrollLeft = cell.offsetLeft + cell.offsetWidth - box.clientWidth + 4
+    }
+  }, [frame, imgs]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onSelect?.({ frames: sel, fps }) }, [sel, fps]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!playing || n < 2) return
-    const timer = setInterval(() => setFrame((f) => (f + 1) % n), 1000 / 24)
+    const timer = setInterval(() => setFrame((f) => {
+      if (f + 1 < n) return f + 1
+      if (loop) return 0
+      setPlaying(false); return f
+    }), 1000 / fps)
     return () => clearInterval(timer)
-  }, [playing, n])
+  }, [playing, n, fps, loop])
 
-  const go = (i: number): void => { setPlaying(false); setFrame(((i % n) + n) % n) }
+  const go = (i: number): void => { setPlaying(false); setFrame(Math.min(n - 1, Math.max(0, i))) }
+  const pick = (i: number, e: MouseEvent): void => {
+    go(i)
+    if (e.shiftKey) {
+      const [a, b] = [Math.min(anchor.current, i), Math.max(anchor.current, i)]
+      setSel(Array.from({ length: b - a + 1 }, (_, k) => a + k))
+    } else if (e.ctrlKey || e.metaKey) {
+      setSel((s) => (s.includes(i) ? s.filter((x) => x !== i) : [...s, i].sort((x, y) => x - y))); anchor.current = i
+    } else { setSel([]); anchor.current = i }
+  }
+  const keys = (e: KeyboardEvent): void => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); setSel(render.files.map((_, i) => i)) }
+    else if (e.key === 'Escape') setSel([])
+    else if (e.key === 'ArrowLeft' || e.key === ',') { e.preventDefault(); go(frame - 1) }
+    else if (e.key === 'ArrowRight' || e.key === '.') { e.preventDefault(); go(frame + 1) }
+    else if (e.key.toLowerCase() === 'k' || e.key === ' ') { e.preventDefault(); setPlaying(!playing) }
+  }
   return (
     <div className="st-player">
       <canvas ref={ref} className="st-canvas" />
       {controls && n > 1 && (
-        <div className="st-ctrl">
+        <div className="st-ctrl" tabIndex={0} onKeyDown={keys}>
           <div className="row">
-            <button className="btn small" onClick={() => go(frame - 1)} aria-label={t('st.prevFrame')}>‹</button>
+            <button className="btn small" onClick={() => go(0)} aria-label={t('st.firstFrame')} title={t('st.firstFrame')}>|◀︎</button>
+            <button className="btn small" onClick={() => go(frame - 1)} aria-label={t('st.prevFrame')} title={t('st.prevFrame')}>◀︎</button>
             <button className="btn small primary st-play" onClick={() => setPlaying(!playing)}>{playing ? t('st.pause') : t('st.play')}</button>
-            <button className="btn small" onClick={() => go(frame + 1)} aria-label={t('st.nextFrame')}>›</button>
-            <span className="muted small st-fnum">{t('st.frameOf', { i: frame + 1, n })}</span>
+            <button className="btn small" onClick={() => go(frame + 1)} aria-label={t('st.nextFrame')} title={t('st.nextFrame')}>▶︎</button>
+            <button className="btn small" onClick={() => go(n - 1)} aria-label={t('st.lastFrame')} title={t('st.lastFrame')}>▶︎|</button>
+            <span className="small st-fnum">{frame + 1} / {n}</span>
+            <select className="st-fps" value={fps} onChange={(e) => { const v = Number(e.target.value); setFps(v); mem.set('fps', v) }} aria-label={t('st.speed')}>
+              {FPS.map((f) => <option key={f} value={f}>{f} i/s</option>)}
+            </select>
+            <label className="row small st-loop"><input type="checkbox" checked={loop} onChange={(e) => { setLoop(e.target.checked); mem.set('loop', e.target.checked) }} />{t('st.loop')}</label>
           </div>
-          <div className="st-scrub">
-            <input type="range" min={0} max={n - 1} step={1} value={frame} onChange={(e) => go(Number(e.target.value))} aria-label={t('st.frame')} />
-            {/* un repère cliquable par image (au-delà de 160 images, la barre seule suffit) */}
-            {n <= 160 && (
-              <div className="st-ticks">
-                {render.files.map((_, i) => (
-                  <button key={i} className={i === frame ? 'on' : ''} style={{ left: `${(i / (n - 1)) * 100}%` }} onClick={() => go(i)} title={t('st.frameOf', { i: i + 1, n })} />
-                ))}
-              </div>
-            )}
+          <input className="st-range" type="range" min={0} max={n - 1} step={1} value={frame} onChange={(e) => go(Number(e.target.value))} aria-label={t('st.frame')} />
+          <div className="st-strip" ref={strip}>
+            {render.files.map((_, i) => (
+              <button key={i} data-i={i} className={`st-cell${i === frame ? ' cur' : ''}${sel.includes(i) ? ' sel' : ''}`} onClick={(e) => pick(i, e)} title={t('st.frameOf', { i: i + 1, n })}>
+                <img loading="lazy" src={src(i)} alt="" draggable={false} />
+                <span>{i + 1}</span>
+              </button>
+            ))}
           </div>
+          <p className="muted small st-hint">{sel.length ? t('st.selCount', { n: sel.length }) + ' · ' : ''}{t('st.selHelp')}</p>
         </div>
       )}
     </div>
   )
 }
 
-/** Vignette calculée à la demande quand elle devient visible. */
-function Thumb({ req }: { req: StudioRenderRequest }): JSX.Element {
-  const ref = useRef<HTMLDivElement>(null)
-  const [src, setSrc] = useState<string | null>(null)
-  const key = JSON.stringify(req)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    let alive = true
-    const io = new IntersectionObserver((entries) => {
-      if (!entries.some((e) => e.isIntersecting)) return
-      io.disconnect()
-      void studio.thumb(req).then((s) => { if (alive) setSrc(s ?? '') })
-    })
-    io.observe(el)
-    return () => { alive = false; io.disconnect() }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
-  return <div ref={ref} className={`st-thumb${src === '' ? ' empty' : ''}`}>{src ? <img src={src} alt="" /> : src === '' ? <span>—</span> : <i className="st-spin" />}</div>
-}
 
-function ExportBar({ render, onSaved }: { render: StudioRender; onSaved: (msg: string) => void }): JSX.Element {
+function ExportBar({ render, sel, onSaved }: { render: StudioRender; sel?: PlayerSel; onSaved: (msg: string) => void }): JSX.Element {
   const { t } = useApp()
+  const opts = { frames: sel?.frames.length ? sel.frames : undefined, fps: sel?.fps }
   const label = (f: StudioExportFormat): string => (f === 'mp4' ? t('st.export.mp4') : f === 'png' ? t('st.export.png') : f.toUpperCase())
   return (
     <div className="st-exports">
+      {!!opts.frames && <span className="badge">{t('st.selCount', { n: opts.frames.length })}</span>}
       {EXPORTS.map((f) => (
-        <button key={f} className="btn small" onClick={() => void studio.exportRender(render.id, f).then((r) => r.ok && r.path && onSaved(t('st.saved', { path: r.path })))}>{label(f)}</button>
+        <button key={f} className="btn small" onClick={() => void studio.exportRender(render.id, f, opts).then((r) => r.ok && r.path && onSaved(t('st.saved', { path: r.path })))}>{label(f)}</button>
       ))}
     </div>
   )
@@ -138,6 +169,10 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
   const [current, setCurrent] = useState<StudioRender | null>(null)
   const [note, setNote] = useState('')
   const [shownFrame, setShownFrame] = useState(0)
+  const [sel, setSel] = useState<PlayerSel>({ frames: [], fps: 24 })
+  const [stack, setStack] = useState<StackItem[]>([])
+  const { settings } = useApp() as unknown as { settings: { lang?: string } }
+  const tr = (fr: string, en: string): string => (settings?.lang === 'en' ? en : fr)
   const ready = status.state === 'ready'
 
   useEffect(() => { mem.set('kind', kind); setQuery(''); setItem(null) }, [kind])
@@ -191,7 +226,7 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
       // le skin d'arme suit l'arme de l'animation (épée pour une attaque à l'épée…) ; aucun pour une emote
       const w = weaponOfAnim(anim.animClass, heroWeapons), weapon = w ? wpick[w] || undefined : undefined
       const wname = weapon ? wskins[w!]?.find((x) => x.name === weapon)?.display : ''
-      return { kind, animClass: anim.animClass, animation: anim.name, costume, color: color || undefined, weapon, scale, flip, label: `${skin?.display || hero}${wname ? ` (${wname})` : ''} — ${anim.label}` }
+      return { kind, animClass: anim.animClass, animation: anim.name, animations: anim.parts, costume, color: color || undefined, weapon, scale, flip, label: `${skin?.display || hero}${wname ? ` (${wname})` : ''} — ${anim.label}` }
     }
     if (!item) return null
     const isSwf = kind === 'portrait' || kind === 'effect'
@@ -309,11 +344,19 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
       </div>
 
       <div className="glass pad st-preview">
-        <div className="st-stage">{current ? <Player render={current} controls onFrame={setShownFrame} /> : <span className="muted">—</span>}</div>
+        {stack.length > 0 && (
+          <div className="st-stage cmp-stage"><Composer stack={stack} setStack={setStack} tr={tr} onMerged={(r) => { setCurrent(r); setStack([]) }} /></div>
+        )}
+        {!stack.length && <div className="st-stage">{current ? <Player render={current} controls onFrame={setShownFrame} onSelect={setSel} /> : <span className="muted">—</span>}</div>}
         {current && (
+          <button className="btn small st-stack-add" disabled={stack.some((s) => s.render.id === current.id)} onClick={() => setStack([...stack, stackItem(current, stack.length ? 40 * stack.length : 0, 0)])}>
+            ＋ {stack.length ? tr(`Superposer « ${current.label.slice(0, 40)} »`, `Stack “${current.label.slice(0, 40)}”`) : tr('Superposer d’autres rendus (composition)', 'Stack other renders (composition)')}
+          </button>
+        )}
+        {current && !stack.length && (
           <>
             <div className="row between"><h2>{current.label}</h2><span className="badge">{t('st.frames', { n: current.frames })} · {current.width}×{current.height}</span></div>
-            <ExportBar render={current} onSaved={setNote} />
+            <ExportBar render={current} sel={sel} onSaved={setNote} />
             {current.frames > 1 && (
               <button className="btn small st-frame-png" onClick={() => void studio.exportFrame(current.id, shownFrame).then((r) => r.ok && r.path && setNote(t('st.saved', { path: r.path })))}>
                 {t('st.exportFrame', { i: shownFrame + 1 })}
@@ -439,8 +482,9 @@ export function StudioPage(): JSX.Element {
           {status.state === 'missing-game' && <button className="btn small" style={{ marginLeft: 12 }} onClick={() => void studio.setGamePath().then(setStatus)}>{t('st.chooseGame')}</button>}
         </div>
       )}
-      <Reveal><div style={{ marginBottom: 16 }}><Tabs value={tab} onChange={setTab} options={(['create', 'library', 'assets', 'music'] as Tab[]).map((id) => ({ id, label: t(`st.tab.${id}`) }))} /></div></Reveal>
+      <Reveal><div style={{ marginBottom: 16 }}><Tabs value={tab} onChange={setTab} options={(['create', 'mini', 'library', 'assets', 'music'] as Tab[]).map((id) => ({ id, label: t(`st.tab.${id}`) }))} /></div></Reveal>
       {tab === 'create' && status && <CreateTab status={status} />}
+      {tab === 'mini' && status?.state === 'ready' && <ThumbEditor />}
       {tab === 'library' && <LibraryTab />}
       {tab === 'assets' && <AssetsTab />}
       {tab === 'music' && <MusicTab />}

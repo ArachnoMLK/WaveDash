@@ -267,19 +267,26 @@ details.rule[open] > summary { margin-bottom: 4px; }
   background: repeating-conic-gradient(rgba(var(--panel-rgb), .05) 0 25%, transparent 0 50%) 0 0 / 22px 22px; overflow: hidden; }
 .st-stage.small { min-height: 200px; }
 .st-canvas { max-width: 100%; max-height: 62vh; }
-.st-player { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; padding: 10px 0; }
-.st-ctrl { width: calc(100% - 24px); display: flex; flex-direction: column; gap: 6px; }
-.st-ctrl .row { display: flex; align-items: center; gap: 6px; }
+.st-player { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; padding: 10px 0 0; }
+/* timeline façon MiniaMaker : commandes, barre, bande de vignettes numérotées */
+.st-ctrl { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 8px; border-top: 1px solid var(--line); outline: none; }
+.st-ctrl .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .st-play { min-width: 84px; justify-content: center; }
-.st-fnum { margin-left: auto; font-variant-numeric: tabular-nums; }
-.st-scrub { position: relative; padding-bottom: 14px; }
-.st-scrub input[type=range] { width: 100%; margin: 0; }
-/* repères alignés sur la course du curseur (demi-largeur du pouce de chaque côté) */
-.st-ticks { position: absolute; left: 8px; right: 8px; bottom: 0; height: 12px; }
-.st-ticks button { position: absolute; top: 0; width: 3px; height: 10px; margin-left: -1.5px; padding: 0; border: 0; border-radius: 1px;
-  background: var(--line-strong); cursor: pointer; }
-.st-ticks button:hover { background: var(--fg); height: 12px; }
-.st-ticks button.on { background: var(--accent, var(--fg)); width: 5px; margin-left: -2.5px; height: 12px; }
+.st-fnum { font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; }
+.st-fps { width: auto; padding: 4px 8px; font-size: 12.5px; }
+.st-loop { gap: 6px; margin-left: 4px; cursor: pointer; }
+.st-range { width: 100%; margin: 0; }
+.st-strip { position: relative; display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px; scroll-behavior: smooth; }
+.st-strip::-webkit-scrollbar { height: 8px; } .st-strip::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; }
+.st-cell { position: relative; flex: 0 0 auto; width: 68px; height: 68px; padding: 4px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: repeating-conic-gradient(rgba(var(--panel-rgb), .05) 0 25%, transparent 0 50%) 0 0 / 12px 12px; }
+.st-cell img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.st-cell span { position: absolute; right: 4px; bottom: 2px; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.st-cell:hover { border-color: var(--line-strong); }
+.st-cell.sel { background-color: rgba(var(--panel-rgb), .12); border-color: var(--fg); }
+.st-cell.cur { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
+.st-cell.cur span, .st-cell.sel span { color: var(--fg); }
+.st-hint { margin: 0; }
 .st-frame-png { align-self: flex-start; }
 /* effets sans rien à dessiner seuls (pièces de rig) : masqués */
 .st-grid .st-card:has(.st-thumb.empty) { display: none; }

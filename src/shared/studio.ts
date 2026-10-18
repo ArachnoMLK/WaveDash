@@ -33,7 +33,8 @@ export interface StudioCostume { name: string; display: string; hero: string }
 export interface StudioCatalog { heroes: StudioHero[]; costumes: StudioCostume[]; colors: string[] }
 
 /** Une animation prête à rendre : `animClass` = « Fichier.swf/Classe ». */
-export interface StudioAnim { name: string; label: string; animClass: string; frames: number }
+/** `parts` : coup en plusieurs animations jouées à la suite (NLight = Combo1 → Combo2 → Combo3). */
+export interface StudioAnim { name: string; label: string; animClass: string; frames: number; parts?: string[] }
 /** Groupe d'animations d'une légende (signatures, attaques d'une arme, emotes…). */
 export interface StudioAnimGroup { id: string; label: string; items: StudioAnim[] }
 
@@ -44,11 +45,15 @@ export type StudioWeaponSkins = Record<string, { name: string; display: string; 
 /** sequence : effet découpé en symboles numérotés (DragonFireALL01, 02…) joués à la suite */
 export interface StudioItem { name: string; display: string; animClass: string; sequence?: string[] }
 
+/** Export : seulement certaines images (indices dans l'ordre voulu) et vitesse en images par seconde. */
+export interface StudioExportOptions { frames?: number[]; fps?: number }
+
 export interface StudioRenderRequest {
   kind: StudioKind
   item?: string            // nom du cosmétique
   animClass?: string       // « Fichier.swf/Classe » (légende, portrait, effet)
   animation?: string       // vide = choisie automatiquement
+  animations?: string[]    // plusieurs animations enchaînées (coup en plusieurs parties)
   costume?: string
   color?: string
   weapon?: string
@@ -61,7 +66,7 @@ export interface StudioRenderRequest {
 export interface StudioRender {
   id: string
   label: string
-  kind: StudioKind
+  kind: StudioKind | 'composite'
   animation: string
   frames: number
   width: number
@@ -89,14 +94,24 @@ export interface StudioApi {
   items(kind: StudioKind, query?: string, file?: string): Promise<StudioItem[]>
   effectFiles(): Promise<string[]>
   thumb(req: StudioRenderRequest): Promise<string | null>
+  /** Toutes les images d'une animation en petit (aperçu au survol). */
+  preview(req: StudioRenderRequest): Promise<{ base: string; files: string[] } | null>
+  /** Plusieurs rendus superposés, fusionnés image par image en un nouveau rendu. */
+  saveComposite(frames: Uint8Array[], label: string, width: number, height: number): Promise<StudioRender>
   render(req: StudioRenderRequest): Promise<StudioJob>
   job(id: string): Promise<StudioJob | null>
   library(): Promise<StudioRender[]>
   remove(id: string): Promise<void>
-  exportRender(id: string, format: StudioExportFormat): Promise<{ ok: boolean; path?: string; error?: string }>
+  exportRender(id: string, format: StudioExportFormat, opts?: StudioExportOptions): Promise<{ ok: boolean; path?: string; error?: string }>
   exportFrame(id: string, index: number): Promise<{ ok: boolean; path?: string }>
   assets(kind: StudioAssetKind, query: string, offset: number, limit: number): Promise<StudioAssetPage>
   saveAsset(path: string): Promise<boolean>
   tracks(): Promise<StudioTrack[]>
   saveTrack(id: string): Promise<boolean>
+  /* éditeur de miniatures */
+  importImage(): Promise<string | null>
+  storeImage(bytes: Uint8Array, ext: string): Promise<string>
+  saveImage(bytes: Uint8Array, name: string, ext: string): Promise<{ ok: boolean; path?: string }>
+  saveProject(json: string, path?: string): Promise<{ ok: boolean; path?: string }>
+  openProject(): Promise<{ path: string; json: string } | null>
 }

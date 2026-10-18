@@ -9,7 +9,7 @@ import { basename, extname, join, relative, resolve, sep } from 'path'
 import { pathToFileURL } from 'url'
 import { promisify } from 'util'
 import type {
-  StudioAnimGroup, StudioAssetKind, StudioAssetPage, StudioCatalog, StudioExportFormat, StudioItem, StudioJob, StudioKind,
+  StudioAnimGroup, StudioAssetKind, StudioAssetPage, StudioCatalog, StudioExportFormat, StudioExportOptions, StudioItem, StudioJob, StudioKind,
   StudioRender, StudioRenderRequest, StudioStatus, StudioTrack, StudioWeaponSkins
 } from '@shared/studio'
 import { Engine } from './engine'
@@ -20,7 +20,7 @@ const DEFAULT_GAME = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brawlha
 
 /** À appeler avant `app.whenReady()` : le protocole doit être déclaré tôt. */
 export function registerStudioScheme(): void {
-  protocol.registerSchemesAsPrivileged([{ scheme: 'studio', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }])
+  protocol.registerSchemesAsPrivileged([{ scheme: 'studio', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }])
 }
 
 const resource = (...p: string[]): string => join(app.isPackaged ? process.resourcesPath : app.getAppPath(), 'resources', 'studio', ...p)
@@ -192,7 +192,7 @@ function effectFiles(): string[] {
 /* ---------------------------------------------------------------- rendus */
 function engineRequest(req: StudioRenderRequest): Record<string, unknown> {
   const r: Record<string, unknown> = { scale: Math.min(Math.max(Number(req.scale) || 2, 0.5), 8), flip: !!req.flip }
-  if (req.kind === 'legend') Object.assign(r, { kind: 'legend', animClass: req.animClass, animation: req.animation, costume: req.costume, color: req.color || undefined, weapon: req.weapon || undefined })
+  if (req.kind === 'legend') Object.assign(r, { kind: 'legend', animClass: req.animClass, animation: req.animation, costume: req.costume, color: req.color || undefined, weapon: req.weapon || undefined, animations: Array.isArray(req.animations) ? req.animations.filter((n) => typeof n === 'string').slice(0, 12) : undefined })
   else if (req.kind === 'portrait' || req.kind === 'effect') Object.assign(r, { kind: 'swf', animClass: req.animClass, animation: '' })
   if (req.kind === 'effect' && Array.isArray(req.sequence)) r.sequence = req.sequence.filter((n) => typeof n === 'string' && /^[\w-]+$/.test(n)).slice(0, 400)
   else Object.assign(r, { kind: req.kind, item: req.item })
@@ -239,26 +239,64 @@ async function thumb(req: StudioRenderRequest): Promise<string | null> {
   return `studio://thumbs/${key}/frame_0000.png`
 }
 
+/** Aperçu animé (survol d'une vignette) : toutes les images en petit, rangées avec les vignettes, hors bibliothèque. */
+const previews = new Map<string, Promise<{ base: string; files: string[] } | null>>()
+function preview(req: StudioRenderRequest): Promise<{ base: string; files: string[] } | null> {
+  const key = 'p-' + createHash('sha1').update(JSON.stringify({ ...req, label: '' }) + gameStamp()).digest('hex').slice(0, 20)
+  const known = previews.get(key)
+  if (known) return known
+  const job = (async () => {
+    const out = join(dir('thumbs'), key), meta = join(out, 'meta.json')
+    try {
+      if (!existsSync(meta)) await call('render', { ...engineRequest({ ...req, scale: req.kind === 'legend' ? 0.6 : 0.7 }), outDir: out })
+      const files = (JSON.parse(readFileSync(meta, 'utf8')) as { files: string[] }).files
+      return { base: `studio://thumbs/${key}/`, files }
+    } catch { previews.delete(key); return null }
+  })()
+  previews.set(key, job)
+  return job
+}
+
+/** Composition fusionnée (plusieurs rendus superposés) : enregistrée comme un rendu de la bibliothèque. */
+function saveComposite(frames: Uint8Array[], label: string, width: number, height: number): StudioRender {
+  const id = `${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}-${randomBytes(2).toString('hex')}`
+  const out = dir('renders', id)
+  const files = frames.map((f, i) => { const name = `frame_${String(i).padStart(4, '0')}.png`; writeFileSync(join(out, name), Buffer.from(f)); return name })
+  const meta: StudioRender = { id, label: (label || 'Composition').slice(0, 80), kind: 'composite', animation: '', frames: files.length, width: Math.round(width), height: Math.round(height), files, created: Date.now() }
+  writeFileSync(join(out, 'render.json'), JSON.stringify(meta))
+  return meta
+}
+
 function library(): StudioRender[] {
   return readdirSync(dir('renders')).map(readRender).filter((r): r is StudioRender => !!r).sort((a, b) => b.created - a.created)
 }
 
-async function exportRender(win: BrowserWindow | null, id: string, format: StudioExportFormat): Promise<{ ok: boolean; path?: string; error?: string }> {
+async function exportRender(win: BrowserWindow | null, id: string, format: StudioExportFormat, opts: StudioExportOptions = {}): Promise<{ ok: boolean; path?: string; error?: string }> {
   const meta = readRender(id)
   if (!meta) return { ok: false, error: 'introuvable' }
-  const src = join(dir('renders'), id)
   const name = meta.label.replace(/[^\w .-]/g, '_') || id
+  const fps = Math.min(60, Math.max(1, Math.round(Number(opts.fps) || 24)))
+  // images choisies dans la bande : copiées et renumérotées à part, dans l'ordre
+  const picked = (opts.frames ?? []).filter((i) => Number.isInteger(i) && i >= 0 && i < meta.files.length)
+  let src = join(dir('renders'), id)
+  let files = meta.files
+  if (picked.length) {
+    const tmp = join(app.getPath('temp'), `wavedash-sel-${id}`)
+    rmSync(tmp, { recursive: true, force: true }); mkdirSync(tmp, { recursive: true })
+    files = picked.map((i, k) => { const f = `frame_${String(k).padStart(4, '0')}.png`; copyFileSync(join(src, meta.files[i]), join(tmp, f)); return f })
+    src = tmp
+  }
   if (format === 'png') {
     const r = win ? await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] }) : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
     if (r.canceled || !r.filePaths[0]) return { ok: false }
     const target = join(r.filePaths[0], name); mkdirSync(target, { recursive: true })
-    for (const f of meta.files) copyFileSync(join(src, f), join(target, f))
+    for (const f of files) copyFileSync(join(src, f), join(target, f))
     return { ok: true, path: target }
   }
-  const opts = { defaultPath: `${name}.${format}`, filters: [{ name: format.toUpperCase(), extensions: [format] }] }
-  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+  const saveOpts = { defaultPath: `${name}.${format}`, filters: [{ name: format.toUpperCase(), extensions: [format] }] }
+  const r = win ? await dialog.showSaveDialog(win, saveOpts) : await dialog.showSaveDialog(saveOpts)
   if (r.canceled || !r.filePath) return { ok: false }
-  const input = ['-y', '-framerate', '24', '-i', join(src, 'frame_%04d.png')]
+  const input = ['-y', '-framerate', String(fps), '-i', join(src, 'frame_%04d.png')]
   const args: Record<Exclude<StudioExportFormat, 'png'>, string[]> = {
     gif: [...input, '-vf', 'split[a][b];[a]palettegen=reserve_transparent=1[p];[b][p]paletteuse', '-loop', '0', r.filePath],
     apng: [...input, '-plays', '0', '-f', 'apng', r.filePath],
@@ -360,15 +398,25 @@ export function registerStudio(win: () => BrowserWindow | null): void {
     const url = new URL(request.url)
     const path = decodeURIComponent(url.pathname).replace(/^\/+/, '')
     let file: string | null = null
-    if (url.host === 'renders' || url.host === 'thumbs') {
+    if (url.host === 'renders' || url.host === 'thumbs' || url.host === 'uploads') {
       const base = resolve(dir(url.host)), full = resolve(base, path)
       file = full.startsWith(base + sep) && existsSync(full) ? full : null
     } else if (url.host === 'game') file = gameFile(path)
     else if (url.host === 'music') file = await trackMp3(path.replace(/\.mp3$/, '')).catch(() => null)
-    return file ? net.fetch(pathToFileURL(file).toString()) : new Response('not found', { status: 404 })
+    if (!file) return new Response('not found', { status: 404 })
+    // CORS ouvert : l'éditeur de miniatures dessine ces images dans un canvas qu'il doit pouvoir exporter
+    const res = await net.fetch(pathToFileURL(file).toString())
+    const headers = new Headers(res.headers)
+    headers.set('Access-Control-Allow-Origin', '*')
+    return new Response(res.body, { status: res.status, headers })
   })
 
   ipcMain.handle('studio:status', () => status())
+  ipcMain.handle('studio:importImage', () => importImage(win()))
+  ipcMain.handle('studio:storeImage', (_e, bytes: Uint8Array, ext: string) => storeUpload(Buffer.from(bytes), String(ext)))
+  ipcMain.handle('studio:saveImage', (_e, bytes: Uint8Array, name: string, ext: string) => saveImage(win(), Buffer.from(bytes), String(name), String(ext)))
+  ipcMain.handle('studio:saveProject', (_e, json: string, path?: string) => saveProject(win(), String(json), path ? String(path) : undefined))
+  ipcMain.handle('studio:openProject', () => openProject(win()))
   ipcMain.handle('studio:setGamePath', async () => {
     const w = win()
     const r = w ? await dialog.showOpenDialog(w, { properties: ['openDirectory'] }) : await dialog.showOpenDialog({ properties: ['openDirectory'] })
@@ -387,13 +435,15 @@ export function registerStudio(win: () => BrowserWindow | null): void {
   ipcMain.handle('studio:items', (_e, kind: StudioKind, query?: string, file?: string) => items(kind, String(query ?? ''), file ? String(file) : undefined))
   ipcMain.handle('studio:effectFiles', () => effectFiles())
   ipcMain.handle('studio:thumb', (_e, req: StudioRenderRequest) => thumb(req))
+  ipcMain.handle('studio:preview', (_e, req: StudioRenderRequest) => preview(req))
+  ipcMain.handle('studio:saveComposite', (_e, frames: Uint8Array[], label: string, w: number, h: number) => saveComposite((frames ?? []).slice(0, 2000), String(label), Number(w), Number(h)))
   ipcMain.handle('studio:render', (_e, req: StudioRenderRequest) => render(req))
   ipcMain.handle('studio:job', (_e, id: string) => jobs.get(String(id)) ?? null)
   ipcMain.handle('studio:library', () => library())
   ipcMain.handle('studio:remove', (_e, id: string) => {
     if (/^[\w-]+$/.test(String(id))) rmSync(join(dir('renders'), String(id)), { recursive: true, force: true })
   })
-  ipcMain.handle('studio:export', (_e, id: string, format: StudioExportFormat) => exportRender(win(), String(id), format))
+  ipcMain.handle('studio:export', (_e, id: string, format: StudioExportFormat, opts?: StudioExportOptions) => exportRender(win(), String(id), format, opts ?? {}))
   ipcMain.handle('studio:assets', (_e, kind: StudioAssetKind, query: string, offset: number, limit: number) =>
     assets(kind, String(query ?? ''), Number(offset) || 0, Number(limit) || 120))
   ipcMain.handle('studio:saveAsset', (_e, rel: string) => { const f = gameFile(String(rel)); return f ? saveCopy(win(), f, basename(f)) : false })
@@ -405,3 +455,46 @@ export function registerStudio(win: () => BrowserWindow | null): void {
 }
 
 export function stopStudio(): void { engine?.stop() }
+
+/* ---------------------------------------------------------------- éditeur de miniatures */
+const IMG_EXT = /^(png|jpe?g|webp|gif)$/i
+/** Image ajoutée par l'utilisateur : copiée dans le Studio pour que le projet la retrouve. */
+function storeUpload(bytes: Uint8Array, ext: string): string {
+  const e = IMG_EXT.test(ext) ? ext.toLowerCase() : 'png'
+  const name = `${createHash('sha1').update(bytes).digest('hex').slice(0, 16)}.${e}`
+  const out = join(dir('uploads'), name)
+  if (!existsSync(out)) writeFileSync(out, bytes)
+  return `studio://uploads/${name}`
+}
+async function importImage(win: BrowserWindow | null): Promise<string | null> {
+  const opts = { properties: ['openFile' as const], filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }] }
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+  if (r.canceled || !r.filePaths[0]) return null
+  return storeUpload(readFileSync(r.filePaths[0]), extname(r.filePaths[0]).slice(1))
+}
+async function saveImage(win: BrowserWindow | null, bytes: Uint8Array, name: string, ext: string): Promise<{ ok: boolean; path?: string }> {
+  const e = /^(png|jpg|webp)$/.test(ext) ? ext : 'png'
+  const opts = { defaultPath: `${(name || 'miniature').replace(/[^\w .-]/g, '_')}.${e}`, filters: [{ name: e.toUpperCase(), extensions: [e] }] }
+  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+  if (r.canceled || !r.filePath) return { ok: false }
+  writeFileSync(r.filePath, bytes)
+  return { ok: true, path: r.filePath }
+}
+const PROJECT_FILTER = [{ name: 'Miniature WaveDash', extensions: ['wdmini'] }]
+async function saveProject(win: BrowserWindow | null, json: string, path?: string): Promise<{ ok: boolean; path?: string }> {
+  let target = path && path.endsWith('.wdmini') ? path : ''
+  if (!target) {
+    const opts = { defaultPath: 'miniature.wdmini', filters: PROJECT_FILTER }
+    const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+    if (r.canceled || !r.filePath) return { ok: false }
+    target = r.filePath
+  }
+  writeFileSync(target, json)
+  return { ok: true, path: target }
+}
+async function openProject(win: BrowserWindow | null): Promise<{ path: string; json: string } | null> {
+  const opts = { properties: ['openFile' as const], filters: PROJECT_FILTER }
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+  if (r.canceled || !r.filePaths[0]) return null
+  return { path: r.filePaths[0], json: readFileSync(r.filePaths[0], 'utf8') }
+}

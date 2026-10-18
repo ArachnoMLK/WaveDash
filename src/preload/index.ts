@@ -84,16 +84,23 @@ const api: WaveApi = {
     items: (kind, query, file) => ipcRenderer.invoke('studio:items', kind, query, file),
     effectFiles: () => ipcRenderer.invoke('studio:effectFiles'),
     thumb: (req) => ipcRenderer.invoke('studio:thumb', req),
+    preview: (req) => ipcRenderer.invoke('studio:preview', req),
+    saveComposite: (frames, label, w, h) => ipcRenderer.invoke('studio:saveComposite', frames, label, w, h),
     render: (req) => ipcRenderer.invoke('studio:render', req),
     job: (id) => ipcRenderer.invoke('studio:job', id),
     library: () => ipcRenderer.invoke('studio:library'),
     remove: (id) => ipcRenderer.invoke('studio:remove', id),
-    exportRender: (id, format) => ipcRenderer.invoke('studio:export', id, format),
+    exportRender: (id, format, opts) => ipcRenderer.invoke('studio:export', id, format, opts),
     exportFrame: (id, index) => ipcRenderer.invoke('studio:exportFrame', id, index),
     assets: (kind, query, offset, limit) => ipcRenderer.invoke('studio:assets', kind, query, offset, limit),
     saveAsset: (path) => ipcRenderer.invoke('studio:saveAsset', path),
     tracks: () => ipcRenderer.invoke('studio:tracks'),
-    saveTrack: (id) => ipcRenderer.invoke('studio:saveTrack', id)
+    saveTrack: (id) => ipcRenderer.invoke('studio:saveTrack', id),
+    importImage: () => ipcRenderer.invoke('studio:importImage'),
+    storeImage: (bytes, ext) => ipcRenderer.invoke('studio:storeImage', bytes, ext),
+    saveImage: (bytes, name, ext) => ipcRenderer.invoke('studio:saveImage', bytes, name, ext),
+    saveProject: (json, path) => ipcRenderer.invoke('studio:saveProject', json, path),
+    openProject: () => ipcRenderer.invoke('studio:openProject')
   },
   onDataUpdated: (cb) => {
     const h = (): void => cb()

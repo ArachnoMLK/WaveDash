@@ -70,7 +70,37 @@ export function mainClass(listing: AnimListing): string | null {
 }
 
 const clean = (n: string): boolean => !/Swap|_IW|UI$|Po$/.test(n)
-const DIR: Record<string, string> = { '': 'Neutre', _Forward: 'Côté', _Down: 'Bas' }
+const DIR: Record<string, string> = { '': 'NSig', _Forward: 'SSig', _Down: 'DSig' }
+/** Préfixe des pouvoirs d'une arme dans powerTypes.csv (SwordNeutral, LanceAir…). */
+const POWER_PREFIX: Record<string, string> = { RocketLance: 'Lance' }
+/** Attaques normales, dans l'ordre habituel des joueurs : nom → suffixe du pouvoir. */
+export const MOVESET: [string, string][] = [
+  ['NLight', 'Neutral'], ['SLight', 'Side'], ['DLight', 'Down'],
+  ['NAir', 'Air'], ['SAir', 'AirSide'], ['DAir', 'AirDown'], ['Recovery', 'AirUpHeavy'], ['GP', 'GroundPound']
+]
+/** Suites d'un même coup (enchaînement, touche, variante au sol…), sans déborder sur le coup voisin (Air → AirSide). */
+const FOLLOW = /^(Combo\d*|Hit\d*|Miss|Release|Exhaust|Ground\w*|Far|Near|Forward|BounceRecover)?$/
+
+/** Animations d'un coup : la chaîne d'enchaînements du pouvoir, puis ses suites (touché, au sol…). */
+export function moveAnims(base: string, powers: Map<string, Record<string, string>>): string[] {
+  const out = powerAnims(base, powers)
+  for (const name of powers.keys()) {
+    if (name === base || !name.startsWith(base) || !FOLLOW.test(name.slice(base.length))) continue
+    for (const a of powerAnims(name, powers)) if (!out.includes(a)) out.push(a)
+  }
+  return out
+}
+
+/** Un coup en plusieurs parties : l'enchaînement complet, puis chaque partie. */
+function moveItems(label: string, names: string[], find: (n: string) => StudioAnim | null): StudioAnim[] {
+  const parts = names.map(find).filter((a): a is StudioAnim => !!a)
+  if (!parts.length) return []
+  if (parts.length === 1) return [{ ...parts[0], label }]
+  return [
+    { ...parts[0], label, parts: parts.map((a) => a.name), frames: parts.reduce((s, a) => s + a.frames, 0) },
+    ...parts.map((a, k) => ({ ...a, label: `${label} · ${k + 1}/${parts.length}` }))
+  ]
+}
 const MOVES = /^(Ready|Idle|Run|Walk|Jump|Fall|Dodge|Dash|Land|Crouch|Hit|Throw|Ledge|Wall|Spawn|Win|Lose)/
 
 export function buildLegendGroups(
@@ -95,11 +125,7 @@ export function buildLegendGroups(
     const file = WEAPON_ANM[w]; if (!file) return
     for (const [suffix, dir] of Object.entries(DIR)) {
       const power = hero.powers[`SpecialPower${i + 1}${suffix}`]; if (!power) continue
-      const names = powerAnims(power, powers)
-      names.forEach((n, k) => {
-        const a = find(file, n)
-        if (a) sigs.push({ ...a, label: `${WEAPON_FR[w] ?? w} — ${dir}${names.length > 1 ? ` (${k + 1}/${names.length})` : ''}` })
-      })
+      sigs.push(...moveItems(`★ ${dir} · ${WEAPON_FR[w] ?? w}`, moveAnims(power, powers), (n) => find(file, n)))
     }
   })
   if (sigs.length) groups.push({ id: 'sigs', label: 'Signatures', items: sigs })
@@ -110,7 +136,17 @@ export function buildLegendGroups(
     const cls = mainClass(l); if (!cls) continue
     const all = l.classes[cls].filter((a) => clean(a.name))
     const attacks = all.filter((a) => a.name.startsWith('Attack') && !a.name.startsWith('AttackSpecial'))
-    groups.push({ id: `atk-${w}`, label: `Attaques ${WEAPON_FR[w] ?? w}`, items: attacks.map((a) => ({ name: a.name, label: a.name.replace(/^Attack/, ''), animClass: cls, frames: a.frames })) })
+    // coups nommés (NLight, SAir, Recovery…) d'après powerTypes, puis le reste des animations d'attaque
+    const prefix = POWER_PREFIX[w] ?? w
+    const byName = (n: string): StudioAnim | null => { const a = l.classes[cls].find((x) => x.name === n); return a ? { name: a.name, label: a.name, animClass: cls, frames: a.frames } : null }
+    const named: StudioAnim[] = [], used = new Set<string>()
+    for (const [label, suffix] of MOVESET) {
+      const items = moveItems(label, moveAnims(prefix + suffix, powers), byName)
+      items.forEach((a) => used.add(a.name))
+      named.push(...items)
+    }
+    const rest = attacks.filter((a) => !used.has(a.name)).map((a) => ({ name: a.name, label: `${a.name.replace(/^Attack/, '')}`, animClass: cls, frames: a.frames }))
+    groups.push({ id: `atk-${w}`, label: `Attaques ${WEAPON_FR[w] ?? w}`, items: [...named, ...rest] })
     const moves = all.filter((a) => MOVES.test(a.name) && a.frames > 1)
     if (moves.length) groups.push({ id: `mv-${w}`, label: `Postures ${WEAPON_FR[w] ?? w}`, items: moves.map((a) => ({ name: a.name, label: a.name, animClass: cls, frames: a.frames })) })
   }

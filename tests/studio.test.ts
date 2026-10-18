@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildLegendGroups, effectItems, heroEffectTest, mainClass, parseCsv, parseHeroes, powerAnims } from '../src/main/studio/presets'
+import { buildLegendGroups, effectItems, heroEffectTest, mainClass, moveAnims, parseCsv, parseHeroes, powerAnims } from '../src/main/studio/presets'
 
 const HEROES = `<HeroTypes><HeroType HeroName="Template"><BioName>T</BioName></HeroType>
 <HeroType HeroName="Ninja"><HeroDisplayName>HATTORI</HeroDisplayName><BaseWeapon1>Sword</BaseWeapon1><SpecialPower1>SwordSmashNeutralNinja</SpecialPower1>
@@ -47,7 +47,7 @@ test('groupes d’une légende : signatures, attaques sans variantes, emotes tri
   const hero = { name: 'Ninja', weapons: ['Sword'], powers: { SpecialPower1: 'SwordSmashNeutralNinja', SpecialPower1_Forward: 'SwordSmashSideNinja' } }
   const groups = buildLegendGroups(hero, powers, { Animation_Sword: sword }, emotes)
   const by = Object.fromEntries(groups.map((g) => [g.id, g]))
-  assert.deepEqual(by['sigs'].items.map((a) => [a.label, a.name]), [['Épée — Neutre', 'AttackSpecialNinja3'], ['Épée — Côté', 'AttackSpecialNinja1']])
+  assert.deepEqual(by['sigs'].items.map((a) => [a.label, a.name]), [['★ NSig · Épée', 'AttackSpecialNinja3'], ['★ SSig · Épée', 'AttackSpecialNinja1']])
   assert.deepEqual(by['atk-Sword'].items.map((a) => a.name), ['AttackCombo1'])
   assert.deepEqual(by['mv-Sword'].items.map((a) => a.name), ['Ready'])
   assert.deepEqual(by['emotes'].items.map((a) => a.label), ['Breakdance', 'Robot Dance'])
@@ -68,4 +68,29 @@ test('effets d’une légende : nom interne sans attraper les noms plus longs', 
   assert.ok(monk('a_SFXAttackSpecialMonkNeutral2_IW'))
   assert.ok(monk('a_FFXAttackSpecialMonk2_IW_SwapAang'))
   assert.ok(!monk('a_Jaw_MonkeyKing'))
+})
+
+test('coups nommés : NLight = Combo1 → Combo2 → Combo3, sans attraper les coups voisins', () => {
+  const powers = new Map([
+    ['SwordNeutral', { CastAnim: 'AttackCombo1', ComboName: 'SwordNeutralCombo' }],
+    ['SwordNeutralCombo', { CastAnim: 'AttackCombo2', ComboName: 'SwordNeutralMiss' }],
+    ['SwordNeutralHit', { CastAnim: 'AttackCombo3' }],
+    ['SwordNeutralMiss', { CastAnim: '' }],
+    ['SwordAir', { CastAnim: 'AttackAirUpShorter' }],
+    ['SwordAirSide', { CastAnim: 'AttackAirSide' }],
+    ['SwordGroundPound', { CastAnim: 'L:AttackAirDownHeavy', ComboName: 'SwordGroundPoundCombo' }],
+    ['SwordGroundPoundHit', { CastAnim: 'AttackAirDownHeavyHit' }],
+    ['SwordGroundPoundCombo', { CastAnim: 'AttackAirDownHeavyHitGround' }]
+  ])
+  assert.deepEqual(moveAnims('SwordNeutral', powers), ['AttackCombo1', 'AttackCombo2', 'AttackCombo3'])
+  assert.deepEqual(moveAnims('SwordAir', powers), ['AttackAirUpShorter'])
+  assert.deepEqual(moveAnims('SwordGroundPound', powers), ['AttackAirDownHeavy', 'AttackAirDownHeavyHitGround', 'AttackAirDownHeavyHit'])
+  const sword = { classes: { 'Animation_Sword.swf/a__1HandRearAnimation': [
+    { name: 'AttackCombo1', frames: 9 }, { name: 'AttackCombo2', frames: 10 }, { name: 'AttackCombo3', frames: 18 }, { name: 'AttackAirUpShorter', frames: 14 }, { name: 'AttackOdd', frames: 5 }
+  ] } }
+  const hero = { name: 'Knight', weapons: ['Sword'], powers: {} }
+  const atk = buildLegendGroups(hero, powers, { Animation_Sword: sword }, { classes: {} }).find((g) => g.id === 'atk-Sword')!
+  assert.deepEqual(atk.items.map((a) => a.label), ['NLight', 'NLight · 1/3', 'NLight · 2/3', 'NLight · 3/3', 'NAir', 'Odd'])
+  assert.deepEqual(atk.items[0].parts, ['AttackCombo1', 'AttackCombo2', 'AttackCombo3'])
+  assert.equal(atk.items[0].frames, 37)
 })
