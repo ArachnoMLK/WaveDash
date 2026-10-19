@@ -94,3 +94,19 @@ test('coups nommés : NLight = Combo1 → Combo2 → Combo3, sans attraper les c
   assert.deepEqual(atk.items[0].parts, ['AttackCombo1', 'AttackCombo2', 'AttackCombo3'])
   assert.equal(atk.items[0].frames, 37)
 })
+
+test('export d’une durée voulue : intro une fois, puis la boucle du jeu', async () => {
+  const { exportSequence } = await import('@shared/studio')
+  // « The Reads » : 50 images ; intro 0-16, boucle 17-40, fin 41-49 (le livre est jeté) ; 10 s à 24 i/s = 240 images.
+  const seq = exportSequence(50, { fps: 24, duration: 10, loop: 'game' }, 17, 41)
+  assert.equal(seq.length, 240)
+  assert.deepEqual(seq.slice(0, 42), [...Array(41).keys(), 17], 'l’intro, la boucle, puis reprise au début de la boucle')
+  assert.deepEqual(seq.slice(-9), [41, 42, 43, 44, 45, 46, 47, 48, 49], 'la fin de l’emote termine l’export')
+  assert.ok(seq.slice(17, -9).every((i) => i >= 17 && i < 41), 'entre les deux : seulement la boucle')
+  assert.equal(exportSequence(50, { fps: 24, duration: 10, loop: 'game' }, 17).length, 240, 'sans fin de boucle connue : jusqu’à la dernière image')
+  assert.deepEqual(exportSequence(4, { fps: 2, duration: 5, loop: 'all' }, 2), [0, 1, 2, 3, 0, 1, 2, 3, 0, 1])
+  assert.deepEqual(exportSequence(4, { fps: 2, duration: 5, loop: 'off' }, 2), [0, 1, 2, 3], 'sans boucle : une fois')
+  assert.deepEqual(exportSequence(4, { fps: 2, duration: 2, loop: 'game', frames: [1, 3] }, 2), [1, 3, 1, 3], 'la sélection est répétée telle quelle')
+  assert.deepEqual(exportSequence(4, { fps: 2 }), [0, 1, 2, 3], 'sans durée : inchangé')
+  assert.equal(exportSequence(10, { fps: 60, duration: 99999, loop: 'all' }).length, 300 * 60, 'plafond de 5 min')
+})

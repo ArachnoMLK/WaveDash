@@ -5,7 +5,7 @@ import { WEAPON_ANM, WEAPON_FR } from '@shared/studio'
 
 export { WEAPON_ANM, WEAPON_FR }
 
-export type AnimListing = { classes: Record<string, { name: string; frames: number }[]> }
+export type AnimListing = { classes: Record<string, { name: string; frames: number; loopStart?: number; recoveryStart?: number }[]> }
 
 /** Champs simples des <HeroType> (pas besoin d'un parseur XML complet). */
 export function parseHeroes(xml: string): (StudioHero & { powers: Record<string, string> })[] {

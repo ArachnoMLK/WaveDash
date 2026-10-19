@@ -5,7 +5,7 @@ Windows dashboard for your **YouTube, Brawlhalla, TikTok, Discord** stats, and a
 
 Electron · React · TypeScript · SQLite · ECharts — gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
 
-> **Version 1.4.1** : Studio : éditeur de **miniatures** façon MiniaMaker (calques, banque d'assets du jeu, textes stylés, effets, lumières, colorimétrie, export YouTube), attaques rangées par coup (NLight, SAir, Recovery…), aperçu animé au survol, timeline avec sélection d'images, composition de plusieurs rendus.
+> **Version 1.5.0** : Studio : boucle des emotes comme en jeu (intro, boucle, fin) et export d'une **durée voulue** (ex. 10 s d'emote en boucle) ;  éditeur de **miniatures** façon MiniaMaker (calques, banque d'assets du jeu, textes stylés, effets, lumières, colorimétrie, export YouTube), attaques rangées par coup (NLight, SAir, Recovery…), aperçu animé au survol, timeline avec sélection d'images, composition de plusieurs rendus.
 >
 > **Version 1.3.1** : Studio : skins d'arme, lecture image par image (barre, repères, PNG d'une image), effets classés par légende et effets en plusieurs parties.
 >

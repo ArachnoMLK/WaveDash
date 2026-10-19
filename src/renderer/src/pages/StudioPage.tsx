@@ -4,7 +4,7 @@ import type {
   StudioAnim, StudioAnimGroup, StudioAssetKind, StudioCatalog, StudioExportFormat, StudioItem, StudioJob, StudioKind,
   StudioRender, StudioRenderRequest, StudioStatus, StudioTrack, StudioWeaponSkins
 } from '@shared/studio'
-import { STUDIO_KINDS, WEAPON_FR, weaponOfAnim } from '@shared/studio'
+import { exportSequence, STUDIO_KINDS, STUDIO_MAX_DURATION, WEAPON_FR, weaponOfAnim, type StudioLoopMode } from '@shared/studio'
 import { Reveal, Switch, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
 import { ThumbEditor } from './studio/ThumbEditor'
@@ -24,7 +24,8 @@ const mem = {
 /* ---------------------------------------------------------------- lecteur d'images animées */
 /** Rendu image par image, comme la timeline de MiniaMaker : lecture (vitesse, boucle), barre, bande de vignettes numérotées.
  *  Dans la bande : clic = afficher l'image, Ctrl+clic = ajouter / retirer, Maj+clic = plage, Ctrl+A = tout. */
-interface PlayerSel { frames: number[]; fps: number }
+interface PlayerSel { frames: number[]; fps: number; loop: StudioLoopMode }
+type LoopMode = StudioLoopMode
 const FPS = [6, 12, 24, 30, 60]
 function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
   render: StudioRender; max?: number; controls?: boolean; onFrame?: (i: number) => void; onSelect?: (s: PlayerSel) => void
@@ -36,7 +37,9 @@ function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
   const [playing, setPlaying] = useState(true)
   const [frame, setFrame] = useState(0)
   const [fps, setFps] = useState<number>(mem.get('fps', 24))
-  const [loop, setLoop] = useState<boolean>(mem.get('loop', true))
+  // Boucle : non, toute l'animation, ou comme en jeu (l'intro une fois, puis reprise au point de boucle de l'animation).
+  const [loopMode, setLoopMode] = useState<LoopMode>(mem.get('loopMode', 'game'))
+  const loopAt = render.loopStart ?? 0, loopEnd = render.loopEnd ?? n
   const [sel, setSel] = useState<number[]>([])
   const anchor = useRef(0)
   const frameRef = useRef(0)
@@ -68,16 +71,19 @@ function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
       else if (cell.offsetLeft + cell.offsetWidth > box.scrollLeft + box.clientWidth) box.scrollLeft = cell.offsetLeft + cell.offsetWidth - box.clientWidth + 4
     }
   }, [frame, imgs]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { onSelect?.({ frames: sel, fps }) }, [sel, fps]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onSelect?.({ frames: sel, fps, loop: loopMode }) }, [sel, fps, loopMode]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!playing || n < 2) return
     const timer = setInterval(() => setFrame((f) => {
+      // Comme en jeu : après l'intro, la boucle se répète sans jouer la fin de l'animation.
+      if (loopMode === 'game' && f >= loopAt && f + 1 >= loopEnd) return loopAt
       if (f + 1 < n) return f + 1
-      if (loop) return 0
+      if (loopMode === 'all') return 0
+      if (loopMode === 'game') return loopAt
       setPlaying(false); return f
     }), 1000 / fps)
     return () => clearInterval(timer)
-  }, [playing, n, fps, loop])
+  }, [playing, n, fps, loopMode, loopAt, loopEnd])
 
   const go = (i: number): void => { setPlaying(false); setFrame(Math.min(n - 1, Math.max(0, i))) }
   const pick = (i: number, e: MouseEvent): void => {
@@ -111,12 +117,19 @@ function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
             <select className="st-fps" value={fps} onChange={(e) => { const v = Number(e.target.value); setFps(v); mem.set('fps', v) }} aria-label={t('st.speed')}>
               {FPS.map((f) => <option key={f} value={f}>{f} i/s</option>)}
             </select>
-            <label className="row small st-loop"><input type="checkbox" checked={loop} onChange={(e) => { setLoop(e.target.checked); mem.set('loop', e.target.checked) }} />{t('st.loop')}</label>
+            <select className="st-fps" value={loopMode} onChange={(e) => { const v = e.target.value as LoopMode; setLoopMode(v); mem.set('loopMode', v) }} aria-label={t('st.loop')} title={t('st.loop')}>
+              <option value="game">{t('st.loop.game')}</option>
+              <option value="all">{t('st.loop.all')}</option>
+              <option value="off">{t('st.loop.off')}</option>
+            </select>
+            {render.loopStart !== undefined && render.loopStart > 0 && (
+              <button className="btn small" onClick={() => { setSel(Array.from({ length: loopEnd - loopAt }, (_, k) => loopAt + k)); go(loopAt) }} title={t('st.loopSelHelp', { i: loopAt + 1, j: loopEnd })}>{t('st.loopSel')}</button>
+            )}
           </div>
           <input className="st-range" type="range" min={0} max={n - 1} step={1} value={frame} onChange={(e) => go(Number(e.target.value))} aria-label={t('st.frame')} />
           <div className="st-strip" ref={strip}>
             {render.files.map((_, i) => (
-              <button key={i} data-i={i} className={`st-cell${i === frame ? ' cur' : ''}${sel.includes(i) ? ' sel' : ''}`} onClick={(e) => pick(i, e)} title={t('st.frameOf', { i: i + 1, n })}>
+              <button key={i} data-i={i} className={`st-cell${i === frame ? ' cur' : ''}${sel.includes(i) ? ' sel' : ''}${render.loopStart && i === render.loopStart ? ' loopstart' : ''}${render.loopEnd && i === render.loopEnd ? ' loopend' : ''}`} onClick={(e) => pick(i, e)} title={t('st.frameOf', { i: i + 1, n })}>
                 <img loading="lazy" src={src(i)} alt="" draggable={false} />
                 <span>{i + 1}</span>
               </button>
@@ -132,11 +145,21 @@ function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
 
 function ExportBar({ render, sel, onSaved }: { render: StudioRender; sel?: PlayerSel; onSaved: (msg: string) => void }): JSX.Element {
   const { t } = useApp()
-  const opts = { frames: sel?.frames.length ? sel.frames : undefined, fps: sel?.fps }
+  // Durée voulue (s) : l'export répète l'animation selon le mode de boucle du lecteur (ex. 10 s d'emote en boucle).
+  const [duration, setDuration] = useState<string>(mem.get('duration', ''))
+  const secs = Math.min(STUDIO_MAX_DURATION, Math.max(0, Number(duration.replace(',', '.')) || 0))
+  const opts = { frames: sel?.frames.length ? sel.frames : undefined, fps: sel?.fps, duration: secs || undefined, loop: sel?.loop ?? 'game' }
+  const count = exportSequence(render.files.length, opts, render.loopStart, render.loopEnd).length
   const label = (f: StudioExportFormat): string => (f === 'mp4' ? t('st.export.mp4') : f === 'png' ? t('st.export.png') : f.toUpperCase())
   return (
     <div className="st-exports">
+      <label className="row small st-duration" title={t('st.durationHelp')}>
+        {t('st.duration')}
+        <input type="number" min={0} max={STUDIO_MAX_DURATION} step={0.5} value={duration} placeholder={t('st.durationAuto')}
+          onChange={(e) => { setDuration(e.target.value); mem.set('duration', e.target.value) }} />
+      </label>
       {!!opts.frames && <span className="badge">{t('st.selCount', { n: opts.frames.length })}</span>}
+      {!!secs && <span className="badge">{t('st.durationInfo', { s: secs, n: count })}</span>}
       {EXPORTS.map((f) => (
         <button key={f} className="btn small" onClick={() => void studio.exportRender(render.id, f, opts).then((r) => r.ok && r.path && onSaved(t('st.saved', { path: r.path })))}>{label(f)}</button>
       ))}
@@ -169,7 +192,7 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
   const [current, setCurrent] = useState<StudioRender | null>(null)
   const [note, setNote] = useState('')
   const [shownFrame, setShownFrame] = useState(0)
-  const [sel, setSel] = useState<PlayerSel>({ frames: [], fps: 24 })
+  const [sel, setSel] = useState<PlayerSel>({ frames: [], fps: 24, loop: 'game' })
   const [stack, setStack] = useState<StackItem[]>([])
   const { settings } = useApp() as unknown as { settings: { lang?: string } }
   const tr = (fr: string, en: string): string => (settings?.lang === 'en' ? en : fr)

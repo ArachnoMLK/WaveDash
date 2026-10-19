@@ -12,6 +12,7 @@ import type {
   StudioAnimGroup, StudioAssetKind, StudioAssetPage, StudioCatalog, StudioExportFormat, StudioExportOptions, StudioItem, StudioJob, StudioKind,
   StudioRender, StudioRenderRequest, StudioStatus, StudioTrack, StudioWeaponSkins
 } from '@shared/studio'
+import { exportSequence } from '@shared/studio'
 import { Engine } from './engine'
 import { AnimListing, buildLegendGroups, effectItems, heroEffectTest, parseCsv, parseHeroes, WEAPON_ANM } from './presets'
 
@@ -77,7 +78,8 @@ async function cached<T>(name: string, produce: () => Promise<T>): Promise<T> {
 
 const swzFile = (name: string): Promise<string> =>
   cached(`swz-${name}`, async () => (await call<{ content: string }>('swzfile', { swz: 'Game.swz', name })).content)
-const listing = (anm: string): Promise<AnimListing> => cached(`anims-${anm}`, () => call<AnimListing>('anims', { file: `anims/${anm}.anm` }))
+// « anims2 » : depuis le moteur r5, la liste donne aussi la fin de boucle (recoveryStart) ; l'ancien cache ne l'a pas.
+const listing = (anm: string): Promise<AnimListing> => cached(`anims2-${anm}`, () => call<AnimListing>('anims', { file: `anims/${anm}.anm` }))
 
 /** Lecture en tâche de fond des fichiers lourds (emotes ~40 s la première fois) pour que tout soit instantané ensuite. */
 let preloading = false
@@ -205,6 +207,28 @@ function readRender(id: string): StudioRender | null {
   try { return JSON.parse(readFileSync(join(dir('renders'), id, 'render.json'), 'utf8')) as StudioRender } catch { return null }
 }
 
+/** Boucle d'un rendu de légende, d'après les données du jeu : une emote joue son intro une fois, répète sa boucle (loopStart
+ *  à recoveryStart), puis sa fin. Coup en plusieurs parties : la boucle de la dernière partie. */
+async function loopOf(req: StudioRenderRequest, animation: string): Promise<{ start: number; end: number } | undefined> {
+  if (req.kind !== 'legend' || !req.animClass) return undefined
+  const file = req.animClass.split('/')[0].replace(/\.swf$/i, '')
+  if (!/^Animation_[\w]+$/.test(file)) return undefined
+  const list = (await listing(file)).classes[req.animClass] ?? []
+  const parts = Array.isArray(req.animations) && req.animations.length ? req.animations : [animation]
+  let offset = 0
+  for (let i = 0; i < parts.length; i++) {
+    const a = list.find((x) => x.name === parts[i])
+    if (!a) return undefined
+    if (i === parts.length - 1) {
+      if (a.loopStart === undefined || a.loopStart < 0 || a.loopStart >= a.frames) return undefined
+      const end = a.recoveryStart !== undefined && a.recoveryStart > a.loopStart && a.recoveryStart <= a.frames ? a.recoveryStart : a.frames
+      return { start: offset + a.loopStart, end: offset + end }
+    }
+    offset += a.frames
+  }
+  return undefined
+}
+
 const jobs = new Map<string, StudioJob>()
 function render(req: StudioRenderRequest): StudioJob {
   const id = `${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}-${randomBytes(2).toString('hex')}`
@@ -213,8 +237,10 @@ function render(req: StudioRenderRequest): StudioJob {
   jobs.set(id, job)
   const out = join(dir('renders'), id)
   call<{ frames: number; width: number; height: number; files: string[]; animation: string }>('render', { ...engineRequest(req), outDir: out })
-    .then((m) => {
+    .then(async (m) => {
       const meta: StudioRender = { id, label, kind: req.kind, animation: m.animation, frames: m.frames, width: m.width, height: m.height, files: m.files, created: Date.now() }
+      const loop = await loopOf(req, m.animation).catch(() => undefined)
+      if (loop && loop.start < m.files.length) { meta.loopStart = loop.start; if (loop.end > loop.start && loop.end < m.files.length) meta.loopEnd = loop.end }
       writeFileSync(join(out, 'render.json'), JSON.stringify(meta))
       job.status = 'done'; job.result = meta
     })
@@ -276,36 +302,49 @@ async function exportRender(win: BrowserWindow | null, id: string, format: Studi
   if (!meta) return { ok: false, error: 'introuvable' }
   const name = meta.label.replace(/[^\w .-]/g, '_') || id
   const fps = Math.min(60, Math.max(1, Math.round(Number(opts.fps) || 24)))
-  // images choisies dans la bande : copiées et renumérotées à part, dans l'ordre
-  const picked = (opts.frames ?? []).filter((i) => Number.isInteger(i) && i >= 0 && i < meta.files.length)
-  let src = join(dir('renders'), id)
-  let files = meta.files
-  if (picked.length) {
-    const tmp = join(app.getPath('temp'), `wavedash-sel-${id}`)
-    rmSync(tmp, { recursive: true, force: true }); mkdirSync(tmp, { recursive: true })
-    files = picked.map((i, k) => { const f = `frame_${String(k).padStart(4, '0')}.png`; copyFileSync(join(src, meta.files[i]), join(tmp, f)); return f })
-    src = tmp
+  // images choisies dans la bande et/ou durée voulue (images répétées en boucle) : copiées et renumérotées à part, dans l'ordre
+  const seq = exportSequence(meta.files.length, opts, meta.loopStart, meta.loopEnd)
+  const picked = seq.length === meta.files.length && seq.every((v, i) => v === i) ? [] : seq
+  // Copie renumérotée dans un dossier propre à cet export (deux exports en même temps ne se gênent pas), effacé à la fin.
+  let tmp = ''
+  const prepare = (): { src: string; files: string[] } => {
+    const base = join(dir('renders'), id)
+    if (!picked.length) return { src: base, files: meta.files }
+    tmp = join(app.getPath('temp'), `wavedash-sel-${id}-${randomBytes(3).toString('hex')}`)
+    mkdirSync(tmp, { recursive: true })
+    return { src: tmp, files: picked.map((i, k) => { const f = `frame_${String(k).padStart(4, '0')}.png`; copyFileSync(join(base, meta.files[i]), join(tmp, f)); return f }) }
   }
-  if (format === 'png') {
-    const r = win ? await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] }) : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
-    if (r.canceled || !r.filePaths[0]) return { ok: false }
-    const target = join(r.filePaths[0], name); mkdirSync(target, { recursive: true })
-    for (const f of files) copyFileSync(join(src, f), join(target, f))
-    return { ok: true, path: target }
+  try {
+    if (format === 'png') {
+      const r = win ? await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] }) : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+      if (r.canceled || !r.filePaths[0]) return { ok: false }
+      const { src, files } = prepare()
+      const target = join(r.filePaths[0], name); mkdirSync(target, { recursive: true })
+      for (const f of files) copyFileSync(join(src, f), join(target, f))
+      return { ok: true, path: target }
+    }
+    const saveOpts = { defaultPath: `${name}.${format}`, filters: [{ name: format.toUpperCase(), extensions: [format] }] }
+    const r = win ? await dialog.showSaveDialog(win, saveOpts) : await dialog.showSaveDialog(saveOpts)
+    if (r.canceled || !r.filePath) return { ok: false }
+    return await encode(r.filePath, prepare().src)
+  } finally {
+    if (tmp) rmSync(tmp, { recursive: true, force: true })
   }
-  const saveOpts = { defaultPath: `${name}.${format}`, filters: [{ name: format.toUpperCase(), extensions: [format] }] }
-  const r = win ? await dialog.showSaveDialog(win, saveOpts) : await dialog.showSaveDialog(saveOpts)
-  if (r.canceled || !r.filePath) return { ok: false }
+
+  async function encode(filePath: string, src: string): Promise<{ ok: boolean; path?: string; error?: string }> {
+  const r = { filePath }
   const input = ['-y', '-framerate', String(fps), '-i', join(src, 'frame_%04d.png')]
   const args: Record<Exclude<StudioExportFormat, 'png'>, string[]> = {
     gif: [...input, '-vf', 'split[a][b];[a]palettegen=reserve_transparent=1[p];[b][p]paletteuse', '-loop', '0', r.filePath],
     apng: [...input, '-plays', '0', '-f', 'apng', r.filePath],
     webm: [...input, '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '24', r.filePath],
     mov: [...input, '-c:v', 'prores_ks', '-profile:v', '4444', '-pix_fmt', 'yuva444p10le', r.filePath],
-    // MP4 n'a pas de transparence : fond vert, prêt pour l'incrustation dans CapCut.
-    mp4: [...input, '-filter_complex', 'color=c=0x00ff00:s=16x16[c];[c][0:v]scale2ref[c2][v];[c2][v]overlay=shortest=1,pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p', '-c:v', 'libx264', '-crf', '16', r.filePath]
+    // MP4 n'a pas de transparence : fond vert, prêt pour l'incrustation dans CapCut. Le fond suit la cadence de l'export
+    // (sinon 25 i/s par défaut : images dupliquées, légers à-coups).
+    mp4: [...input, '-filter_complex', `color=c=0x00ff00:s=16x16:r=${fps}[c];[c][0:v]scale2ref[c2][v];[c2][v]overlay=shortest=1,pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p`, '-c:v', 'libx264', '-crf', '16', r.filePath]
   }
-  try { await run(ffmpegPath(), args[format], { windowsHide: true }); return { ok: true, path: r.filePath } } catch (e) { return { ok: false, error: (e as Error).message.slice(-300) } }
+  try { await run(ffmpegPath(), args[format as Exclude<StudioExportFormat, 'png'>], { windowsHide: true }); return { ok: true, path: r.filePath } } catch (e) { return { ok: false, error: (e as Error).message.slice(-300) } }
+  }
 }
 
 /* ---------------------------------------------------------------- assets (fichiers images du jeu) */

@@ -286,6 +286,11 @@ details.rule[open] > summary { margin-bottom: 4px; }
 .st-cell.sel { background-color: rgba(var(--panel-rgb), .12); border-color: var(--fg); }
 .st-cell.cur { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
 .st-cell.cur span, .st-cell.sel span { color: var(--fg); }
+/* Début de la boucle du jeu : repère à gauche de l'image. */
+.st-cell.loopstart::before { content: '↻'; position: absolute; left: 4px; top: 2px; font-size: 11px; color: var(--accent); }
+.st-cell.loopstart { border-left: 2px solid var(--accent); }
+/* Fin de la boucle (début de la fin de l'animation) : repère à gauche. */
+.st-cell.loopend { border-left: 2px dashed var(--muted); }
 .st-hint { margin: 0; }
 .st-frame-png { align-self: flex-start; }
 /* effets sans rien à dessiner seuls (pièces de rig) : masqués */
@@ -299,3 +304,7 @@ details.rule[open] > summary { margin-bottom: 4px; }
 .st-more { margin: 16px auto 0; display: flex; }
 .st-audio { width: 100%; margin-bottom: 12px; }
 .st-state.ready { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--fg); }
+
+/* Durée voulue d'un export du Studio */
+.st-duration { gap: 6px; }
+.st-duration input { width: 72px; }
