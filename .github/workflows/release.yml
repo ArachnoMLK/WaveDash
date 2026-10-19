@@ -24,7 +24,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          STUDIO_ENGINE_TAG: studio-engine-r3
+          STUDIO_ENGINE_TAG: studio-engine-r4
         run: |
           gh release download $env:STUDIO_ENGINE_TAG -R $env:GITHUB_REPOSITORY -p studio-engine.zip -D $env:RUNNER_TEMP
           Expand-Archive -LiteralPath "$env:RUNNER_TEMP\studio-engine.zip" -DestinationPath resources\studio -Force

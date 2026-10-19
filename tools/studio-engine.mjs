@@ -3,7 +3,7 @@
 //   vgmstream/  décodeur des musiques Wwise (dernière version officielle)
 // Usage : npm run studio:engine   (BRAWLSTUDIO_DIR = dossier du dépôt BrawlStudio, par défaut ../BrawlStudio)
 import { execFileSync } from 'child_process'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 
 const root = resolve(import.meta.dirname, '..')
@@ -14,6 +14,15 @@ const project = join(studio, 'renderer', 'BrawlRender.csproj')
 if (!existsSync(project)) {
   console.error(`Projet introuvable : ${project}\nClone BrawlStudio (git clone --recurse-submodules) à côté de WaveDash ou définis BRAWLSTUDIO_DIR.`)
   process.exit(1)
+}
+
+// Correctifs des sous-modules (BrawlStudio/patches, cible dans targets.json) : appliqués une fois, avant la compilation.
+const patches = join(studio, 'patches')
+if (existsSync(join(patches, 'targets.json'))) {
+  for (const [file, target] of Object.entries(JSON.parse(readFileSync(join(patches, 'targets.json'), 'utf8')))) {
+    const git = (...args) => execFileSync('git', ['-C', join(studio, target), 'apply', '--ignore-whitespace', ...args, join(patches, file)], { stdio: 'pipe' })
+    try { git('--reverse', '--check'); console.log(`Correctif déjà appliqué : ${file}`) } catch { git(); console.log(`Correctif appliqué : ${file}`) }
+  }
 }
 
 console.log('1/2 Publication du moteur de rendu…')
