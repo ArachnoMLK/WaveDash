@@ -8,5 +8,5 @@ export function useChartTheme(): ChartTheme {
     [settings.theme, settings.lang, settings.chartPalette, settings.accentColor, dur])
 }
 
-/** « bodvar » → « Bodvar » (l'API renvoie des clés en minuscules). */
+/** "bodvar" → "Bodvar" (the API returns lowercase keys). */
 export const prettyName = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)

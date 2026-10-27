@@ -1,4 +1,4 @@
-// Sons de palier synthétisés (Web Audio) : aucun fichier audio à embarquer.
+// Synthesized milestone sounds (Web Audio): no audio file to ship.
 import type { SoundKind } from '@shared/types'
 
 let ctx: AudioContext | null = null
@@ -24,5 +24,5 @@ export function playSound(kind: SoundKind, volume: number): void {
     if (kind === 'chime') { note(784, 0, 0.35); note(1175, 0.14, 0.6) }
     else if (kind === 'pulse') { note(523, 0, 0.12, 'triangle'); note(523, 0.16, 0.12, 'triangle'); note(784, 0.32, 0.32, 'triangle') }
     else { note(660, 0, 1.1); note(1320, 0, 0.7); note(1980, 0, 0.4) }
-  } catch { /* audio indisponible : on ignore */ }
+  } catch { /* audio unavailable: ignore */ }
 }

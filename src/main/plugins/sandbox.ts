@@ -1,7 +1,7 @@
-// Bac à sable des plugins : le script s'exécute dans QuickJS (WebAssembly), un moteur JavaScript isolé qui n'a,
-// par construction, ni `process`, ni `require`, ni réseau, ni disque. Le plugin ne voit QUE l'objet `host`
-// ci-dessous, dont chaque fonction est contrôlée côté WaveDash selon les permissions du manifeste.
-// Chaque exécution utilise un moteur neuf, avec plafonds de mémoire, de temps de calcul et de requêtes.
+// Plugin sandbox: the script runs in QuickJS (WebAssembly), an isolated JavaScript engine that has,
+// by design, no `process`, no `require`, no network and no disk. The plugin sees ONLY the `host` object
+// below, each function of which is checked on the WaveDash side according to the manifest permissions.
+// Every run uses a fresh engine, with limits on memory, compute time and requests.
 import type { QuickJSContext, QuickJSDeferredPromise } from 'quickjs-emscripten'
 import type { PluginManifest } from '@shared/plugin'
 import { setMaxListeners } from 'events'
@@ -13,16 +13,16 @@ export class PluginError extends Error { logs: string[] = []; constructor(public
 
 export interface Limits {
   memoryBytes: number; stackBytes: number
-  /** Temps de calcul JavaScript cumulé (hors attente réseau). */
+  /** Cumulated JavaScript compute time (network waits excluded). */
   cpuMs: number
-  /** Durée totale maximale, réseau compris. */
+  /** Maximum total duration, network included. */
   wallMs: number
   maxRequests: number; maxResponseBytes: number; httpTimeoutMs: number
   maxFileBytes: number; maxFileTotal: number
   maxStorageValue: number; maxLogLines: number; maxResultBytes: number
 }
 export const DEFAULT_LIMITS: Limits = {
-  // Pile : au-delà d'environ 400 Ko, la pile native du moteur déborde avant sa propre limite ; 256 Ko reste sûr.
+  // Stack: beyond about 400 KB, the engine's native stack overflows before its own limit; 256 KB stays safe.
   memoryBytes: 48 * 1024 * 1024, stackBytes: 256 * 1024, cpuMs: 8000, wallMs: 45_000,
   maxRequests: 30, maxResponseBytes: 5 * 1024 * 1024, httpTimeoutMs: 15_000,
   maxFileBytes: 8 * 1024 * 1024, maxFileTotal: 64 * 1024 * 1024,
@@ -35,14 +35,14 @@ export interface RunRequest {
   fn: 'resolve' | 'refresh' | 'search' | 'cross' | 'view'
   ctx: { inputs: Record<string, string>; secrets: Record<string, string>; lang: string; account?: { externalId: string; displayName: string }; query?: string; cross?: Record<string, string>; filters?: Record<string, string> }
   storage: { get(key: string): string | null; set(key: string, value: string): void }
-  /** Présent seulement si le manifeste demande la permission « dossier » et que l'utilisateur en a choisi un. */
+  /** Present only if the manifest asks for the "folder" permission and the user picked one. */
   folder?: FolderAccess
   limits?: Partial<Limits>
-  /** Réservé aux tests. */
+  /** Tests only. */
   allowLocalForTests?: boolean
 }
 
-// Code exécuté dans le moteur avant le script du plugin : il construit l'objet `host` puis retire les fonctions internes.
+// Code run in the engine before the plugin script: it builds the `host` object then removes the internal functions.
 const BOOTSTRAP = `(() => {
   const g = globalThis;
   const L = g.__log, SG = g.__sget, SS = g.__sset, H = g.__http, FL = g.__flist, FR = g.__fread;
@@ -75,7 +75,7 @@ const CALL = `globalThis.__state = 'pending'; globalThis.__out = '';
 
 const clip = (s: string, n: number): string => (s.length > n ? s.slice(0, n) + '…' : s)
 
-/** Octets → chaîne sans caractère nul (octet + 1), car la frontière du moteur ne transporte pas le caractère nul. */
+/** Bytes → string without null characters (byte + 1), because the engine boundary does not carry the null character. */
 function encodeBytes(buf: Buffer): string {
   const u = new Uint16Array(buf.length)
   for (let i = 0; i < buf.length; i++) u[i] = buf[i] + 1
@@ -84,9 +84,9 @@ function encodeBytes(buf: Buffer): string {
 
 function mapVmError(err: { name?: string; message?: string }): PluginError {
   const msg = String(err?.message ?? err)
-  if (/interrupted/i.test(msg)) return new PluginError('timeout', 'Temps de calcul dépassé')
-  if (/out of memory/i.test(msg)) return new PluginError('memory', 'Mémoire dépassée')
-  if (/stack/i.test(msg) && /overflow|exceeded/i.test(msg)) return new PluginError('memory', 'Pile dépassée')
+  if (/interrupted/i.test(msg)) return new PluginError('timeout', 'Compute time exceeded')
+  if (/out of memory/i.test(msg)) return new PluginError('memory', 'Memory exceeded')
+  if (/stack/i.test(msg) && /overflow|exceeded/i.test(msg)) return new PluginError('memory', 'Stack exceeded')
   return new PluginError('script', clip(msg, 300))
 }
 
@@ -94,7 +94,7 @@ export async function runPlugin(req: RunRequest): Promise<{ value: unknown; logs
   const limits = { ...DEFAULT_LIMITS, ...req.limits }
   const logs: string[] = []
   const abort = new AbortController()
-  setMaxListeners(limits.maxRequests + 10, abort.signal)   // une écoute par requête du plugin
+  setMaxListeners(limits.maxRequests + 10, abort.signal)   // one listener per plugin request
 
   let mod
   try { mod = await (await import('quickjs-emscripten')).newQuickJSWASMModule() } catch (e) { throw new PluginError('engine', `Moteur de plugins indisponible : ${(e as Error).message}`) }
@@ -102,7 +102,7 @@ export async function runPlugin(req: RunRequest): Promise<{ value: unknown; logs
   rt.setMemoryLimit(limits.memoryBytes)
   rt.setMaxStackSize(limits.stackBytes)
 
-  // Temps de calcul : on ne mesure que les phases où le JavaScript du plugin s'exécute.
+  // Compute time: only the phases where the plugin's JavaScript runs are measured.
   let cpuUsed = 0, sliceStart = Date.now(), aborted = false
   rt.setInterruptHandler(() => aborted || cpuUsed + (Date.now() - sliceStart) > limits.cpuMs)
   const slice = <T,>(fn: () => T): T => { sliceStart = Date.now(); try { return fn() } finally { cpuUsed += Date.now() - sliceStart } }
@@ -121,7 +121,7 @@ export async function runPlugin(req: RunRequest): Promise<{ value: unknown; logs
   const netCfg: NetConfig = { allowedHosts: req.manifest.permissions.network, maxBytes: limits.maxResponseBytes, timeoutMs: limits.httpTimeoutMs,
     maxRedirects: 3, allowLocalForTests: req.allowLocalForTests, signal: abort.signal }
 
-  // ----- fonctions fournies au plugin -----
+  // ----- functions given to the plugin -----
   const define = (name: string, impl: Parameters<QuickJSContext['newFunction']>[1]): void => {
     const h = vm.newFunction(name, impl); vm.setProp(vm.global, name, h); h.dispose()
   }
@@ -129,7 +129,7 @@ export async function runPlugin(req: RunRequest): Promise<{ value: unknown; logs
   define('__sget', (k) => { const v = req.storage.get(vm.getString(k)); return v === null ? vm.null : vm.newString(v) })
   define('__sset', (k, v) => {
     const key = vm.getString(k), val = vm.getString(v)
-    if (!/^[\w.-]{1,64}$/.test(key)) throw new Error('clé de stockage invalide')
+    if (!/^[\w.-]{1,64}$/.test(key)) throw new Error('invalid storage key')
     if (val.length > limits.maxStorageValue) throw new Error('valeur de stockage trop grande')
     req.storage.set(key, val)
   })
@@ -141,22 +141,22 @@ export async function runPlugin(req: RunRequest): Promise<{ value: unknown; logs
       if (!aborted) { const h = vm.newString(text); if (ok) d.resolve(h); else d.reject(h); h.dispose() }
       wake()
     }
-    if (++requests > limits.maxRequests) { queueMicrotask(() => finish(false, 'trop de requêtes pour une exécution')); return d.handle }
+    if (++requests > limits.maxRequests) { queueMicrotask(() => finish(false, 'too many requests for one run')); return d.handle }
     let opts: { method?: string; headers?: Record<string, string>; body?: string } = {}
-    try { opts = JSON.parse(optsJson) } catch { /* options ignorées */ }
-    httpRequest(url, opts, netCfg).then((r) => finish(true, JSON.stringify(r)), (e: unknown) => finish(false, e instanceof NetError ? e.message : 'requête impossible'))
+    try { opts = JSON.parse(optsJson) } catch { /* options ignored */ }
+    httpRequest(url, opts, netCfg).then((r) => finish(true, JSON.stringify(r)), (e: unknown) => finish(false, e instanceof NetError ? e.message : 'request failed'))
     return d.handle
   })
   define('__flist', () => {
-    if (!req.folder) throw new Error('permission « dossier » non accordée')
+    if (!req.folder) throw new Error('"folder" permission not granted')
     return vm.newString(JSON.stringify(listFiles(req.folder)))
   })
   define('__fread', (nameH, modeH) => {
-    if (!req.folder) throw new Error('permission « dossier » non accordée')
+    if (!req.folder) throw new Error('"folder" permission not granted')
     const name = vm.getString(nameH), mode = vm.getString(modeH)
     const buf = readFileSafe(req.folder, name, limits.maxFileBytes)
     fileTotal += buf.length
-    if (fileTotal > limits.maxFileTotal) throw new Error('volume de lecture dépassé')
+    if (fileTotal > limits.maxFileTotal) throw new Error('read volume exceeded')
     return vm.newString(mode === 'text' ? buf.toString('utf8') : encodeBytes(buf))
   })
 
@@ -188,32 +188,32 @@ export async function runPlugin(req: RunRequest): Promise<{ value: unknown; logs
       if ('error' in jobs && jobs.error) { const e = vm.dump(jobs.error); jobs.error.dispose(); throw mapVmError(e) }
       const st = readState()
       if (st !== 'pending') break
-      if (pending === 0) throw new PluginError('blocked_promise', 'Le plugin attend une promesse qui ne se résout jamais')
+      if (pending === 0) throw new PluginError('blocked_promise', 'The plugin waits for a promise that never resolves')
       const left = deadline - Date.now()
-      if (left <= 0) throw new PluginError('timeout', 'Durée maximale dépassée')
+      if (left <= 0) throw new PluginError('timeout', 'Maximum duration exceeded')
       await waitWake(left)
     }
 
     const out = readOut()
     if (readState() === 'err') {
-      if (out.startsWith('NO_FUNCTION:')) throw new PluginError('no_function', `Le plugin ne définit pas « ${out.slice(12)} »`)
+      if (out.startsWith('NO_FUNCTION:')) throw new PluginError('no_function', `The plugin does not define "${out.slice(12)}"`)
       throw mapVmError({ message: out })
     }
-    if (out.length > limits.maxResultBytes) throw new PluginError('invalid_result', 'Résultat trop volumineux')
-    try { return { value: JSON.parse(out), logs } } catch { throw new PluginError('invalid_result', 'Résultat illisible') }
+    if (out.length > limits.maxResultBytes) throw new PluginError('invalid_result', 'Result too large')
+    try { return { value: JSON.parse(out), logs } } catch { throw new PluginError('invalid_result', 'Unreadable result') }
   } catch (e) {
-    // Filet de sécurité : une exception inattendue du moteur devient une erreur de plugin, jamais un plantage de l'appli.
+    // Safety net: an unexpected engine exception becomes a plugin error, never an app crash.
     const err = e instanceof PluginError ? e
-      : e instanceof RangeError ? new PluginError('memory', 'Pile dépassée')
-      : new PluginError('engine', `Erreur du moteur : ${clip(String((e as Error)?.message ?? e), 200)}`)
-    err.logs = logs     // le journal accompagne l'erreur pour aider à comprendre
+      : e instanceof RangeError ? new PluginError('memory', 'Stack exceeded')
+      : new PluginError('engine', `Engine error: ${clip(String((e as Error)?.message ?? e), 200)}`)
+    err.logs = logs     // the log comes with the error to help understand it
     throw err
   } finally {
     aborted = true
     abort.abort()
-    for (const d of deferreds) { try { d.dispose() } catch { /* déjà libéré */ } }
-    try { vm.dispose() } catch { /* le moteur est jeté de toute façon */ }
-    // Pas de rt.dispose() : une promesse du plugin encore en attente y déclenche une assertion de QuickJS.
-    // Le module WebAssembly, créé pour cette exécution, est jeté en entier avec le runtime.
+    for (const d of deferreds) { try { d.dispose() } catch { /* already released */ } }
+    try { vm.dispose() } catch { /* the engine is thrown away anyway */ }
+    // No rt.dispose(): a plugin promise still pending triggers a QuickJS assertion there.
+    // The WebAssembly module, created for this run, is thrown away entirely with the runtime.
   }
 }

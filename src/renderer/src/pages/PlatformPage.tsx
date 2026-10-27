@@ -11,7 +11,7 @@ import { useChartTheme } from '../lib/useChartTheme'
 
 const RANGES: RangeKey[] = ['7', '30', '90', 'all']
 
-/** Carte de graphique par catégories dont le type (barres / camembert / radar) se règle ici et dans les paramètres. */
+/** Category chart card whose type (bars / pie / radar) is set here and in the settings. */
 function CategoryCard({ title, k, data, unit, radarMax }: { title: string; k: string; data: Category[]; unit?: string; radarMax?: number }): JSX.Element {
   const { t, settings, updateSettings } = useApp()
   const th = useChartTheme()

@@ -1,4 +1,4 @@
-// Moteur de rendu Brawlhalla (BrawlRender.exe, .NET) : un processus lancé une fois, une requête JSON par ligne.
+// Brawlhalla render engine (BrawlRender.exe, .NET): a process started once, one JSON request per line.
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process'
 import { createInterface } from 'readline'
 
@@ -9,7 +9,7 @@ export class Engine {
   private ready: Promise<void> | null = null
   private pending = new Map<number, Pending>()
   private nextId = 1
-  /** Les requêtes passent une par une : le moteur traite une commande à la fois. */
+  /** Requests go one by one: the engine handles one command at a time. */
   private chain: Promise<unknown> = Promise.resolve()
 
   constructor(private exe: string, private gamePath: string) {}
@@ -33,19 +33,19 @@ export class Engine {
         if (msg.ok) p.resolve(msg)
         else p.reject(new Error(String(msg.error ?? 'erreur moteur')))
       })
-      proc.stderr.on('data', () => { /* journal du moteur ignoré */ })
+      proc.stderr.on('data', () => { /* engine log ignored */ })
       proc.on('error', (e) => { if (first) reject(e) })
       proc.on('exit', () => {
-        for (const p of this.pending.values()) p.reject(new Error('moteur arrêté'))
+        for (const p of this.pending.values()) p.reject(new Error('engine stopped'))
         this.pending.clear()
         this.proc = null
-        if (first) reject(new Error('le moteur s’est arrêté au démarrage'))
+        if (first) reject(new Error('the engine stopped during startup'))
       })
     })
     return this.ready
   }
 
-  /** Démarre le moteur (charge les fichiers du jeu, ~3 s). */
+  /** Starts the engine (loads the game files, ~3 s). */
   warmup(): Promise<void> { return this.start() }
 
   call<T = Record<string, unknown>>(cmd: string, params: Record<string, unknown> = {}): Promise<T> {
@@ -64,7 +64,7 @@ export class Engine {
 
   stop(): void {
     if (!this.proc) return
-    try { this.proc.stdin.write('{"cmd":"quit"}\n') } catch { /* déjà fermé */ }
+    try { this.proc.stdin.write('{"cmd":"quit"}\n') } catch { /* already closed */ }
     const p = this.proc
     setTimeout(() => { if (p.exitCode === null) p.kill() }, 2000)
     this.proc = null

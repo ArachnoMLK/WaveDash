@@ -1,5 +1,5 @@
-// Lecteur ZIP minimal et prudent : lit uniquement en mémoire, n'extrait jamais sur le disque.
-// Protections : taille d'archive et d'entrée plafonnées (anti « zip bomb »), noms suspects refusés, CRC vérifié.
+// Minimal, cautious ZIP reader: reads only in memory, never extracts to disk.
+// Protections: archive and entry size capped (anti "zip bomb"), suspicious names rejected, CRC checked.
 import { inflateRawSync } from 'zlib'
 
 const CRC_TABLE = (() => {
@@ -18,13 +18,13 @@ export class ZipError extends Error {}
 export interface ZipLimits { maxArchive: number; maxEntries: number; maxEntryBytes: number }
 const DEFAULTS: ZipLimits = { maxArchive: 5 * 1024 * 1024, maxEntries: 100, maxEntryBytes: 1024 * 1024 }
 
-/** Retourne le contenu décompressé des entrées pour lesquelles `wanted(nom)` est vrai. */
+/** Returns the decompressed content of the entries for which `wanted(name)` is true. */
 export function readZip(buf: Buffer, wanted: (name: string) => boolean, limits: Partial<ZipLimits> = {}): Map<string, Buffer> {
   const L = { ...DEFAULTS, ...limits }
   if (buf.length > L.maxArchive) throw new ZipError('archive_too_large')
   if (buf.length < 22) throw new ZipError('not_a_zip')
 
-  // Fin de l'archive (EOCD), cherchée à reculons.
+  // End of the archive (EOCD), searched backwards.
   let eocd = -1
   for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break }
   if (eocd < 0) throw new ZipError('not_a_zip')
@@ -43,7 +43,7 @@ export function readZip(buf: Buffer, wanted: (name: string) => boolean, limits: 
     const name = buf.toString('utf8', o + 46, o + 46 + nlen)
     o += 46 + nlen + elen + clen
 
-    // Noms refusés : chemins absolus, remontées de dossier, antislash, octet nul.
+    // Rejected names: absolute paths, parent folder traversal, backslash, null byte.
     if (name.includes('\0') || name.includes('\\') || name.startsWith('/') || name.split('/').includes('..')) throw new ZipError('unsafe_name')
     if (name.endsWith('/') || !wanted(name)) continue
     if (out.has(name)) throw new ZipError('duplicate_entry')

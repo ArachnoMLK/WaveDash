@@ -1,4 +1,4 @@
-/* WaveDash — niveaux de gris, verre dépoli, mouvements lents.
+/* WaveDash — greyscale, frosted glass, slow motion.
    Les variables --panel-bg, --bf, --accent, --radius, --space, --font et --dur sont pilotées par les réglages d'apparence. */
 :root {
   --font: 'Inter Variable', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
@@ -21,10 +21,10 @@
 * { box-sizing: border-box; margin: 0; }
 html, body, #root { height: 100%; }
 body { font-family: var(--font); color: var(--fg); background: transparent; overflow: hidden; -webkit-font-smoothing: antialiased; font-feature-settings: 'tnum', 'cv11'; }
-/* Sans verre natif (Windows 10), on remplit le fond. */
+/* Without native glass (Windows 10), fill the background. */
 :root:not([data-native-glass]) body { background: var(--bg); }
 
-/* Fond : deux halos gris très lents, pour que le flou ait quelque chose à travailler. */
+/* Background: two very slow grey halos, so the blur has something to work with. */
 .ambient { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .ambient i { position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%; background: radial-gradient(closest-side, var(--blob), transparent); animation: drift 48s ease-in-out infinite alternate; animation-play-state: var(--ambient-play, running); }
 .ambient i:nth-child(1) { top: -25vmax; left: -15vmax; }
@@ -36,18 +36,18 @@ body { font-family: var(--font); color: var(--fg); background: transparent; over
 main { overflow-y: auto; padding: 4px 8px 28px 4px; }
 main::-webkit-scrollbar { width: 8px; } main::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; }
 
-/* Apparitions (CSS pur) : le style final est celui de l'élément, l'animation ne fait que partir d'un état atténué. */
+/* Appearances (pure CSS): the final style is the element's own, the animation only starts from a dimmed state. */
 .reveal { animation-name: reveal-in; animation-fill-mode: backwards; animation-timing-function: var(--ease); }
 .page { animation: page-in var(--dur) var(--ease) backwards; }
 @keyframes reveal-in { from { opacity: 0; transform: translateY(10px); } }
 @keyframes page-in { from { opacity: 0; } }
 
-/* Panneau en verre */
+/* Glass panel */
 .glass { background: var(--panel-bg); backdrop-filter: var(--bf); -webkit-backdrop-filter: var(--bf);
   border: 1px solid var(--line); border-radius: var(--radius); box-shadow: inset 0 1px 0 rgba(var(--panel-rgb), 0.07), 0 10px 30px -18px rgba(0,0,0,0.5); }
 .pad { padding: calc(20px * var(--space)) calc(22px * var(--space)); }
 
-/* Barre latérale */
+/* Sidebar */
 .sidebar { display: flex; flex-direction: column; padding: 18px 12px 12px; gap: 4px; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 10px 18px; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; }
 .brand img { width: 30px; height: 30px; }
@@ -58,7 +58,7 @@ main::-webkit-scrollbar { width: 8px; } main::-webkit-scrollbar-thumb { backgrou
 .nav .dot { margin-left: auto; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0.8; }
 .nav-spacer { flex: 1; }
 
-/* Typographie */
+/* Typography */
 h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
 h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
 .muted { color: var(--muted); } .small { font-size: 12.5px; }
@@ -66,7 +66,7 @@ h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
 .page-head .grow { flex: 1; }
 .avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: var(--ctrl); }
 
-/* Cartes de chiffres : le grand chiffre est l'élément mémorable */
+/* Number cards: the big number is the memorable element */
 .grid { display: grid; gap: calc(14px * var(--space)); }
 .cards { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 .two { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
@@ -78,7 +78,7 @@ button.stat { text-align: left; font: inherit; color: inherit; cursor: pointer; 
 .stat .value { font-size: 40px; font-weight: 300; letter-spacing: -0.035em; line-height: 1.1; margin-top: 6px; }
 .stat .delta { font-size: 12.5px; margin-top: 6px; color: var(--muted); }
 
-/* Boutons : élévation + lueur + opacité au survol */
+/* Buttons: elevation + glow + opacity on hover */
 .btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--ctrl); color: var(--fg); font: inherit; font-size: 13.5px; cursor: pointer; opacity: 0.88;
   transition: transform 0.35s var(--ease), box-shadow 0.35s var(--ease), opacity 0.35s var(--ease), background 0.35s var(--ease); }
 .btn:hover { opacity: 1; transform: translateY(-2px); background: var(--ctrl-hover); box-shadow: 0 8px 22px -10px var(--glow), 0 0 0 1px var(--line-strong); }
@@ -99,7 +99,7 @@ button.stat { text-align: left; font: inherit; color: inherit; cursor: pointer; 
 .sect { margin-top: 26px; } .sect > h2 { margin-bottom: 12px; }
 .chart-box { width: 100%; }
 
-/* Formulaires */
+/* Forms */
 input[type='text'], input[type='password'], input[type='search'], select { width: 100%; padding: 10px 13px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--ctrl); color: var(--fg); font: inherit; font-size: 14px; outline: none; transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease); }
 input:focus, select:focus { border-color: var(--line-strong); box-shadow: 0 0 0 3px var(--ctrl); }
 select option { background: #1c1c1c; color: #f2f2f2; }
@@ -111,7 +111,7 @@ input[type='range'] { width: 100%; accent-color: var(--accent); }
 .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--muted); transition: transform 0.35s var(--ease), background 0.35s var(--ease); }
 .switch.on { background: var(--accent); } .switch.on::after { transform: translateX(18px); background: var(--accent-ink); }
 
-/* Fenêtre modale */
+/* Modal window */
 .overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(0,0,0,0.35); backdrop-filter: blur(6px); }
 .modal { width: min(460px, 92vw); padding: 24px; }
 :root[data-theme='dark'] .modal { background: rgba(24,24,24,0.88); }
@@ -124,7 +124,7 @@ input[type='range'] { width: 100%; accent-color: var(--accent); }
 :focus-visible { outline: 2px solid var(--line-strong); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .ambient i { animation: none; } }
 
-/* Fond personnalisé : couche fixe sous tout le reste (+ voile d'assombrissement pour les images). */
+/* Custom background: fixed layer under everything else (+ darkening veil for images). */
 .bg-layer { position: fixed; inset: 0; z-index: -3; pointer-events: none; }
 .bg-dim { position: fixed; inset: 0; z-index: -2; pointer-events: none; }
 input[type='color'] { width: 46px; height: 34px; padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--ctrl); cursor: pointer; }
@@ -142,7 +142,7 @@ input[type='color'] { width: 46px; height: 34px; padding: 2px; border-radius: va
 .order-row .nav-name:focus { outline: none; border-color: var(--line-strong); background: var(--ctrl); }
 .order-row .nav-name:focus::placeholder { opacity: .45; }
 
-/* Objectifs, tableaux, règles de paliers */
+/* Goals, tables, milestone rules */
 .page-head { flex-wrap: wrap; }
 .bar { height: 8px; border-radius: 999px; background: var(--ctrl); overflow: hidden; margin-top: 12px; }
 .bar > i { display: block; height: 100%; border-radius: 999px; background: var(--accent); transform-origin: left; animation: bar-in calc(var(--dur) * 1.6) var(--ease) backwards; }
@@ -187,7 +187,7 @@ input[type='search']::-webkit-search-cancel-button { filter: grayscale(1); opaci
 .cross-form { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
 .cross-form label { display: flex; flex-direction: column; gap: 4px; }
 @media (max-width: 900px) { .cross-form { grid-template-columns: 1fr 1fr; } }
-.top-search { margin-bottom: 36px; }                 /* même écart qu'entre les cartes et la courbe (36 px mesurés) */
+.top-search { margin-bottom: 36px; }                 /* same gap as between the cards and the curve (36 px measured) */
 .top-search .search { font-size: 15px; }
 .table tr.detail-row > td { white-space: normal; background: var(--ctrl); padding: 4px 12px 16px; cursor: default; }
 .table tr.detail-row .table td { background: transparent; }
@@ -199,7 +199,7 @@ details.rule > summary .grow { flex: 1; }
 details.rule[open] > summary { margin-bottom: 4px; }
 .tpl-preview { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
 
-/* Écran de célébration (CSS pur : jamais bloqué à l'état invisible) */
+/* Celebration screen (pure CSS: never stuck in the invisible state) */
 .celebrate { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(0,0,0,0.4); backdrop-filter: blur(5px); cursor: pointer; animation: page-in calc(var(--dur) * 0.6) var(--ease) backwards; }
 .celebrate .rings { position: absolute; width: 12px; height: 12px; pointer-events: none; }
 .celebrate .rings i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--accent); opacity: 0; animation: ring 3.2s var(--ease) infinite; animation-play-state: var(--ambient-play, running); }
@@ -210,20 +210,20 @@ details.rule[open] > summary { margin-bottom: 4px; }
 @keyframes pop { from { opacity: 0; transform: translateY(16px) scale(0.96); } }
 .celebrate .big { font-size: 72px; font-weight: 200; letter-spacing: -0.04em; line-height: 1.05; margin-top: 8px; }
 
-/* Image en tête d'un détail de plugin (ex. vignette de la carte d'un replay), à côté des badges. */
+/* Image at the top of a plugin detail (e.g. map thumbnail of a replay), next to the badges. */
 .detail-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 10px; flex-wrap: wrap; }
 .detail-head .chips { flex: 1; min-width: 220px; }
 .detail-image { margin: 0; width: 260px; max-width: 100%; }
 .detail-image img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--line); }
 .detail-image figcaption { margin-top: 6px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 
-/* Barre des filtres d'un plugin (Mode, Patch, Période…) : un menu par filtre, libellé au-dessus. */
+/* Plugin filter bar (Mode, Patch, Period…): one menu per filter, label above. */
 .filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; padding: 14px 18px; }
 .filter-bar label { display: flex; flex-direction: column; gap: 5px; min-width: 170px; }
 .filter-bar label > span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .filter-bar select { min-width: 170px; }
 
-/* Studio Brawlhalla */
+/* Brawlhalla Studio */
 .st-create { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 14px; align-items: start; }
 @media (max-width: 1100px) { .st-create { grid-template-columns: 1fr; } }
 .st-side { display: flex; flex-direction: column; gap: 12px; }
@@ -257,7 +257,7 @@ details.rule[open] > summary { margin-bottom: 4px; }
 .st-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--fg); animation: st-spin 0.9s linear infinite; }
 @keyframes st-spin { to { transform: rotate(360deg); } }
 .st-actions { position: sticky; bottom: 0; z-index: 2; display: flex; flex-direction: column; gap: 10px; margin: 0 calc(-22px * var(--space)) calc(-20px * var(--space)); padding: 12px calc(22px * var(--space)) calc(20px * var(--space));
-  /* opaque : la couleur du panneau posée sur le fond, pour ne pas laisser voir la liste qui défile dessous */
+  /* opaque: the panel colour laid on the background, so the list scrolling underneath does not show through */
   background: linear-gradient(var(--panel-bg), var(--panel-bg)), var(--bg); border-top: 1px solid var(--line); border-radius: 0 0 var(--radius) var(--radius); }
 .st-out { display: flex; align-items: flex-end; gap: 16px; }
 .st-go { justify-content: center; width: 100%; padding: 12px; }
@@ -268,7 +268,7 @@ details.rule[open] > summary { margin-bottom: 4px; }
 .st-stage.small { min-height: 200px; }
 .st-canvas { max-width: 100%; max-height: 62vh; }
 .st-player { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; padding: 10px 0 0; }
-/* timeline façon MiniaMaker : commandes, barre, bande de vignettes numérotées */
+/* MiniaMaker-style timeline: controls, bar, strip of numbered thumbnails */
 .st-ctrl { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 8px; border-top: 1px solid var(--line); outline: none; }
 .st-ctrl .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .st-play { min-width: 84px; justify-content: center; }
@@ -286,14 +286,14 @@ details.rule[open] > summary { margin-bottom: 4px; }
 .st-cell.sel { background-color: rgba(var(--panel-rgb), .12); border-color: var(--fg); }
 .st-cell.cur { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
 .st-cell.cur span, .st-cell.sel span { color: var(--fg); }
-/* Début de la boucle du jeu : repère à gauche de l'image. */
+/* Start of the game loop: marker on the left of the frame. */
 .st-cell.loopstart::before { content: '↻'; position: absolute; left: 4px; top: 2px; font-size: 11px; color: var(--accent); }
 .st-cell.loopstart { border-left: 2px solid var(--accent); }
-/* Fin de la boucle (début de la fin de l'animation) : repère à gauche. */
+/* End of the loop (start of the animation's ending): marker on the left. */
 .st-cell.loopend { border-left: 2px dashed var(--muted); }
 .st-hint { margin: 0; }
 .st-frame-png { align-self: flex-start; }
-/* effets sans rien à dessiner seuls (pièces de rig) : masqués */
+/* effects with nothing to draw on their own (rig pieces): hidden */
 .st-grid .st-card:has(.st-thumb.empty) { display: none; }
 .st-exports { display: flex; flex-wrap: wrap; gap: 6px; }
 .st-lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
@@ -305,6 +305,6 @@ details.rule[open] > summary { margin-bottom: 4px; }
 .st-audio { width: 100%; margin-bottom: 12px; }
 .st-state.ready { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--fg); }
 
-/* Durée voulue d'un export du Studio */
+/* Desired duration of a Studio export */
 .st-duration { gap: 6px; }
 .st-duration input { width: 72px; }

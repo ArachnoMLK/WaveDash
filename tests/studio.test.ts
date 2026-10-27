@@ -7,22 +7,22 @@ const HEROES = `<HeroTypes><HeroType HeroName="Template"><BioName>T</BioName></H
 <SpecialPower1_Forward>SwordSmashSideNinja</SpecialPower1_Forward><BaseWeapon2>Spear</BaseWeapon2><BioName>Hattori</BioName></HeroType>
 <HeroType HeroName="Bot"><HeroDisplayName>BOT</HeroDisplayName><BaseWeapon1>--</BaseWeapon1></HeroType></HeroTypes>`
 
-test('HeroTypes : nom, armes et pouvoirs de signature', () => {
+test('HeroTypes: name, weapons and signature powers', () => {
   const hs = parseHeroes(HEROES)
   const h = hs.find((x) => x.name === 'Ninja')!
   assert.equal(h.bio, 'Hattori')
   assert.deepEqual(h.weapons, ['Sword', 'Spear'])
   assert.equal(h.powers['SpecialPower1_Forward'], 'SwordSmashSideNinja')
-  assert.equal(hs.find((x) => x.name === 'Bot')!.bio, 'Bot')          // nom affiché en minuscules faute de BioName
-  assert.deepEqual(hs.find((x) => x.name === 'Bot')!.weapons, [])     // « -- » = pas d'arme
+  assert.equal(hs.find((x) => x.name === 'Bot')!.bio, 'Bot')          // name shown in lowercase for lack of a BioName
+  assert.deepEqual(hs.find((x) => x.name === 'Bot')!.weapons, [])     // "--" = no weapon
 })
 
-test('CSV du jeu : 1re ligne ignorée, guillemets et virgules dans les champs', () => {
+test('game CSV: 1st line ignored, quotes and commas in fields', () => {
   const rows = parseCsv('junk line\r\nPowerName,CastAnim,ComboName\r\nA,"L:One,L:Two",B\r\nB,"say ""hi""",\r\n')
   assert.deepEqual(rows, [{ PowerName: 'A', CastAnim: 'L:One,L:Two', ComboName: 'B' }, { PowerName: 'B', CastAnim: 'say "hi"', ComboName: '' }])
 })
 
-test('pouvoir → animations jouées, enchaînements compris, sans boucle infinie', () => {
+test('power → animations played, follow-ups included, without an infinite loop', () => {
   const powers = new Map([
     ['A', { CastAnim: 'L:AttackSpecialNinja2Charge', ComboName: 'B' }],
     ['B', { CastAnim: 'L:AttackSpecialNinja2', ComboName: 'A' }]
@@ -31,7 +31,7 @@ test('pouvoir → animations jouées, enchaînements compris, sans boucle infini
   assert.deepEqual(powerAnims('inconnu', powers), [])
 })
 
-test('groupes d’une légende : signatures, attaques sans variantes, emotes triées', () => {
+test('legend groups: signatures, attacks without variants, sorted emotes', () => {
   const sword = { classes: {
     'Animation_Sword.swf/a__1HandRearAnimation': [
       { name: 'AttackSpecialNinja3', frames: 30 }, { name: 'AttackSpecialNinja1', frames: 20 }, { name: 'AttackCombo1', frames: 12 },
@@ -47,30 +47,30 @@ test('groupes d’une légende : signatures, attaques sans variantes, emotes tri
   const hero = { name: 'Ninja', weapons: ['Sword'], powers: { SpecialPower1: 'SwordSmashNeutralNinja', SpecialPower1_Forward: 'SwordSmashSideNinja' } }
   const groups = buildLegendGroups(hero, powers, { Animation_Sword: sword }, emotes)
   const by = Object.fromEntries(groups.map((g) => [g.id, g]))
-  assert.deepEqual(by['sigs'].items.map((a) => [a.label, a.name]), [['★ NSig · Épée', 'AttackSpecialNinja3'], ['★ SSig · Épée', 'AttackSpecialNinja1']])
+  assert.deepEqual(by['sigs'].items.map((a) => [a.label, a.name]), [['★ NSig · Sword', 'AttackSpecialNinja3'], ['★ SSig · Sword', 'AttackSpecialNinja1']])
   assert.deepEqual(by['atk-Sword'].items.map((a) => a.name), ['AttackCombo1'])
   assert.deepEqual(by['mv-Sword'].items.map((a) => a.name), ['Ready'])
   assert.deepEqual(by['emotes'].items.map((a) => a.label), ['Breakdance', 'Robot Dance'])
 })
 
-test('effets en plusieurs parties : symboles numérotés regroupés et triés', () => {
+test('multi-part effects: numbered symbols grouped and sorted', () => {
   const items = effectItems('SFX_X.swf', ['a_Glow', 'DragonFireALL10', 'DragonFireALL2', 'DragonFireALL1', 'Sparkle01', 'Lone7'])
   const by = Object.fromEntries(items.map((x) => [x.name, x]))
   assert.deepEqual(by['DragonFireALL'].sequence, ['DragonFireALL1', 'DragonFireALL2', 'DragonFireALL10'])
   assert.equal(by['DragonFireALL'].animClass, 'SFX_X.swf/DragonFireALL2')
-  assert.equal(by['Sparkle01'].sequence, undefined)     // une seule partie : effet normal
+  assert.equal(by['Sparkle01'].sequence, undefined)     // a single part: normal effect
   assert.equal(by['a_Glow'].display, 'Glow')
   assert.equal(items.length, 4)
 })
 
-test('effets d’une légende : nom interne sans attraper les noms plus longs', () => {
+test('legend effects: internal name without catching longer names', () => {
   const monk = heroEffectTest('Monk')
   assert.ok(monk('a_SFXAttackSpecialMonkNeutral2_IW'))
   assert.ok(monk('a_FFXAttackSpecialMonk2_IW_SwapAang'))
   assert.ok(!monk('a_Jaw_MonkeyKing'))
 })
 
-test('coups nommés : NLight = Combo1 → Combo2 → Combo3, sans attraper les coups voisins', () => {
+test('named moves: NLight = Combo1 → Combo2 → Combo3, without catching neighbouring moves', () => {
   const powers = new Map([
     ['SwordNeutral', { CastAnim: 'AttackCombo1', ComboName: 'SwordNeutralCombo' }],
     ['SwordNeutralCombo', { CastAnim: 'AttackCombo2', ComboName: 'SwordNeutralMiss' }],
@@ -95,18 +95,18 @@ test('coups nommés : NLight = Combo1 → Combo2 → Combo3, sans attraper les c
   assert.equal(atk.items[0].frames, 37)
 })
 
-test('export d’une durée voulue : intro une fois, puis la boucle du jeu', async () => {
+test('export of a desired duration: intro once, then the game loop', async () => {
   const { exportSequence } = await import('@shared/studio')
-  // « The Reads » : 50 images ; intro 0-16, boucle 17-40, fin 41-49 (le livre est jeté) ; 10 s à 24 i/s = 240 images.
+  // "The Reads": 50 frames; intro 0-16, loop 17-40, ending 41-49 (the book is thrown); 10 s at 24 fps = 240 frames.
   const seq = exportSequence(50, { fps: 24, duration: 10, loop: 'game' }, 17, 41)
   assert.equal(seq.length, 240)
-  assert.deepEqual(seq.slice(0, 42), [...Array(41).keys(), 17], 'l’intro, la boucle, puis reprise au début de la boucle')
-  assert.deepEqual(seq.slice(-9), [41, 42, 43, 44, 45, 46, 47, 48, 49], 'la fin de l’emote termine l’export')
-  assert.ok(seq.slice(17, -9).every((i) => i >= 17 && i < 41), 'entre les deux : seulement la boucle')
-  assert.equal(exportSequence(50, { fps: 24, duration: 10, loop: 'game' }, 17).length, 240, 'sans fin de boucle connue : jusqu’à la dernière image')
+  assert.deepEqual(seq.slice(0, 42), [...Array(41).keys(), 17], 'the intro, the loop, then back to the start of the loop')
+  assert.deepEqual(seq.slice(-9), [41, 42, 43, 44, 45, 46, 47, 48, 49], 'the end of the emote finishes the export')
+  assert.ok(seq.slice(17, -9).every((i) => i >= 17 && i < 41), 'in between: only the loop')
+  assert.equal(exportSequence(50, { fps: 24, duration: 10, loop: 'game' }, 17).length, 240, 'without a known loop end: up to the last frame')
   assert.deepEqual(exportSequence(4, { fps: 2, duration: 5, loop: 'all' }, 2), [0, 1, 2, 3, 0, 1, 2, 3, 0, 1])
-  assert.deepEqual(exportSequence(4, { fps: 2, duration: 5, loop: 'off' }, 2), [0, 1, 2, 3], 'sans boucle : une fois')
-  assert.deepEqual(exportSequence(4, { fps: 2, duration: 2, loop: 'game', frames: [1, 3] }, 2), [1, 3, 1, 3], 'la sélection est répétée telle quelle')
-  assert.deepEqual(exportSequence(4, { fps: 2 }), [0, 1, 2, 3], 'sans durée : inchangé')
+  assert.deepEqual(exportSequence(4, { fps: 2, duration: 5, loop: 'off' }, 2), [0, 1, 2, 3], 'no loop: once')
+  assert.deepEqual(exportSequence(4, { fps: 2, duration: 2, loop: 'game', frames: [1, 3] }, 2), [1, 3, 1, 3], 'the selection is repeated as is')
+  assert.deepEqual(exportSequence(4, { fps: 2 }), [0, 1, 2, 3], 'no duration: unchanged')
   assert.equal(exportSequence(10, { fps: 60, duration: 99999, loop: 'all' }).length, 300 * 60, 'plafond de 5 min')
 })

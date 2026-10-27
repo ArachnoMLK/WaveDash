@@ -1,8 +1,8 @@
-// Détection des paliers franchis (hausse et baisse) et des changements de rang, puis notification.
+// Detection of milestones crossed (up and down) and rank changes, then notification.
 import { Notification } from 'electron'
-import { DEFAULT_TEMPLATES, METRIC_NAMES, PLATFORM_NAMES, renderTemplate, templateVars } from '@shared/labels'
+import { DEFAULT_TEMPLATES, METRIC_NAMES, PLATFORM_NAMES, renderTemplate, SAMPLE_ACCOUNT, templateVars } from '@shared/labels'
 import { crossedDown, crossedUp, getPluginRule, getRule, MILESTONE_METRICS, pluginMilestoneMetrics } from '@shared/milestones'
-import { Account, LatestMetrics, MilestoneEvent, ProviderResult, Settings, TemplateKey } from '@shared/types'
+import { Account, LatestMetrics, localeOf, MilestoneEvent, ProviderResult, Settings, TemplateKey } from '@shared/types'
 import { loc, PluginManifest, PluginNotice } from '@shared/plugin'
 import * as db from './db'
 
@@ -14,24 +14,24 @@ export function initMilestones(onEvent: (e: MilestoneEvent) => void, onClick: ()
   showWindow = onClick
 }
 
-const fmtNum = (n: number, s: Settings): string => new Intl.NumberFormat(s.lang === 'fr' ? 'fr-FR' : 'en-US', { maximumFractionDigits: 1 }).format(n)
+const fmtNum = (n: number, s: Settings): string => new Intl.NumberFormat(localeOf(s.lang), { maximumFractionDigits: 1 }).format(n)
 
-/** Message final : texte personnalisé s'il existe, sinon texte par défaut de la langue. */
+/** Final message: custom text if any, otherwise the default text of the language. */
 function message(s: Settings, tpl: TemplateKey, a: Account, e: Omit<MilestoneEvent, 'id' | 'message'>): string {
-  const text = s.notifyTemplates[tpl]?.trim() || DEFAULT_TEMPLATES[s.lang][tpl]
-  const stat = e.metric === 'rank' ? (s.lang === 'fr' ? 'Rang' : 'Rank') : METRIC_NAMES[s.lang][e.metric as keyof (typeof METRIC_NAMES)['fr']] ?? e.metric
+  const text = s.notifyTemplates[tpl]?.trim() || (DEFAULT_TEMPLATES[s.lang] ?? DEFAULT_TEMPLATES.en)[tpl]
+  const stat = e.metric === 'rank' ? (s.lang === 'fr' ? 'Rang' : 'Rank') : (METRIC_NAMES[s.lang] ?? METRIC_NAMES.en)[e.metric as keyof (typeof METRIC_NAMES)['en']] ?? e.metric
   return renderTemplate(text, templateVars({
     platform: PLATFORM_NAMES[a.platform], stat, value: fmtNum(e.value, s), threshold: fmtNum(e.threshold, s), previous: fmtNum(e.previous, s),
     account: a.displayName, rank: e.toRank ?? '', oldRank: e.fromRank ?? ''
   }))
 }
 
-/** Envoie la notification Windows et prévient l'interface (son, célébration). */
+/** Sends the Windows notification and tells the interface (sound, celebration). */
 function deliver(s: Settings, e: MilestoneEvent): void {
   if (!s.notificationsEnabled) return
   if (Notification.isSupported()) {
-    // Le son est joué par l'interface (choix du son et du volume) : la notification système reste muette.
-    const n = new Notification({ title: `WaveDash · ${e.platform === 'plugin' ? e.source ?? 'Plugin' : PLATFORM_NAMES[e.platform]}${e.demo ? ' (démo)' : ''}`, body: e.message, silent: true })
+    // The sound is played by the interface (choice of sound and volume): the system notification stays silent.
+    const n = new Notification({ title: `WaveDash · ${e.platform === 'plugin' ? e.source ?? 'Plugin' : PLATFORM_NAMES[e.platform]}${e.demo ? ' (demo)' : ''}`, body: e.message, silent: true })
     n.on('click', showWindow)
     n.show()
   }
@@ -39,8 +39,8 @@ function deliver(s: Settings, e: MilestoneEvent): void {
 }
 
 /**
- * Compare les valeurs précédentes aux nouvelles. À appeler AVANT l'enregistrement du nouveau relevé.
- * Le tout premier relevé d'un compte ne déclenche rien (rien à comparer).
+ * Compares the previous values with the new ones. Call BEFORE saving the new reading.
+ * The very first reading of an account triggers nothing (nothing to compare).
  */
 export function processRefresh(a: Account, prev: LatestMetrics, res: ProviderResult): void {
   if (Object.keys(prev).length === 0) return
@@ -64,17 +64,17 @@ export function processRefresh(a: Account, prev: LatestMetrics, res: ProviderRes
   }
 }
 
-/** Notification de test (non enregistrée dans l'historique). */
+/** Test notification (not recorded in the history). */
 export function fireTest(): void {
   const s = db.getSettings()
-  const base = { accountId: 0, platform: 'youtube' as const, account: s.lang === 'fr' ? 'Ma chaîne' : 'My channel', metric: 'subscribers', threshold: 1000,
+  const base = { accountId: 0, platform: 'youtube' as const, account: SAMPLE_ACCOUNT[s.lang] ?? SAMPLE_ACCOUNT.en, metric: 'subscribers', threshold: 1000,
     previous: 998, value: 1002, direction: 'up' as const, ts: Date.now(), demo: true }
   const fake = { id: 0, displayName: base.account, platform: 'youtube' } as unknown as Account
   deliver({ ...s, notificationsEnabled: true }, { ...base, id: 0, message: message(s, 'up', fake, base) })
 }
 
-/** Paliers des plugins : par défaut sur la métrique principale (si c'est un nombre), séquence 10, 20, 50, 100…
- *  Une règle enregistrée sous « plugin:<id>.<métrique> » dans les réglages la remplace. À appeler AVANT d'enregistrer le relevé. */
+/** Plugin milestones: by default on the main metric (if it is a number), sequence 10, 20, 50, 100…
+ *  A rule saved as "plugin:<id>.<metric>" in the settings replaces it. Call BEFORE saving the reading. */
 export function processPluginRefresh(accountId: number, account: string, m: PluginManifest, prev: Record<string, number>, next: Record<string, number>): void {
   if (Object.keys(prev).length === 0) return
   const s = db.getSettings(), ts = Date.now()
@@ -86,7 +86,7 @@ export function processPluginRefresh(accountId: number, account: string, m: Plug
     const up = crossedUp(rule, from, to), down = rule.notifyDown ? crossedDown(rule, from, to) : null
     const threshold = up ?? down
     if (threshold === null) continue
-    const text = s.notifyTemplates[up !== null ? 'up' : 'down']?.trim() || DEFAULT_TEMPLATES[s.lang][up !== null ? 'up' : 'down']
+    const text = s.notifyTemplates[up !== null ? 'up' : 'down']?.trim() || (DEFAULT_TEMPLATES[s.lang] ?? DEFAULT_TEMPLATES.en)[up !== null ? 'up' : 'down']
     const e = { accountId, platform: 'plugin' as const, source: m.name, account, metric: metric.key, label: loc(metric.label, s.lang), threshold, previous: from, value: to,
       direction: (up !== null ? 'up' : 'down') as 'up' | 'down', ts, demo: false }
     const event: MilestoneEvent = { ...e, id: 0, message: renderTemplate(text, templateVars({ platform: m.name, stat: loc(metric.label, s.lang), value: fmtNum(to, s),
@@ -96,8 +96,8 @@ export function processPluginRefresh(accountId: number, account: string, m: Plug
   }
 }
 
-/** Notifications envoyées par un plugin (ex. nouveau rang) : chaque `id` n'est envoyé qu'une fois par compte ; le réglage
- *  « Notifications du plugin » peut les couper. Enregistrées dans l'historique comme les paliers. */
+/** Notifications sent by a plugin (e.g. new rank): each `id` is sent only once per account; the
+ *  "Plugin notifications" setting can turn them off. Recorded in the history like milestones. */
 export function processPluginNotices(accountId: number, account: string, m: PluginManifest, notices: PluginNotice[]): void {
   if (!notices.length) return
   const s = db.getSettings()

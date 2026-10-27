@@ -1,24 +1,24 @@
 {
   "wdsh": 1,
   "id": "wavedash.tiktok-profile",
-  "name": "TikTok (profil public)",
-  "version": "1.0.0",
+  "name": "TikTok (public profile)",
+  "version": "1.0.1",
   "author": "WaveDash",
   "description": {
-    "fr": "Suit un profil TikTok public : abonnés, abonnements, likes reçus, vidéos. Lit la page publique du profil (sans compte ni clé). Fragile : la page peut changer, et cette lecture n'est pas une API officielle.",
-    "en": "Tracks a public TikTok profile: followers, following, likes received, videos. Reads the public profile page (no account or key). Fragile: the page can change, and this is not an official API."
+    "en": "Tracks a public TikTok profile: followers, following, likes received, videos. Reads the public profile page (no account or key). Fragile: the page can change, and this is not an official API.",
+    "fr": "Suit un profil TikTok public : abonnés, abonnements, likes reçus, vidéos. Lit la page publique du profil (sans compte ni clé). Fragile : la page peut changer, et cette lecture n'est pas une API officielle."
   },
   "permissions": { "network": ["www.tiktok.com"], "folder": false },
   "inputs": [
     { "key": "username", "type": "text", "required": true, "placeholder": "brawlhalla_valhost",
-      "label": { "fr": "Pseudo TikTok (sans @)", "en": "TikTok username (no @)" } }
+      "label": { "en": "TikTok username (no @)", "fr": "Pseudo TikTok (sans @)" } }
   ],
   "metrics": [
-    { "key": "followers", "label": { "fr": "Abonnés", "en": "Followers" }, "primary": true },
-    { "key": "following", "label": { "fr": "Abonnements", "en": "Following" } },
-    { "key": "likes", "label": { "fr": "Likes reçus", "en": "Likes received" } },
-    { "key": "videos", "label": { "fr": "Vidéos", "en": "Videos" } },
-    { "key": "friends", "label": { "fr": "Amis", "en": "Friends" } }
+    { "key": "followers", "label": { "en": "Followers", "fr": "Abonnés" }, "primary": true },
+    { "key": "following", "label": { "en": "Following", "fr": "Abonnements" } },
+    { "key": "likes", "label": { "en": "Likes received", "fr": "Likes reçus" } },
+    { "key": "videos", "label": { "en": "Videos", "fr": "Vidéos" } },
+    { "key": "friends", "label": { "en": "Friends", "fr": "Amis" } }
   ],
   "refreshMinutes": 60
 }

@@ -5,10 +5,10 @@ import { pluginAccountOfRoute, pluginNavIds, pluginNavLabel } from '../lib/plugi
 import logoWhite from '../lib/logo-white.png'
 import logoDark from '../lib/logo-dark.png'
 
-/** 'overview', une plateforme, ou 'settings'. */
+/** 'overview', a platform, or 'settings'. */
 export type Route = string
 
-/** Onglets visibles dans l'ordre choisi (la vue d'ensemble reste toujours présente). */
+/** Visible tabs in the chosen order (the overview is always present). */
 export const visibleNav = (order: string[], hidden: string[], extra: string[] = []): string[] =>
   orderedNav(order, extra).filter((id) => id === 'overview' || !hidden.includes(id))
 

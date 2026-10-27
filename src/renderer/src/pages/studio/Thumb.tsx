@@ -1,4 +1,4 @@
-// Vignette d'un rendu : image fixe calculée quand elle devient visible, animation jouée au survol de la carte.
+// Render thumbnail: still image computed when it becomes visible, animation played when hovering the card.
 import { useEffect, useRef, useState } from 'react'
 import type { StudioRenderRequest } from '@shared/studio'
 
@@ -22,7 +22,7 @@ export function Thumb({ req, animate = true }: { req: StudioRenderRequest; anima
     return () => { alive = false; io.disconnect() }
   }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // survol de la carte entière (le bouton parent) : petite boucle de l'animation, préparée à la demande
+  // hovering the whole card (the parent button): small loop of the animation, prepared on demand
   useEffect(() => {
     const card = (ref.current?.closest('button, .st-card') as HTMLElement | null) ?? ref.current
     if (!card || !animate) return

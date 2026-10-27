@@ -1,4 +1,4 @@
-// Écran de célébration : s'affiche quand un palier est franchi (si l'option est activée).
+// Celebration screen: shown when a milestone is reached (if the option is on).
 import { useEffect } from 'react'
 import { useApp } from '../lib/AppContext'
 import { fmt } from '../lib/format'
@@ -6,7 +6,7 @@ import { fmt } from '../lib/format'
 export function Celebration(): JSX.Element | null {
   const { celebration: e, dismissCelebration, t, settings } = useApp()
 
-  // Disparaît seul après 7 s de fenêtre visible (le compte à rebours attend si la fenêtre est réduite).
+  // Disappears on its own after 7 s of visible window (the countdown waits while the window is minimized).
   useEffect(() => {
     if (!e) return
     let timer: number | undefined
@@ -18,7 +18,7 @@ export function Celebration(): JSX.Element | null {
   }, [e, dismissCelebration])
 
   if (!e) return null
-  // Changement de rang (ancien Brawlhalla intégré) ou notification d'un plugin : le titre remplace le nombre.
+  // Rank change (old built-in Brawlhalla) or plugin notification: the title replaces the number.
   const isRank = e.metric === 'rank' || e.metric === 'notice'
   const kind = e.metric === 'notice' ? 'notice' : isRank ? (e.direction === 'up' ? 'rankUp' : 'rankDown') : e.direction
   return (

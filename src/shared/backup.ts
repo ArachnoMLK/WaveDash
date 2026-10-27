@@ -1,7 +1,7 @@
-// Sauvegarde de la configuration : réglages, paliers, textes, préréglages. Jamais de clés API ni de comptes.
+// Configuration backup: settings, milestones, texts, presets. Never API keys or accounts.
 import { MILESTONE_METRICS, ruleKey } from './milestones'
 import { sanitizeTheme, themeFromSettings } from './theme'
-import { DEFAULT_SETTINGS, MilestoneRule, PLATFORMS, Settings, TemplateKey, ThemeData } from './types'
+import { DEFAULT_SETTINGS, isLang, MilestoneRule, PLATFORMS, Settings, TemplateKey, ThemeData } from './types'
 
 const NAV_IDS = ['overview', 'goals', ...PLATFORMS]
 const CHARTS = ['line', 'area', 'bar', 'pie', 'radar']
@@ -17,13 +17,13 @@ function sanitizeRule(raw: unknown): MilestoneRule | null {
   return { enabled: r.enabled, sequence: r.sequence, increment: Math.round(increment), custom, notifyDown: r.notifyDown }
 }
 
-/** Ne garde que les réglages connus, du bon type et dans les bornes. */
+/** Keeps only known settings, of the right type and within bounds. */
 export function sanitizeBackup(raw: unknown): Partial<Settings> {
   const out: Partial<Settings> & Record<string, unknown> = {}
   if (!raw || typeof raw !== 'object') return out
   const s = raw as Record<string, unknown>
   Object.assign(out, sanitizeTheme(s))                       // apparence
-  if (s.lang === 'fr' || s.lang === 'en') out.lang = s.lang
+  if (isLang(s.lang)) out.lang = s.lang
   const refresh = num(s.refreshMinutes, 5, 1440); if (refresh !== null) out.refreshMinutes = Math.round(refresh)
   for (const k of ['seeThroughMaximized', 'scrapingEnabled', 'startWithWindows', 'closeToTray', 'autoUpdate', 'notificationsEnabled', 'notifyRank', 'notifySound', 'notifyCelebration'] as const)
     if (typeof s[k] === 'boolean') out[k] = s[k]
@@ -46,7 +46,7 @@ export function sanitizeBackup(raw: unknown): Partial<Settings> {
     const valid = new Set(PLATFORMS.flatMap((p) => MILESTONE_METRICS[p].map((m) => ruleKey(p, m))))
     const rules: Record<string, MilestoneRule> = {}
     for (const [k, v] of Object.entries(s.milestoneRules as Record<string, unknown>)) {
-      // Règles des plateformes, et des métriques de plugins (« plugin:<id>.<métrique> »).
+      // Platform rules, and plugin metric rules ("plugin:<id>.<metric>").
       const r = valid.has(k) || /^plugin:[a-z0-9][a-z0-9._-]{2,63}\.[a-z][a-z0-9_]{0,31}$/.test(k) ? sanitizeRule(v) : null
       if (r) rules[k] = r
     }
@@ -55,7 +55,7 @@ export function sanitizeBackup(raw: unknown): Partial<Settings> {
   if (Array.isArray(s.navOrder)) out.navOrder = s.navOrder.filter((x): x is string => typeof x === 'string' && NAV_IDS.includes(x))
   if (Array.isArray(s.navHidden)) out.navHidden = s.navHidden.filter((x): x is string => typeof x === 'string' && NAV_IDS.includes(x) && x !== 'overview')
   if (s.navLabels && typeof s.navLabels === 'object') {
-    // Les onglets de plugins sont propres à cette installation : seuls les onglets de base voyagent.
+    // Plugin tabs belong to this install: only the base tabs travel.
     out.navLabels = Object.fromEntries(Object.entries(s.navLabels as Record<string, unknown>)
       .filter(([k, v]) => NAV_IDS.includes(k) && typeof v === 'string' && v.trim()).map(([k, v]) => [k, (v as string).trim().slice(0, 40)]))
   }
@@ -73,7 +73,7 @@ export function sanitizeBackup(raw: unknown): Partial<Settings> {
   return out
 }
 
-/** Clés enregistrées dans une sauvegarde (tout sauf image de fond locale). */
+/** Keys saved in a backup (everything except the local background image). */
 export const BACKUP_KEYS: (keyof Settings)[] = [
   'theme', 'glassEnabled', 'glass', 'glassOpacity', 'glassSaturation', 'nativeMaterial', 'seeThroughMaximized', 'bgMode', 'bgColor', 'bgColor2', 'bgAngle', 'bgBlur', 'bgDim', 'ambient',
   'accentEnabled', 'accentColor', 'chartPalette', 'radius', 'density', 'uiScale', 'fontFamily', 'animations',

@@ -1,5 +1,5 @@
-// Tests automatiques : chaque tests/*.test.ts est compilé par esbuild, puis exécuté par Electron en mode Node
-// (même version de Node que l'appli, et better-sqlite3 compilé pour Electron se charge). Usage : npm test [filtre]
+// Automated tests: each tests/*.test.ts is compiled by esbuild, then run by Electron in Node mode
+// (same Node version as the app, and better-sqlite3 built for Electron loads). Usage: npm test [filter]
 import { build } from 'esbuild'
 import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync, rmSync } from 'node:fs'
@@ -16,15 +16,15 @@ await build({
   outExtension: { '.js': '.cjs' }, sourcemap: 'inline', logLevel: 'warning',
   alias: { '@shared': join(root, 'src', 'shared'), electron: join(root, 'tests', 'stubs', 'electron.ts') },
   external: ['better-sqlite3', 'quickjs-emscripten'],
-  // Diagnostic : chaque fichier signale ce qui reste ouvert après ses tests (voir tests/stubs/diag.js).
+  // Diagnostic: each file reports what is still open after its tests (see tests/stubs/diag.js).
   banner: diag ? { js: readFileSync(join(root, 'tests', 'stubs', 'diag.js'), 'utf8') } : undefined
 })
 const electron = join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron')
-// Un fichier à la fois : avec les 12 fichiers en parallèle, le lanceur de tests de Node 20 (celui d'Electron) se figeait parfois
-// sous Windows (4 suites sur 30 sur le PC du propriétaire, 0 sur 20 fichier par fichier). WAVEDASH_TEST_CONC=n pour changer.
-// WAVEDASH_TEST_DIAG=1 : sans sortie forcée, chaque fichier liste ce qui reste ouvert après ses tests (tests/stubs/diag.js).
-// Un test bloqué échoue au bout de 3 min au lieu de suspendre tout (ex. sur GitHub) ; un fichier dont les tests sont finis se ferme
-// même s'il reste une connexion ou une minuterie ouverte (vu par intermittence sur GitHub). Sur GitHub, les échecs deviennent des annotations.
+// One file at a time: with the 12 files in parallel, the Node 20 test runner (Electron's) sometimes froze
+// on Windows (4 runs out of 30 on the owner's PC, 0 out of 20 file by file). WAVEDASH_TEST_CONC=n to change it.
+// WAVEDASH_TEST_DIAG=1: without forced exit, each file lists what is still open after its tests (tests/stubs/diag.js).
+// A stuck test fails after 3 min instead of hanging everything (e.g. on GitHub); a file whose tests are done closes
+// even if a connection or a timer is still open (seen intermittently on GitHub). On GitHub, failures become annotations.
 const reporters = process.env.GITHUB_ACTIONS
   ? ['--test-reporter=spec', '--test-reporter-destination=stdout', `--test-reporter=${pathToFileURL(join(root, 'tools', 'gh-reporter.mjs')).href}`, '--test-reporter-destination=stdout']
   : []

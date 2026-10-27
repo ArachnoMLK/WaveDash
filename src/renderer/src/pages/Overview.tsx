@@ -13,7 +13,7 @@ import { useChartTheme } from '../lib/useChartTheme'
 
 const SOCIAL: Platform[] = ['youtube']
 
-/** Cartes de chiffres clés d'un compte. */
+/** Key figure cards of an account. */
 function AccountSummary({ account }: { account: Account }): JSX.Element {
   const { t, settings } = useApp()
   const data = useAccountData(account, '30')
@@ -28,7 +28,7 @@ function AccountSummary({ account }: { account: Account }): JSX.Element {
           return (
             <Reveal key={m} delay={i * 0.08}>
               <StatCard label={t(`metric.${m}`)} value={v === undefined ? '—' : fmtMetric(m, v, settings.lang)}
-                delta={delta === undefined ? undefined : `${fmtDelta(delta, settings.lang, 0)} · 30 ${settings.lang === 'fr' ? 'j' : 'd'}`} />
+                delta={delta === undefined ? undefined : `${fmtDelta(delta, settings.lang, 0)} · ${t('range.30')}`} />
             </Reveal>
           )
         })}
@@ -37,7 +37,7 @@ function AccountSummary({ account }: { account: Account }): JSX.Element {
   )
 }
 
-/** Comptes de plugins : jusqu'à 4 métriques chacun (la principale d'abord) ; un clic ouvre la page du compte. */
+/** Plugin accounts: up to 4 metrics each (the main one first); a click opens the account page. */
 function PluginSummary({ account, onOpen }: { account: PluginAccount; onOpen: (route: string) => void }): JSX.Element | null {
   const { settings, plugins, dataVersion } = useApp()
   const plugin = plugins.find((p) => p.id === account.pluginId)
@@ -65,7 +65,7 @@ export function Overview({ onAdd, onOpen }: { onAdd: (p: Platform, replace?: boo
   const socials = accounts.filter((a) => SOCIAL.includes(a.platform))
   const [subs, setSubs] = useState<NamedSeries[]>([])
 
-  // Abonnés de toutes les plateformes sociales sur 30 jours (courbes combinées).
+  // Followers of all social platforms over 30 days (combined curves).
   useEffect(() => {
     let alive = true
     void (async () => {

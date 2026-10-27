@@ -5,8 +5,8 @@ import { sanitizeTheme } from '@shared/theme'
 
 const rule = { enabled: true, sequence: true, increment: 0, custom: [5, 'x'], notifyDown: false }
 
-test('sauvegarde : seuls les réglages connus et valides', () => {
-  const s = sanitizeBackup({ lang: 'de', refreshMinutes: 1, theme: 'dark', glass: 500, bgColor: 'red', evil: 1, seeThroughMaximized: false,
+test('backup: only known and valid settings', () => {
+  const s = sanitizeBackup({ lang: 'xx', refreshMinutes: 1, theme: 'dark', glass: 500, bgColor: 'red', evil: 1, seeThroughMaximized: false,
     navOrder: ['overview', 'x'], navHidden: ['overview', 'goals'], chartTypes: { a: 'line', b: 'fancy' } }) as Record<string, unknown>
   assert.equal(s.lang, undefined)
   assert.equal(s.refreshMinutes, 5)
@@ -20,18 +20,18 @@ test('sauvegarde : seuls les réglages connus et valides', () => {
   assert.deepEqual(s.chartTypes, { a: 'line' })
 })
 
-test('sauvegarde : règles de paliers des plateformes et des plugins', () => {
+test('backup: milestone rules of platforms and plugins', () => {
   const s = sanitizeBackup({ milestoneRules: { 'youtube.subscribers': rule, 'plugin:wavedash.discord-server.members': rule, 'nope.x': rule, 'plugin:../x': rule } })
   assert.deepEqual(Object.keys(s.milestoneRules!).sort(), ['plugin:wavedash.discord-server.members', 'youtube.subscribers'])
   assert.deepEqual(s.milestoneRules!['youtube.subscribers'].custom, [5])
 })
 
-test('sauvegarde : un préréglage nommé « __proto__ » est ignoré', () => {
-  const s = sanitizeBackup(JSON.parse('{"themePresets": {"__proto__": {"theme": "light"}, "Clair": {"theme": "light"}}}'))
-  assert.deepEqual(Object.keys(s.themePresets!), ['Clair'])
+test('backup: a preset named "__proto__" is ignored', () => {
+  const s = sanitizeBackup(JSON.parse('{"themePresets": {"__proto__": {"theme": "light"}, "Light": {"theme": "light"}}}'))
+  assert.deepEqual(Object.keys(s.themePresets!), ['Light'])
   assert.equal(({} as Record<string, unknown>).theme, undefined)
 })
 
-test('thème : image de fond jamais importée', () => {
+test('theme: background image never imported', () => {
   assert.equal(sanitizeTheme({ bgMode: 'image' }).bgMode, 'default')
 })

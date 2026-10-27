@@ -1,16 +1,16 @@
 {
   "wdsh": 1,
   "id": "wavedash.example.weather",
-  "name": "Météo (Open-Meteo)",
-  "version": "1.0.0",
+  "name": "Weather (Open-Meteo)",
+  "version": "1.0.1",
   "author": "WaveDash",
-  "description": { "fr": "Exemple : température, humidité et vent d'une ville, via l'API gratuite Open-Meteo (sans clé).", "en": "Example: temperature, humidity and wind for a city, via the free Open-Meteo API (no key)." },
+  "description": { "en": "Example: temperature, humidity and wind for a city, via the free Open-Meteo API (no key).", "fr": "Exemple : température, humidité et vent d'une ville, via l'API gratuite Open-Meteo (sans clé)." },
   "permissions": { "network": ["api.open-meteo.com", "geocoding-api.open-meteo.com"], "folder": false },
-  "inputs": [ { "key": "city", "type": "text", "required": true, "placeholder": "Valence", "label": { "fr": "Ville", "en": "City" } } ],
+  "inputs": [ { "key": "city", "type": "text", "required": true, "placeholder": "Valence", "label": { "en": "City", "fr": "Ville" } } ],
   "metrics": [
-    { "key": "temperature", "label": { "fr": "Température", "en": "Temperature" }, "unit": "°C", "decimals": 1, "primary": true },
-    { "key": "humidity", "label": { "fr": "Humidité", "en": "Humidity" }, "format": "percent" },
-    { "key": "wind", "label": { "fr": "Vent", "en": "Wind" }, "unit": "km/h", "decimals": 1 }
+    { "key": "temperature", "label": { "en": "Temperature", "fr": "Température" }, "unit": "°C", "decimals": 1, "primary": true },
+    { "key": "humidity", "label": { "en": "Humidity", "fr": "Humidité" }, "format": "percent" },
+    { "key": "wind", "label": { "en": "Wind", "fr": "Vent" }, "unit": "km/h", "decimals": 1 }
   ],
   "refreshMinutes": 30
 }

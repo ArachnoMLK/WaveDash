@@ -1,8 +1,8 @@
 {
   "name": "wavedash",
   "productName": "WaveDash",
-  "version": "1.5.0",
-  "description": "Dashboard centralisÃ© : TikTok, Instagram, YouTube, Brawlhalla",
+  "version": "1.6.0",
+  "description": "Windows dashboard for YouTube, Brawlhalla, TikTok and Discord stats, with sandboxed plugins and a Brawlhalla Studio",
   "author": "WaveDash",
   "license": "MIT",
   "main": "./out/main/index.js",

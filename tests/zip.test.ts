@@ -4,7 +4,7 @@ import { deflateRawSync } from 'node:zlib'
 import { crc32, readZip } from '../src/main/plugins/zip'
 
 interface Entry { name: string; data: Buffer; method?: 0 | 8; flags?: number; crc?: number; usize?: number }
-/** Petit écrivain ZIP pour fabriquer des archives normales et piégées. */
+/** Small ZIP writer to build normal and booby-trapped archives. */
 function zip(entries: Entry[]): Buffer {
   const locals: Buffer[] = [], central: Buffer[] = []
   let offset = 0
@@ -24,14 +24,14 @@ function zip(entries: Entry[]): Buffer {
 const all = (): boolean => true
 const fails = (buf: Buffer, msg: string, limits = {}): void => assert.throws(() => readZip(buf, all, limits), (e: Error) => e.message === msg, msg)
 
-test('archive normale : contenu identique, compressé ou non', () => {
+test('normal archive: identical content, compressed or not', () => {
   const m = readZip(zip([{ name: 'manifest.json', data: Buffer.from('{"a":1}') }, { name: 'main.js', data: Buffer.from('var x'), method: 0 }]), all)
   assert.equal(m.get('manifest.json')!.toString(), '{"a":1}')
   assert.equal(m.get('main.js')!.toString(), 'var x')
   assert.deepEqual([...readZip(zip([{ name: 'a', data: Buffer.from('1') }, { name: 'b', data: Buffer.from('2') }]), (n) => n === 'b').keys()], ['b'])
 })
 
-test('archives piégées refusées', () => {
+test('booby-trapped archives rejected', () => {
   fails(zip([{ name: '../evil.js', data: Buffer.from('x') }]), 'unsafe_name')
   fails(zip([{ name: '/abs.js', data: Buffer.from('x') }]), 'unsafe_name')
   fails(zip([{ name: 'a\\b.js', data: Buffer.from('x') }]), 'unsafe_name')
@@ -40,10 +40,10 @@ test('archives piégées refusées', () => {
   fails(zip([{ name: 'a.js', data: Buffer.from('x'), crc: 1234 }]), 'corrupt')
   fails(zip([{ name: 'a.js', data: Buffer.from('xyz'), usize: 1 }]), 'corrupt')
   fails(zip([{ name: 'a.js', data: Buffer.from('x'), method: 0 }]).subarray(5), 'corrupt')
-  // Bombe : 50 Mo de zéros annoncés comme 10 octets, et entrée trop grosse annoncée honnêtement.
+  // Bomb: 50 MB of zeros announced as 10 bytes, and an oversized entry announced honestly.
   fails(zip([{ name: 'bomb', data: Buffer.alloc(50 * 1024 * 1024), usize: 10 }]), 'entry_too_large')
   fails(zip([{ name: 'big', data: Buffer.alloc(2 * 1024 * 1024) }]), 'entry_too_large')
   fails(zip([...Array(101)].map((_, i) => ({ name: `f${i}`, data: Buffer.from('x') }))), 'too_many_entries')
   fails(Buffer.alloc(6 * 1024 * 1024), 'archive_too_large')
-  fails(Buffer.from('pas un zip du tout, juste du texte assez long'), 'not_a_zip')
+  fails(Buffer.from('not a zip at all, just fairly long text'), 'not_a_zip')
 })

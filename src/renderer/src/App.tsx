@@ -14,7 +14,7 @@ import { PlatformPage } from './pages/PlatformPage'
 import { Settings } from './pages/Settings'
 import { StudioPage } from './pages/StudioPage'
 
-/** Style de la couche de fond selon le mode choisi (null = fond par défaut du thème). */
+/** Style of the background layer according to the chosen mode (null = theme default background). */
 function backgroundStyle(s: AppSettings, bgUrl: string | null): CSSProperties | null {
   if (s.bgMode === 'solid') return { background: s.bgColor }
   if (s.bgMode === 'gradient') return { background: `linear-gradient(${s.bgAngle}deg, ${s.bgColor}, ${s.bgColor2})` }
@@ -25,18 +25,18 @@ function backgroundStyle(s: AppSettings, bgUrl: string | null): CSSProperties | 
 export function App(): JSX.Element {
   const { settings, bgUrl, pluginAccounts } = useApp()
   const [route, setRoute] = useState<Route>('overview')
-  // `replace` : le nouveau compte remplace celui déjà connecté sur cette plateforme.
+  // `replace`: the new account replaces the one already connected on this platform.
   const [adding, setAdding] = useState<{ platform: Platform; replace: boolean } | null>(null)
   const openAdd = (platform: Platform, replace = false): void => setAdding({ platform, replace })
 
-  // Fichier .wdsh reçu (double-clic dans l'Explorateur ou fenêtre déjà ouverte) : on ouvre la page Plugins pour le valider.
+  // .wdsh file received (double-click in Explorer or window already open): open the Plugins page to confirm it.
   const [incoming, setIncoming] = useState<string | null>(null)
   useEffect(() => {
     void window.api.takePendingPluginFile().then((p) => { if (p) { setIncoming(p); setRoute('plugins') } })
     return window.api.onPluginFile((p) => { setIncoming(p); setRoute('plugins') })
   }, [])
 
-  // Un onglet masqué (ou un compte de plugin supprimé) ramène à la vue d'ensemble.
+  // A hidden tab (or a deleted plugin account) goes back to the overview.
   const pluginId = pluginAccountOfRoute(route)
   const known = route === 'settings' || route === 'plugins' || (pluginId !== null && pluginAccounts.some((a) => a.id === pluginId))
   const current = known || visibleNav(settings.navOrder, settings.navHidden).includes(route) ? route : 'overview'
@@ -58,7 +58,7 @@ export function App(): JSX.Element {
       <div className="titlebar" />
       <div className="shell">
         <Sidebar route={current} onRoute={setRoute} />
-        {/* key = changement de page : le bloc est recréé et rejoue son apparition CSS */}
+        {/* key = page change: the block is recreated and replays its CSS appearance */}
         <main><div className="page" key={current}>{page}</div></main>
       </div>
       <Celebration />

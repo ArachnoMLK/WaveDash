@@ -1,11 +1,11 @@
 import { ChartType, MetricKey, Platform, PLATFORMS } from '@shared/types'
 
-/** Métriques mises en avant dans les cartes de la vue d'ensemble. */
+/** Metrics highlighted in the overview cards. */
 export const PRIMARY_METRICS: Record<Platform, MetricKey[]> = {
   youtube: ['subscribers', 'views']
 }
 
-/** Types de graphique proposés par statistique (courbes dans le temps vs données par catégorie). */
+/** Chart types offered per statistic (curves over time vs data by category). */
 export const TIME_CHARTS: ChartType[] = ['line', 'area', 'bar']
 export const CATEGORY_CHARTS: ChartType[] = ['bar', 'pie', 'radar']
 export const CHART_KEYS = { videoViews: 'youtube.videoViews' }
@@ -14,13 +14,13 @@ export const DEFAULT_CHART: Record<string, ChartType> = {
 }
 export const chartKey = (platform: Platform, metric: MetricKey): string => `${platform}.${metric}`
 
-/** Onglets de navigation personnalisables (les paramètres restent toujours en bas). */
+/** Customizable navigation tabs (settings always stay at the bottom). */
 export const NAV_IDS: string[] = ['overview', 'goals', 'studio', ...PLATFORMS]
-/** Clé de traduction du libellé d'un onglet. */
+/** Translation key of a tab label. */
 export const navLabelKey = (id: string): string =>
   (id === 'overview' ? 'nav.overview' : id === 'goals' ? 'nav.goals' : id === 'studio' ? 'nav.studio' : `platform.${id}`)
-/** Ordre enregistré ; un onglet apparu depuis (ex. Objectifs en 0.4) s'insère après la vue d'ensemble.
- *  `extra` : onglets des comptes de plugins (« plugin:<id> ») ; un nouveau compte s'ajoute à la fin. */
+/** Saved order; a tab added since (e.g. Goals in 0.4) is inserted after the overview.
+ *  `extra`: tabs of plugin accounts ("plugin:<id>"); a new account is added at the end. */
 export const orderedNav = (saved: string[], extra: string[] = []): string[] => {
   const out = saved.filter((id) => NAV_IDS.includes(id) || extra.includes(id))
   for (const id of NAV_IDS.filter((x) => !out.includes(x))) {

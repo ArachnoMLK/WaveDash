@@ -1,12 +1,12 @@
 {
   "wdsh": 1,
   "id": "wavedash.discord-server",
-  "name": "Discord (serveurs)",
-  "version": "1.2.4",
+  "name": "Discord (servers)",
+  "version": "1.2.5",
   "author": "WaveDash",
   "description": {
-    "fr": "Suit tes serveurs Discord avec l'API officielle. Avec un bot : tous les serveurs où il est présent (membres, en ligne, messages par jour et par salon, membres les plus actifs), ou un seul serveur avec son ID. Sans bot : membres, en ligne et boosts d'après un lien d'invitation.",
-    "en": "Tracks your Discord servers with the official API. With a bot: every server it is in (members, online, messages per day and per channel, most active members), or a single server by ID. Without a bot: members, online and boosts from an invite link."
+    "en": "Tracks your Discord servers with the official API. With a bot: every server it is in (members, online, messages per day and per channel, most active members), or a single server by ID. Without a bot: members, online and boosts from an invite link.",
+    "fr": "Suit tes serveurs Discord avec l'API officielle. Avec un bot : tous les serveurs où il est présent (membres, en ligne, messages par jour et par salon, membres les plus actifs), ou un seul serveur avec son ID. Sans bot : membres, en ligne et boosts d'après un lien d'invitation."
   },
   "permissions": {
     "network": [
@@ -21,12 +21,12 @@
       "required": false,
       "placeholder": "discord.gg/xxxx",
       "label": {
-        "fr": "Lien d'invitation (sans bot)",
-        "en": "Invite link (without a bot)"
+        "en": "Invite link (without a bot)",
+        "fr": "Lien d'invitation (sans bot)"
       },
       "help": {
-        "fr": "Laisse vide pour suivre tous les serveurs du bot. Sans bot : un lien permanent (Expire : jamais).",
-        "en": "Leave empty to track every server of the bot. Without a bot: a permanent link (Expire: never)."
+        "en": "Leave empty to track every server of the bot. Without a bot: a permanent link (Expire: never).",
+        "fr": "Laisse vide pour suivre tous les serveurs du bot. Sans bot : un lien permanent (Expire : jamais)."
       }
     },
     {
@@ -35,8 +35,8 @@
       "required": false,
       "placeholder": "123456789012345678",
       "label": {
-        "fr": "ID d’un seul serveur (facultatif, avec un bot)",
-        "en": "Single server ID (optional, with a bot)"
+        "en": "Single server ID (optional, with a bot)",
+        "fr": "ID d’un seul serveur (facultatif, avec un bot)"
       }
     }
   ],
@@ -44,12 +44,12 @@
     {
       "key": "botToken",
       "label": {
-        "fr": "Jeton du bot (facultatif)",
-        "en": "Bot token (optional)"
+        "en": "Bot token (optional)",
+        "fr": "Jeton du bot (facultatif)"
       },
       "help": {
-        "fr": "Discord Developer Portal › ton application › Bot › Reset Token. Le bot doit être invité sur le serveur avec la permission « Lire l'historique des messages ».",
-        "en": "Discord Developer Portal › your application › Bot › Reset Token. The bot must be invited to the server with the Read Message History permission."
+        "en": "Discord Developer Portal › your application › Bot › Reset Token. The bot must be invited to the server with the Read Message History permission.",
+        "fr": "Discord Developer Portal › ton application › Bot › Reset Token. Le bot doit être invité sur le serveur avec la permission « Lire l'historique des messages »."
       }
     }
   ],
@@ -57,23 +57,23 @@
     {
       "key": "members",
       "label": {
-        "fr": "Membres",
-        "en": "Members"
+        "en": "Members",
+        "fr": "Membres"
       },
       "primary": true
     },
     {
       "key": "online",
       "label": {
-        "fr": "En ligne",
-        "en": "Online"
+        "en": "Online",
+        "fr": "En ligne"
       }
     },
     {
       "key": "online_pct",
       "label": {
-        "fr": "Part en ligne",
-        "en": "Online share"
+        "en": "Online share",
+        "fr": "Part en ligne"
       },
       "format": "percent",
       "decimals": 1
@@ -81,43 +81,43 @@
     {
       "key": "servers",
       "label": {
-        "fr": "Serveurs",
-        "en": "Servers"
+        "en": "Servers",
+        "fr": "Serveurs"
       }
     },
     {
       "key": "boosts",
       "label": {
-        "fr": "Boosts",
-        "en": "Boosts"
+        "en": "Boosts",
+        "fr": "Boosts"
       }
     },
     {
       "key": "channels",
       "label": {
-        "fr": "Salons textuels",
-        "en": "Text channels"
+        "en": "Text channels",
+        "fr": "Salons textuels"
       }
     },
     {
       "key": "messages_today",
       "label": {
-        "fr": "Messages aujourd'hui",
-        "en": "Messages today"
+        "en": "Messages today",
+        "fr": "Messages aujourd'hui"
       }
     },
     {
       "key": "messages_7d",
       "label": {
-        "fr": "Messages sur 7 jours",
-        "en": "Messages, last 7 days"
+        "en": "Messages, last 7 days",
+        "fr": "Messages sur 7 jours"
       }
     },
     {
       "key": "authors_7d",
       "label": {
-        "fr": "Membres actifs sur 7 jours",
-        "en": "Active members, 7 days"
+        "en": "Active members, 7 days",
+        "fr": "Membres actifs sur 7 jours"
       }
     }
   ],
@@ -125,50 +125,50 @@
     {
       "key": "members",
       "label": {
-        "fr": "Membres",
-        "en": "Members"
+        "en": "Members",
+        "fr": "Membres"
       }
     },
     {
       "key": "online",
       "label": {
-        "fr": "En ligne",
-        "en": "Online"
+        "en": "Online",
+        "fr": "En ligne"
       }
     },
     {
       "key": "boosts",
       "label": {
-        "fr": "Boosts",
-        "en": "Boosts"
+        "en": "Boosts",
+        "fr": "Boosts"
       }
     },
     {
       "key": "today",
       "label": {
-        "fr": "Aujourd'hui",
-        "en": "Today"
+        "en": "Today",
+        "fr": "Aujourd'hui"
       }
     },
     {
       "key": "week",
       "label": {
-        "fr": "7 jours",
-        "en": "7 days"
+        "en": "7 days",
+        "fr": "7 jours"
       }
     },
     {
       "key": "total",
       "label": {
-        "fr": "Depuis le suivi",
-        "en": "Since tracking"
+        "en": "Since tracking",
+        "fr": "Depuis le suivi"
       }
     },
     {
       "key": "last",
       "label": {
-        "fr": "Dernier message",
-        "en": "Last message"
+        "en": "Last message",
+        "fr": "Dernier message"
       }
     }
   ],

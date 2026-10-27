@@ -1,7 +1,7 @@
-// Notifications : activation, son, célébration, textes personnalisés, paliers par statistique.
+// Notifications: enabling, sound, celebration, custom texts, milestones per statistic.
 import { useState } from 'react'
 import { MilestoneRule, PLATFORMS, SoundKind, TemplateKey } from '@shared/types'
-import { DEFAULT_TEMPLATES, renderTemplate, TEMPLATE_VARIABLES, templateVars } from '@shared/labels'
+import { DEFAULT_TEMPLATES, renderTemplate, SAMPLE_ACCOUNT, TEMPLATE_VARIABLES, templateVars } from '@shared/labels'
 import { getPluginRule, getRule, MILESTONE_METRICS, nextThreshold, pluginMilestoneMetrics, pluginRuleKey, ruleKey } from '@shared/milestones'
 import { loc } from '@shared/plugin'
 import { Row, Section, Slider } from '../components/settingsUi'
@@ -10,10 +10,10 @@ import { useApp } from '../lib/AppContext'
 import { fmt } from '../lib/format'
 import { playSound } from '../lib/sound'
 
-// Les modèles de changement de rang servaient au Brawlhalla intégré, devenu un plugin : seuls « hausse » et « baisse » restent.
+// The rank change templates were used by the built-in Brawlhalla, now a plugin: only "up" and "down" remain.
 const TEMPLATES: TemplateKey[] = ['up', 'down']
 
-/** Éditeur des paliers d'une statistique (séquence, incrément, valeurs précises, baisses) : plateforme intégrée ou plugin. */
+/** Milestone editor of a statistic (sequence, increment, exact values, drops): built-in platform or plugin. */
 function RuleEditor({ rk, label, rule }: { rk: string; label: string; rule: MilestoneRule }): JSX.Element {
   const { t, settings, updateSettings } = useApp()
   const [custom, setCustom] = useState(rule.custom.join(', '))
@@ -30,7 +30,7 @@ function RuleEditor({ rk, label, rule }: { rk: string; label: string; rule: Mile
     setCustom(list.join(', ')); save({ custom: list })
   }
 
-  // Aperçu des premiers paliers produits par la règle.
+  // Preview of the first milestones produced by the rule.
   const preview: number[] = []
   for (let v = 0, i = 0; i < 6; i++) { const n = nextThreshold(rule, v); if (n === null) break; preview.push(n); v = n }
 
@@ -61,9 +61,9 @@ export function NotificationSettings(): JSX.Element {
   const defaults = DEFAULT_TEMPLATES[s.lang]
   const setTpl = (k: TemplateKey, v: string): void => void up({ notifyTemplates: { ...s.notifyTemplates, [k]: v } })
 
-  // Aperçu des textes avec des valeurs d'exemple.
+  // Preview of the texts with sample values.
   const sample = templateVars({ platform: 'YouTube', stat: t('metric.subscribers'), value: fmt(1002, s.lang), threshold: fmt(1000, s.lang), previous: fmt(998, s.lang),
-    account: 'Ma chaîne', rank: 'Platinum 1', oldRank: 'Gold 5' })
+    account: SAMPLE_ACCOUNT[s.lang], rank: 'Platinum 1', oldRank: 'Gold 5' })
 
   return (
     <div>

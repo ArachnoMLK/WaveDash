@@ -2,12 +2,12 @@ import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
-// Trois cibles : processus principal, preload (pont sécurisé) et interface React.
+// Three targets: main process, preload (secure bridge) and React interface.
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     resolve: { alias: { '@shared': resolve('src/shared') } },
-    // Deux points d'entrée : l'appli, et le processus séparé qui exécute les plugins (out/main/pluginHost.js).
+    // Two entry points: the app, and the separate process that runs plugins (out/main/pluginHost.js).
     build: { rollupOptions: { input: { index: resolve('src/main/index.ts'), pluginHost: resolve('src/main/plugins/pluginHost.ts') } } }
   },
   preload: {

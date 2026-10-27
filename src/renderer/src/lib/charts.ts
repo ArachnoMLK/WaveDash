@@ -1,5 +1,5 @@
-// Construction des options ECharts en niveaux de gris. Les séries sont distinguées par la nuance ET par des
-// motifs (hachures) grâce à l'option `aria.decal`, pour rester lisibles sans couleur.
+// Builds greyscale ECharts options. Series are told apart by shade AND by
+// patterns (hatching) through the `aria.decal` option, to stay readable without colour.
 import * as echarts from 'echarts/core'
 import { BarChart, LineChart, PieChart, RadarChart, ScatterChart } from 'echarts/charts'
 import { AriaComponent, GridComponent, LegendComponent, RadarComponent, TooltipComponent } from 'echarts/components'
@@ -25,7 +25,7 @@ const MULTI = {
   light: ['#2f6fe0', '#1f9d57', '#d94c4c', '#c98a00', '#8a52d6', '#0f9ba3', '#d9702a']
 }
 
-/** Mélange deux couleurs hexadécimales (t = part de b). */
+/** Mixes two hex colours (t = share of b). */
 function mix(a: string, b: string, t: number): string {
   const p = (h: string, i: number): number => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16)
   const c = (i: number): string => Math.round(p(a, i) * (1 - t) + p(b, i) * t).toString(16).padStart(2, '0')
@@ -47,7 +47,7 @@ function base(th: ChartTheme): EChartsOption {
     color: palette(th),
     textStyle: { color: ink, fontFamily: 'Inter Variable, Segoe UI, sans-serif' },
     animationDuration: th.animMs, animationDurationUpdate: th.animMs, animationEasing: 'cubicOut',
-    // Les motifs (hachures) ne servent qu'en niveaux de gris ; avec des couleurs, la couleur suffit.
+    // Patterns (hatching) are only used in greyscale; with colours, colour is enough.
     aria: { enabled: true, decal: { show: th.palette === 'mono' } },
     tooltip: {
       trigger: 'item', confine: true, borderWidth: 0, textStyle: { color: ink, fontSize: 12.5 },
@@ -62,7 +62,7 @@ const axisStyle = (th: ChartTheme) => ({
   splitLine: { lineStyle: { color: th.dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' } }
 })
 
-/** Courbe / aire / barres dans le temps. L'axe Y ne démarre pas à zéro pour que l'évolution reste visible. */
+/** Line / area / bars over time. The Y axis does not start at zero so the trend stays visible. */
 export function timeOption(type: ChartType, series: NamedSeries[], th: ChartTheme, unit = ''): EChartsOption {
   const kind = type === 'bar' ? 'bar' : 'line'
   const ax = axisStyle(th)
@@ -83,7 +83,7 @@ export function timeOption(type: ChartType, series: NamedSeries[], th: ChartThem
   } as EChartsOption
 }
 
-/** Données par catégorie : barres, camembert ou radar. */
+/** Data by category: bars, pie or radar. */
 export function categoryOption(type: ChartType, data: Category[], th: ChartTheme, unit = '', radarMax?: number): EChartsOption {
   const ax = axisStyle(th)
   const tip = { ...(base(th).tooltip as object), valueFormatter: (v: unknown) => `${fmt(Number(v), th.lang, 1)}${unit}` }
@@ -105,13 +105,13 @@ export function categoryOption(type: ChartType, data: Category[], th: ChartTheme
 }
 
 
-/** Frise d'événements : une ligne par joueur, un repère par événement (ex. KO), l'axe horizontal en minutes:secondes. */
+/** Event timeline: one row per player, one marker per event (e.g. KO), horizontal axis in minutes:seconds. */
 const MARK: Record<string, { symbol: string; symbolSize: number }> = { ko: { symbol: 'diamond', symbolSize: 16 }, action: { symbol: 'circle', symbolSize: 7 }, mark: { symbol: 'triangle', symbolSize: 11 } }
 export function timelineOption(tl: { duration: number; lanes: string[]; events: { t: number; lane: number; label?: string; kind?: string }[] }, th: ChartTheme): EChartsOption {
   const ax = axisStyle(th)
   const mmss = (v: number): string => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`
   const pal = palette(th)
-  // Graduations rondes (10 s, 30 s, 1 min…) ; la fin exacte de la partie n'a pas d'étiquette, pour ne pas chevaucher la dernière.
+  // Round ticks (10 s, 30 s, 1 min…); the exact end of the game has no label, so it does not overlap the last one.
   const step = [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600].find((s) => tl.duration / s <= 7) ?? 3600
   return {
     ...base(th),
@@ -123,14 +123,14 @@ export function timelineOption(tl: { duration: number; lanes: string[]; events: 
     series: [{
       type: 'scatter', symbol: 'diamond', symbolSize: 16,
       itemStyle: { color: (p: any) => pal[p.value[1] % pal.length] },
-      // `name` et non `label` : `label` est une option de style d'ECharts pour chaque point.
-      // Forme selon le type : KO (losange), action (petit rond), repère (triangle) ; les KOs dessinés en dernier, au-dessus.
+      // `name` and not `label`: `label` is an ECharts style option for each point.
+      // Shape by type: KO (diamond), action (small dot), mark (triangle); KOs drawn last, on top.
       data: [...tl.events].sort((a, b) => (a.kind && a.kind !== 'ko' ? 0 : 1) - (b.kind && b.kind !== 'ko' ? 0 : 1)).map((e) => ({ value: [e.t, e.lane], name: e.label ?? '', ...MARK[e.kind ?? 'ko'] }))
     }]
   } as EChartsOption
 }
 
-/** Courbes au fil d'une partie : un point toutes les `step` secondes, axe horizontal en minutes:secondes. */
+/** Curves over a game: one point every `step` seconds, horizontal axis in minutes:seconds. */
 export function seriesOption(sr: { unit?: string; step: number; lines: { name: string; values: number[] }[] }, th: ChartTheme): EChartsOption {
   const ax = axisStyle(th)
   const mmss = (v: number): string => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`
@@ -149,12 +149,12 @@ export function seriesOption(sr: { unit?: string; step: number; lines: { name: s
   } as EChartsOption
 }
 
-/** Barres par catégorie, une couleur par série (groupées ou empilées) ; étiquettes inclinées si elles sont nombreuses. */
+/** Bars by category, one colour per series (grouped or stacked); labels tilted when there are many. */
 export function barsOption(b: { unit?: string; stacked?: boolean; categories: string[]; series: { name: string; values: number[] }[] }, th: ChartTheme): EChartsOption {
   const ax = axisStyle(th), unit = b.unit ? ` ${b.unit}` : ''
   return {
     ...base(th),
-    color: palette({ ...th, palette: th.palette === 'mono' ? 'multi' : th.palette }),   // plusieurs séries : toujours en couleurs
+    color: palette({ ...th, palette: th.palette === 'mono' ? 'multi' : th.palette }),   // several series: always in colour
     grid: { left: 8, right: 12, top: b.series.length > 1 ? 34 : 12, bottom: 4, containLabel: true },
     legend: b.series.length > 1 ? { top: 0, type: 'scroll', textStyle: { color: th.dark ? '#bbb' : '#444' }, icon: 'roundRect' } : undefined,
     tooltip: { ...(base(th).tooltip as object), trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (v) => `${fmt(Number(v), th.lang, 1)}${unit}` },

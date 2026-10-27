@@ -1,4 +1,4 @@
-// Éléments communs aux pages de paramètres.
+// Elements shared by the settings pages.
 import { ReactNode } from 'react'
 import { Reveal } from './ui'
 
@@ -10,7 +10,7 @@ export const Section = ({ title, children, delay = 0 }: { title: string; childre
   <Reveal className="glass pad sect" delay={delay}><h2 style={{ marginBottom: 6 }}>{title}</h2>{children}</Reveal>
 )
 
-/** Curseur avec sa valeur affichée à droite. */
+/** Slider with its value shown on the right. */
 export function Slider({ value, min, max, unit = '', onChange }: { value: number; min: number; max: number; unit?: string; onChange: (v: number) => void }): JSX.Element {
   return (
     <div className="slider">

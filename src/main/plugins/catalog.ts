@@ -1,5 +1,5 @@
-// Catalogue en ligne des plugins : index.json du dépôt ArachnoMLK/WaveDash-Plugins (adresse fixe, non modifiable).
-// Chaque paquet téléchargé est vérifié (taille, empreinte SHA-256 de l'index) avant d'être proposé à l'installation.
+// Online plugin catalog: index.json of the ArachnoMLK/WaveDash-Plugins repository (fixed address, not editable).
+// Each downloaded package is checked (size, SHA-256 hash from the index) before being offered for install.
 import { app } from 'electron'
 import { createHash, createPublicKey, verify } from 'crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
@@ -9,7 +9,7 @@ import * as db from '../db'
 
 const BASE = 'https://raw.githubusercontent.com/ArachnoMLK/WaveDash-Plugins/main/'
 const MAX_INDEX = 1024 * 1024, MAX_PACKAGE = 5 * 1024 * 1024, TTL = 3 * 3_600_000
-/** Clé publique du catalogue : index.json doit être signé (Ed25519) par la clé privée du propriétaire, qui n'est jamais en ligne. */
+/** Catalog public key: index.json must be signed (Ed25519) by the owner's private key, which is never online. */
 const CATALOG_KEY = createPublicKey(`-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAt6yhLud7hcezlS7tvMLEh+twMsuZ2xg+GvZo2KHd1Dc=
 -----END PUBLIC KEY-----`)
@@ -31,15 +31,15 @@ async function download(url: string, max: number): Promise<Buffer> {
     const r = await fetch(url, { signal: ctrl.signal, headers: { 'user-agent': 'WaveDash' } })
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
     const len = Number(r.headers.get('content-length') || 0)
-    if (len > max) throw new Error('fichier trop volumineux')
+    if (len > max) throw new Error('file too large')
     const buf = Buffer.from(await r.arrayBuffer())
-    if (buf.length > max) throw new Error('fichier trop volumineux')
+    if (buf.length > max) throw new Error('file too large')
     return buf
   } finally { clearTimeout(timer) }
 }
 
 const str = (v: unknown, max = 200): string | null => (typeof v === 'string' && v.length <= max ? v : null)
-/** Contrôle strict de chaque entrée : tout ce qui est incorrect est écarté. */
+/** Strict check of every entry: anything incorrect is dropped. */
 function parseIndex(raw: unknown): CatalogEntry[] {
   const out: CatalogEntry[] = []
   const list = (raw as { plugins?: unknown })?.plugins
@@ -59,20 +59,20 @@ function parseIndex(raw: unknown): CatalogEntry[] {
   return out
 }
 
-/** Index du catalogue (cache de 3 h ; en cas d'échec réseau, la dernière copie enregistrée). */
+/** Catalog index (3 h cache; on network failure, the last saved copy). */
 export async function getCatalog(force = false): Promise<CatalogView> {
   let offline = false
   if (force || !cache || Date.now() - cache.at > TTL) {
     try {
-      // Paramètre unique : contourne le cache de GitHub (jusqu'à 5 min), pour voir une publication tout de suite.
+      // Unique parameter: bypasses the GitHub cache (up to 5 min), to see a release right away.
       const v = Date.now(), buf = await download(BASE + 'index.json?v=' + v, MAX_INDEX), sig = await download(BASE + 'index.json.sig?v=' + v, 1024)
       const sigBuf = Buffer.from(sig.toString('utf8').trim(), 'base64')
-      if (!signedBy(buf, sigBuf)) throw new Error('signature du catalogue invalide')
+      if (!signedBy(buf, sigBuf)) throw new Error('invalid catalog signature')
       cache = { entries: parseIndex(JSON.parse(buf.toString('utf8'))), at: Date.now() }
       writeFileSync(join(dir(), 'index.json'), buf); writeFileSync(join(dir(), 'index.json.sig'), sigBuf)
     } catch {
       offline = true
-      // Hors ligne (ou index refusé) : la dernière copie enregistrée, seulement si sa signature est valide elle aussi.
+      // Offline (or index rejected): the last saved copy, only if its signature is valid too.
       if (!cache) try {
         const buf = readFileSync(join(dir(), 'index.json')), sigBuf = readFileSync(join(dir(), 'index.json.sig'))
         cache = signedBy(buf, sigBuf) ? { entries: parseIndex(JSON.parse(buf.toString('utf8'))), at: 0 } : null
@@ -85,13 +85,13 @@ export async function getCatalog(force = false): Promise<CatalogView> {
   return { entries, fetchedAt: cache?.at || null, offline }
 }
 
-/** Télécharge un paquet du catalogue et vérifie taille et empreinte. Renvoie le chemin du fichier vérifié. */
+/** Downloads a catalog package and checks size and hash. Returns the path of the verified file. */
 export async function fetchPackage(id: string): Promise<string> {
   const view = await getCatalog()
   const e = view.entries.find((x) => x.id === id)
-  if (!e) throw new Error('plugin absent du catalogue')
+  if (!e) throw new Error('plugin not in the catalog')
   const buf = await download(BASE + e.file, MAX_PACKAGE)
-  if (buf.length !== e.size || createHash('sha256').update(buf).digest('hex') !== e.sha256) throw new Error('empreinte incorrecte : paquet refusé')
+  if (buf.length !== e.size || createHash('sha256').update(buf).digest('hex') !== e.sha256) throw new Error('hash mismatch: package rejected')
   const path = join(dir(), `${e.id}-${e.version}.wdsh`)
   writeFileSync(path, buf)
   return path

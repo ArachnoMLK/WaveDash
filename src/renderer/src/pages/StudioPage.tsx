@@ -1,10 +1,10 @@
-// Studio Brawlhalla : rendus de légendes et de cosmétiques, bibliothèque, assets et musiques du jeu.
+// Brawlhalla Studio: renders of legends and cosmetics, library, game assets and music.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type {
   StudioAnim, StudioAnimGroup, StudioAssetKind, StudioCatalog, StudioExportFormat, StudioItem, StudioJob, StudioKind,
   StudioRender, StudioRenderRequest, StudioStatus, StudioTrack, StudioWeaponSkins
 } from '@shared/studio'
-import { exportSequence, STUDIO_KINDS, STUDIO_MAX_DURATION, WEAPON_FR, weaponOfAnim, type StudioLoopMode } from '@shared/studio'
+import { exportSequence, STUDIO_KINDS, STUDIO_MAX_DURATION, weaponName, weaponOfAnim, type StudioLoopMode } from '@shared/studio'
 import { Reveal, Switch, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
 import { ThumbEditor } from './studio/ThumbEditor'
@@ -15,15 +15,15 @@ const studio = window.api.studio
 type Tab = 'create' | 'mini' | 'library' | 'assets' | 'music'
 const EXPORTS: StudioExportFormat[] = ['gif', 'apng', 'webm', 'mov', 'mp4', 'png']
 
-/** Mémoire locale de l'interface (dernier choix), sans casser l'affichage si le stockage est indisponible. */
+/** Local memory of the interface (last choice), without breaking the display if storage is unavailable. */
 const mem = {
   get<T>(k: string, d: T): T { try { return (JSON.parse(localStorage.getItem('studio:' + k) ?? 'null') as T) ?? d } catch { return d } },
-  set(k: string, v: unknown): void { try { localStorage.setItem('studio:' + k, JSON.stringify(v)) } catch { /* ignoré */ } }
+  set(k: string, v: unknown): void { try { localStorage.setItem('studio:' + k, JSON.stringify(v)) } catch { /* ignored */ } }
 }
 
-/* ---------------------------------------------------------------- lecteur d'images animées */
-/** Rendu image par image, comme la timeline de MiniaMaker : lecture (vitesse, boucle), barre, bande de vignettes numérotées.
- *  Dans la bande : clic = afficher l'image, Ctrl+clic = ajouter / retirer, Maj+clic = plage, Ctrl+A = tout. */
+/* ---------------------------------------------------------------- animated frame player */
+/** Frame by frame render, like the MiniaMaker timeline: playback (speed, loop), bar, strip of numbered thumbnails.
+ *  In the strip: click = show the frame, Ctrl+click = add / remove, Shift+click = range, Ctrl+A = all. */
 interface PlayerSel { frames: number[]; fps: number; loop: StudioLoopMode }
 type LoopMode = StudioLoopMode
 const FPS = [6, 12, 24, 30, 60]
@@ -37,7 +37,7 @@ function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
   const [playing, setPlaying] = useState(true)
   const [frame, setFrame] = useState(0)
   const [fps, setFps] = useState<number>(mem.get('fps', 24))
-  // Boucle : non, toute l'animation, ou comme en jeu (l'intro une fois, puis reprise au point de boucle de l'animation).
+  // Loop: off, the whole animation, or like in game (the intro once, then back to the animation's loop point).
   const [loopMode, setLoopMode] = useState<LoopMode>(mem.get('loopMode', 'game'))
   const loopAt = render.loopStart ?? 0, loopEnd = render.loopEnd ?? n
   const [sel, setSel] = useState<number[]>([])
@@ -63,8 +63,8 @@ function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
   }, [render, max])
   useEffect(() => {
     draw(frame); onFrame?.(frame)
-    // garde l'image courante visible dans la bande
-    // (sans scrollIntoView, qui ferait aussi défiler la page)
+    // keeps the current frame visible in the strip
+    // (without scrollIntoView, which would also scroll the page)
     const box = strip.current, cell = box?.querySelector<HTMLElement>(`[data-i="${frame}"]`)
     if (box && cell) {
       if (cell.offsetLeft < box.scrollLeft) box.scrollLeft = cell.offsetLeft - 4
@@ -75,7 +75,7 @@ function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
   useEffect(() => {
     if (!playing || n < 2) return
     const timer = setInterval(() => setFrame((f) => {
-      // Comme en jeu : après l'intro, la boucle se répète sans jouer la fin de l'animation.
+      // Like in game: after the intro, the loop repeats without playing the end of the animation.
       if (loopMode === 'game' && f >= loopAt && f + 1 >= loopEnd) return loopAt
       if (f + 1 < n) return f + 1
       if (loopMode === 'all') return 0
@@ -145,7 +145,7 @@ function Player({ render, max = 520, controls = false, onFrame, onSelect }: {
 
 function ExportBar({ render, sel, onSaved }: { render: StudioRender; sel?: PlayerSel; onSaved: (msg: string) => void }): JSX.Element {
   const { t } = useApp()
-  // Durée voulue (s) : l'export répète l'animation selon le mode de boucle du lecteur (ex. 10 s d'emote en boucle).
+  // Desired duration (s): the export repeats the animation according to the player's loop mode (e.g. 10 s of a looping emote).
   const [duration, setDuration] = useState<string>(mem.get('duration', ''))
   const secs = Math.min(STUDIO_MAX_DURATION, Math.max(0, Number(duration.replace(',', '.')) || 0))
   const opts = { frames: sel?.frames.length ? sel.frames : undefined, fps: sel?.fps, duration: secs || undefined, loop: sel?.loop ?? 'game' }
@@ -167,7 +167,7 @@ function ExportBar({ render, sel, onSaved }: { render: StudioRender; sel?: Playe
   )
 }
 
-/* ---------------------------------------------------------------- onglet Créer */
+/* ---------------------------------------------------------------- Create tab */
 function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
   const { t } = useApp()
   const [kind, setKind] = useState<StudioKind>(mem.get('kind', 'legend'))
@@ -176,7 +176,7 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
   const [costume, setCostume] = useState<string>(mem.get('costume', ''))
   const [color, setColor] = useState<string>(mem.get('color', ''))
   const [wskins, setWskins] = useState<StudioWeaponSkins>({})
-  // skin choisi pour chaque arme de base de la légende ('' = celui du skin de la légende)
+  // skin chosen for each base weapon of the legend ('' = the one of the legend's skin)
   const [wpick, setWpick] = useState<Record<string, string>>({})
   const [groups, setGroups] = useState<StudioAnimGroup[] | null>(null)
   const [group, setGroup] = useState<string>(mem.get('group', 'emotes'))
@@ -194,15 +194,15 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
   const [shownFrame, setShownFrame] = useState(0)
   const [sel, setSel] = useState<PlayerSel>({ frames: [], fps: 24, loop: 'game' })
   const [stack, setStack] = useState<StackItem[]>([])
-  const { settings } = useApp() as unknown as { settings: { lang?: string } }
-  const tr = (fr: string, en: string): string => (settings?.lang === 'en' ? en : fr)
+  const { settings } = useApp()
+  const tr = (en: string, fr: string): string => (settings.lang === 'fr' ? fr : en)
   const ready = status.state === 'ready'
 
   useEffect(() => { mem.set('kind', kind); setQuery(''); setItem(null) }, [kind])
-  useEffect(() => { if (ready && !cat) void studio.catalog().then(setCat) }, [ready, cat]) // aussi pour les effets par légende
+  useEffect(() => { if (ready && !cat) void studio.catalog().then(setCat) }, [ready, cat]) // also for the per-legend effects
   useEffect(() => { void studio.library().then((l) => setCurrent((c) => c ?? l[0] ?? null)) }, [])
 
-  // Légende : skins de la légende, puis ses animations rangées automatiquement.
+  // Legend: the legend's skins, then its animations sorted automatically.
   const costumes = useMemo(() => cat?.costumes.filter((c) => c.hero === hero) ?? [], [cat, hero])
   useEffect(() => {
     if (!costumes.length) return
@@ -223,7 +223,7 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
   const heroWeapons = cat?.heroes.find((h) => h.name === hero)?.weapons ?? []
   useEffect(() => { mem.set('costume', costume); mem.set('color', color); mem.set('group', group); mem.set('scale', scale) }, [costume, color, group, scale])
 
-  // Cosmétiques, portraits, effets.
+  // Cosmetics, portraits, effects.
   useEffect(() => {
     if (!ready || kind === 'legend') return
     setItems(null)
@@ -246,7 +246,7 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
     if (kind === 'legend') {
       if (!anim) return null
       const skin = costumes.find((c) => c.name === costume)
-      // le skin d'arme suit l'arme de l'animation (épée pour une attaque à l'épée…) ; aucun pour une emote
+      // the weapon skin follows the animation's weapon (sword for a sword attack…); none for an emote
       const w = weaponOfAnim(anim.animClass, heroWeapons), weapon = w ? wpick[w] || undefined : undefined
       const wname = weapon ? wskins[w!]?.find((x) => x.name === weapon)?.display : ''
       return { kind, animClass: anim.animClass, animation: anim.name, animations: anim.parts, costume, color: color || undefined, weapon, scale, flip, label: `${skin?.display || hero}${wname ? ` (${wname})` : ''} — ${anim.label}` }
@@ -297,7 +297,7 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
             {heroWeapons.length > 0 && (
               <div className="st-two">
                 {heroWeapons.map((w) => (
-                  <label key={w} className="st-field"><span>{t('st.weaponSkin', { w: WEAPON_FR[w] ?? w })}</span>
+                  <label key={w} className="st-field"><span>{t('st.weaponSkin', { w: weaponName(w, settings.lang) })}</span>
                     <select value={wpick[w] ?? ''} onChange={(e) => pickWeapon(w, e.target.value)}>
                       <option value="">{t('st.weaponDefault')}</option>
                       {(wskins[w] ?? []).map((x) => <option key={x.name} value={x.name}>{x.own ? '★ ' : ''}{x.display}</option>)}
@@ -350,7 +350,7 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
           </>
         )}
 
-        {/* toujours visible en bas du panneau, même avec une longue liste au-dessus */}
+        {/* always visible at the bottom of the panel, even with a long list above */}
         <div className="st-actions">
         <div className="st-out">
           <label className="st-field grow"><span>{t('st.quality')} · {scale}</span>
@@ -373,7 +373,7 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
         {!stack.length && <div className="st-stage">{current ? <Player render={current} controls onFrame={setShownFrame} onSelect={setSel} /> : <span className="muted">—</span>}</div>}
         {current && (
           <button className="btn small st-stack-add" disabled={stack.some((s) => s.render.id === current.id)} onClick={() => setStack([...stack, stackItem(current, stack.length ? 40 * stack.length : 0, 0)])}>
-            ＋ {stack.length ? tr(`Superposer « ${current.label.slice(0, 40)} »`, `Stack “${current.label.slice(0, 40)}”`) : tr('Superposer d’autres rendus (composition)', 'Stack other renders (composition)')}
+            ＋ {stack.length ? tr(`Stack “${current.label.slice(0, 40)}”`, `Superposer « ${current.label.slice(0, 40)} »`) : tr('Stack other renders (composition)', 'Superposer d’autres rendus (composition)')}
           </button>
         )}
         {current && !stack.length && (
@@ -393,7 +393,7 @@ function CreateTab({ status }: { status: StudioStatus }): JSX.Element {
   )
 }
 
-/* ---------------------------------------------------------------- onglet Bibliothèque */
+/* ---------------------------------------------------------------- Library tab */
 function LibraryTab(): JSX.Element {
   const { t } = useApp()
   const [list, setList] = useState<StudioRender[] | null>(null)
@@ -420,7 +420,7 @@ function LibraryTab(): JSX.Element {
   )
 }
 
-/* ---------------------------------------------------------------- onglet Assets */
+/* ---------------------------------------------------------------- Assets tab */
 const ASSET_KINDS: StudioAssetKind[] = ['banners', 'avatars', 'sprites', 'backgrounds', 'maps', 'images']
 function AssetsTab(): JSX.Element {
   const { t } = useApp()
@@ -451,7 +451,7 @@ function AssetsTab(): JSX.Element {
   )
 }
 
-/* ---------------------------------------------------------------- onglet Musiques */
+/* ---------------------------------------------------------------- Music tab */
 function MusicTab(): JSX.Element {
   const { t } = useApp()
   const [tracks, setTracks] = useState<StudioTrack[] | null>(null)

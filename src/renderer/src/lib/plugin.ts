@@ -1,10 +1,10 @@
 import { InstalledPlugin, PluginAccount, PluginMetric } from '@shared/plugin'
-import { Lang } from '@shared/types'
+import { Lang, localeOf } from '@shared/types'
 
-/** Formate la valeur d'une métrique de plugin selon son manifeste (nombre, pourcentage, rang, durée). */
+/** Formats a plugin metric value according to its manifest (number, percentage, rank, duration). */
 export function fmtPluginMetric(m: PluginMetric, v: number, lang: Lang): string {
   const nf = (n: number, d: number): string =>
-    new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-US', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n)
+    new Intl.NumberFormat(localeOf(lang), { minimumFractionDigits: d, maximumFractionDigits: d }).format(n)
   if (m.format === 'percent') return `${nf(v, m.decimals)} %`
   if (m.format === 'rank') return `#${nf(v, 0)}`
   if (m.format === 'duration') {
@@ -14,13 +14,13 @@ export function fmtPluginMetric(m: PluginMetric, v: number, lang: Lang): string 
   return `${nf(v, m.decimals)}${m.unit ? ' ' + m.unit : ''}`
 }
 
-/** Route d'une page de compte de plugin. */
+/** Route of a plugin account page. */
 export const pluginRoute = (accountId: number): string => `plugin:${accountId}`
 export const pluginAccountOfRoute = (route: string): number | null => (route.startsWith('plugin:') ? Number(route.slice(7)) || null : null)
-/** Onglets des comptes de plugins installés, dans l'ordre de création. */
+/** Tabs of installed plugin accounts, in creation order. */
 export const pluginNavIds = (plugins: InstalledPlugin[], accounts: PluginAccount[]): string[] =>
   accounts.filter((a) => plugins.some((p) => p.id === a.pluginId)).map((a) => pluginRoute(a.id))
-/** Nom de l'onglet d'un compte de plugin : le plugin, suivi du compte s'il en a plusieurs. */
+/** Tab name of a plugin account: the plugin, followed by the account if it has several. */
 export function pluginNavLabel(route: string, plugins: InstalledPlugin[], accounts: PluginAccount[]): string {
   const a = accounts.find((x) => x.id === pluginAccountOfRoute(route)), pl = a && plugins.find((p) => p.id === a.pluginId)
   if (!a || !pl) return route

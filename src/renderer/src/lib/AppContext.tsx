@@ -1,6 +1,6 @@
-// État global : réglages, comptes, langue, mises à jour. Applique thème, verre, fond, couleur et police au document.
+// Global state: settings, accounts, language, updates. Applies theme, glass, background, colour and font to the document.
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Account, AppInfo, DEFAULT_SETTINGS, MilestoneEvent, Settings, UpdateStatus } from '@shared/types'
+import { Account, AppInfo, DEFAULT_SETTINGS, MilestoneEvent, Settings, UpdateStatus, isRtl } from '@shared/types'
 import type { InstalledPlugin, PluginAccount } from '@shared/plugin'
 import { translate } from '../i18n'
 import { playSound } from './sound'
@@ -9,15 +9,15 @@ interface Ctx {
   settings: Settings
   info: AppInfo | null
   accounts: Account[]
-  /** Incrémenté à chaque actualisation de données : les pages s'en servent pour recharger. */
+  /** Incremented on every data refresh: pages use it to reload. */
   dataVersion: number
   t: (key: string, vars?: Record<string, string | number>) => string
-  /** Durée de base des transitions (s) ; 0 quand les animations sont coupées. */
+  /** Base duration of transitions (s); 0 when animations are off. */
   dur: number
-  /** Image de fond (data URL) quand le fond « Image » est choisi. */
+  /** Background image (data URL) when the "Image" background is chosen. */
   bgUrl: string | null
   update: UpdateStatus
-  /** Palier à célébrer (null = rien à afficher). */
+  /** Milestone to celebrate (null = nothing to show). */
   celebration: MilestoneEvent | null
   plugins: InstalledPlugin[]
   pluginAccounts: PluginAccount[]
@@ -39,7 +39,7 @@ const FONTS: Record<Settings['fontFamily'], string> = {
 }
 const DENSITY = { compact: 0.82, comfortable: 1, spacious: 1.2 }
 
-/** Texte lisible (noir ou blanc) sur une couleur d'accent donnée. */
+/** Readable text (black or white) on a given accent colour. */
 function inkFor(hex: string): string {
   const n = parseInt(hex.slice(1), 16)
   const lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)
@@ -79,14 +79,14 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
     return window.api.onUpdateStatus(setUpdate)
   }, [])
 
-  // Palier franchi : son et célébration selon les réglages du moment.
+  // Milestone reached: sound and celebration according to the current settings.
   useEffect(() => window.api.onMilestone((ev) => {
     const s = settingsRef.current
     if (s.notifySound) playSound(s.notifySoundKind, s.notifyVolume)
     if (s.notifyCelebration) setCelebration(ev)
   }), [])
 
-  // L'image de fond est relue quand le fichier change.
+  // The background image is read again when the file changes.
   useEffect(() => {
     if (!settings.bgImage) { setBgUrl(null); return }
     let alive = true
@@ -96,7 +96,7 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
 
   const dur = settings.animations === 0 ? 0 : 0.35 + (settings.animations / 100) * 0.9
 
-  // Apparence → variables CSS.
+  // Appearance → CSS variables.
   useEffect(() => {
     const r = document.documentElement
     const s = settings
@@ -104,8 +104,9 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
     const set = (k: string, v: string): void => r.style.setProperty(k, v)
     r.dataset.theme = s.theme
     r.lang = s.lang
+    r.dir = isRtl(s.lang) ? 'rtl' : 'ltr'          // Arabic: right-to-left layout
 
-    // Verre : fond translucide + flou, ou panneaux opaques.
+    // Glass: translucent background + blur, or opaque panels.
     const nativeOn = !!info?.nativeGlass && s.glassEnabled && s.nativeMaterial !== 'none'
     if (nativeOn) r.dataset.nativeGlass = ''; else delete r.dataset.nativeGlass
     if (s.glassEnabled) {
@@ -117,7 +118,7 @@ export function AppProvider({ children }: { children: ReactNode }): JSX.Element 
       set('--bf', 'none')
     }
 
-    // Couleur d'accent (sinon on reste en niveaux de gris).
+    // Accent colour (otherwise stay in greyscale).
     if (s.accentEnabled) {
       set('--accent', s.accentColor); set('--accent-ink', inkFor(s.accentColor)); set('--glow', `${s.accentColor}66`)
     } else {

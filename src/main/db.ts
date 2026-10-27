@@ -1,4 +1,4 @@
-// Base SQLite locale : comptes, historique (snapshots), contenus, légendes, paramètres.
+// Local SQLite database: accounts, history (snapshots), contents, captions, settings.
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
@@ -41,7 +41,7 @@ export function initDb(): void {
       falls INTEGER, damage_dealt INTEGER, match_time INTEGER, level INTEGER,
       PRIMARY KEY (account_id, legend_id)
     );
-    -- Tables prévues pour les étapes suivantes (paliers, notifications, rivaux).
+    -- Tables planned for the next steps (milestones, notifications, rivals).
     CREATE TABLE IF NOT EXISTS rivals (id INTEGER PRIMARY KEY AUTOINCREMENT, brawlhalla_id TEXT NOT NULL, name TEXT);
     CREATE TABLE IF NOT EXISTS milestones (
       id INTEGER PRIMARY KEY AUTOINCREMENT, platform TEXT, metric TEXT, kind TEXT, value REAL, enabled INTEGER DEFAULT 1
@@ -50,7 +50,7 @@ export function initDb(): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER, metric TEXT, value REAL, direction TEXT, ts INTEGER
     );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-    -- Plugins .wdsh : le script installé, ses comptes (liés à une ligne de la table accounts, plateforme plugin) et son stockage.
+    -- .wdsh plugins: the installed script, its accounts (linked to a row of the accounts table, platform plugin) and its storage.
     CREATE TABLE IF NOT EXISTS plugins (
       id TEXT PRIMARY KEY, manifest TEXT NOT NULL, script TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
       installed_at INTEGER NOT NULL, failures INTEGER NOT NULL DEFAULT 0, last_error TEXT, hash TEXT NOT NULL
@@ -63,30 +63,33 @@ export function initDb(): void {
       plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE, account_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
       PRIMARY KEY (plugin_id, account_id, key)
     );
-    -- Valeurs non numériques propres à un compte (ex. rang Brawlhalla précédent).
+    -- Non-numeric values specific to an account (e.g. previous Brawlhalla rank).
     CREATE TABLE IF NOT EXISTS account_meta (
       account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, key TEXT NOT NULL, value TEXT NOT NULL,
       PRIMARY KEY (account_id, key)
     );
-    -- Éléments renvoyés par un plugin (JSON déjà validé), consultés page par page.
+    -- Items returned by a plugin (JSON already validated), read page by page.
     CREATE TABLE IF NOT EXISTS plugin_items (
       account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE, item_id TEXT NOT NULL, ts INTEGER NOT NULL, data TEXT NOT NULL,
       PRIMARY KEY (account_id, item_id)
     );
     CREATE INDEX IF NOT EXISTS idx_plugin_items ON plugin_items(account_id, ts);
   `)
-  // Migration 0.6.2 : les éléments de plugin étaient un seul JSON dans account_meta.
+  // Migration 0.6.2: plugin items used to be a single JSON in account_meta.
   const old = db.prepare("SELECT account_id, value FROM account_meta WHERE key = 'items'").all() as { account_id: number; value: string }[]
   for (const o of old) {
-    try { savePluginItems(o.account_id, JSON.parse(o.value) as PluginItem[], 'replace') } catch { /* JSON illisible : ignoré */ }
+    try { savePluginItems(o.account_id, JSON.parse(o.value) as PluginItem[], 'replace') } catch { /* unreadable JSON: ignored */ }
     db.prepare("DELETE FROM account_meta WHERE account_id = ? AND key = 'items'").run(o.account_id)
   }
-  // Migration : la table milestone_events (créée en 0.1) reçoit une colonne pour le détail JSON.
+  // Migration: the milestone_events table (created in 0.1) gets a column for the JSON detail.
   const cols = db.prepare('PRAGMA table_info(milestone_events)').all() as { name: string }[]
   if (!cols.some((c) => c.name === 'detail')) db.exec('ALTER TABLE milestone_events ADD COLUMN detail TEXT')
 }
 
-/* ---------- Paramètres ---------- */
+/* ---------- Settings ---------- */
+/** True when the user (or a previous launch) saved this setting; false when the default applies. */
+export const hasSetting = (key: keyof Settings): boolean => !!db.prepare('SELECT 1 FROM settings WHERE key = ?').get(key)
+
 export function getSettings(): Settings {
   const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[]
   const stored: Record<string, unknown> = {}
@@ -101,7 +104,7 @@ export function setSettings(patch: Partial<Settings>): Settings {
   return getSettings()
 }
 
-/* ---------- Comptes ---------- */
+/* ---------- Accounts ---------- */
 type AccountRow = {
   id: number; platform: Platform; input: string; display_name: string; external_id: string
   avatar: string | null; demo: number; created_at: number; last_sync_at: number | null; last_error: string | null
@@ -128,7 +131,7 @@ export function insertAccount(a: Omit<Account, 'id' | 'createdAt' | 'lastSyncAt'
 
 export const deleteAccount = (id: number): void => {
   db.transaction(() => {
-    db.prepare('DELETE FROM plugin_storage WHERE account_id = ?').run(id)   // le stockage d'un plugin n'a pas de lien étranger vers accounts
+    db.prepare('DELETE FROM plugin_storage WHERE account_id = ?').run(id)   // a plugin's storage has no foreign key to accounts
     db.prepare('DELETE FROM accounts WHERE id = ?').run(id)
   })()
 }
@@ -137,7 +140,7 @@ export const markSync = (id: number, error: string | null): void => {
   db.prepare('UPDATE accounts SET last_sync_at = ?, last_error = ? WHERE id = ?').run(error ? null : Date.now(), error, id)
 }
 
-/* ---------- Historique ---------- */
+/* ---------- History ---------- */
 export function insertSnapshots(accountId: number, metrics: Partial<Record<string, number>>, ts = Date.now()): void {
   const stmt = db.prepare('INSERT INTO snapshots (account_id, metric, ts, value) VALUES (?,?,?,?)')
   const tx = db.transaction(() => {
@@ -158,7 +161,7 @@ export function getLatest(accountId: number): Record<string, number> {
   return Object.fromEntries(rows.map((r) => [r.metric, r.value]))
 }
 
-/* ---------- Contenus et légendes ---------- */
+/* ---------- Contents and captions ---------- */
 export function saveItems(accountId: number, items: ItemStat[]): void {
   const up = db.prepare(`INSERT INTO items (account_id, external_id, title, published_at, views, likes, comments)
     VALUES (?,?,?,?,?,?,?) ON CONFLICT(account_id, external_id) DO UPDATE SET
@@ -177,14 +180,14 @@ export const getItems = (accountId: number): ItemStat[] =>
   (db.prepare('SELECT * FROM items WHERE account_id = ? ORDER BY views DESC LIMIT 50').all(accountId) as any[])
     .map((r) => ({ externalId: r.external_id, title: r.title, publishedAt: r.published_at, views: r.views, likes: r.likes, comments: r.comments }))
 
-/* ---------- Valeurs propres à un compte (rang précédent) ---------- */
+/* ---------- Per-account values (previous rank) ---------- */
 export const getMeta = (accountId: number, key: string): string | null =>
   (db.prepare('SELECT value FROM account_meta WHERE account_id = ? AND key = ?').get(accountId, key) as { value: string } | undefined)?.value ?? null
 export const setMeta = (accountId: number, key: string, value: string): void => {
   db.prepare('INSERT INTO account_meta VALUES (?,?,?) ON CONFLICT(account_id, key) DO UPDATE SET value = excluded.value').run(accountId, key, value)
 }
 
-/* ---------- Événements de paliers ---------- */
+/* ---------- Milestone events ---------- */
 export function insertEvent(e: Omit<MilestoneEvent, 'id'>): number {
   const { id: _id, ...detail } = e as MilestoneEvent
   const info = db.prepare('INSERT INTO milestone_events (account_id, metric, value, direction, ts, detail) VALUES (?,?,?,?,?,?)')
@@ -195,7 +198,7 @@ export function insertEvent(e: Omit<MilestoneEvent, 'id'>): number {
 export function listEvents(limit = 50): MilestoneEvent[] {
   const rows = db.prepare('SELECT id, detail FROM milestone_events WHERE detail IS NOT NULL ORDER BY ts DESC, id DESC LIMIT ?').all(limit) as { id: number; detail: string }[]
   const out: MilestoneEvent[] = []
-  for (const r of rows) { try { out.push({ ...JSON.parse(r.detail), id: r.id }) } catch { /* ligne illisible ignorée */ } }
+  for (const r of rows) { try { out.push({ ...JSON.parse(r.detail), id: r.id }) } catch { /* unreadable row ignored */ } }
   return out
 }
 
@@ -205,7 +208,7 @@ export const allSnapshotRows = (): SnapshotRow[] =>
   db.prepare(`SELECT COALESCE('plugin:' || pa.plugin_id, a.platform) AS platform, a.display_name AS account, s.metric AS metric, s.ts AS ts, s.value AS value
     FROM snapshots s JOIN accounts a ON a.id = s.account_id LEFT JOIN plugin_accounts pa ON pa.account_id = a.id ORDER BY 1, s.metric, s.ts`).all() as SnapshotRow[]
 
-/** Dernière valeur connue d'une métrique à l'instant `ts` (ou avant), sinon null. */
+/** Last known value of a metric at time `ts` (or before), otherwise null. */
 export const valueAt = (accountId: number, metric: MetricKey, ts: number): number | null =>
   (db.prepare('SELECT value FROM snapshots WHERE account_id = ? AND metric = ? AND ts <= ? ORDER BY ts DESC LIMIT 1').get(accountId, metric, ts) as { value: number } | undefined)?.value ?? null
 
@@ -216,7 +219,7 @@ export interface PluginAccountRow { account_id: number; plugin_id: string; input
 export const getPluginRow = (id: string): PluginRow | undefined => db.prepare('SELECT * FROM plugins WHERE id = ?').get(id) as PluginRow | undefined
 export const listPluginRows = (): PluginRow[] => db.prepare('SELECT * FROM plugins ORDER BY installed_at').all() as PluginRow[]
 
-/** Installe ou met à jour un plugin ; ses comptes, clés et stockage sont conservés. */
+/** Installs or updates a plugin; its accounts, keys and storage are kept. */
 export function upsertPlugin(id: string, manifest: string, script: string, hash: string): void {
   db.prepare(`INSERT INTO plugins (id, manifest, script, enabled, installed_at, failures, last_error, hash) VALUES (?,?,?,1,?,0,NULL,?)
     ON CONFLICT(id) DO UPDATE SET manifest = excluded.manifest, script = excluded.script, hash = excluded.hash, enabled = 1, failures = 0, last_error = NULL`)
@@ -228,7 +231,7 @@ export const setPluginEnabled = (id: string, enabled: boolean): void => {
 export const setPluginState = (id: string, failures: number, lastError: string | null, disable = false): void => {
   db.prepare('UPDATE plugins SET failures = ?, last_error = ?, enabled = CASE WHEN ? THEN 0 ELSE enabled END WHERE id = ?').run(failures, lastError, disable ? 1 : 0, id)
 }
-/** Supprime le plugin, ses comptes (et leur historique) et son stockage. */
+/** Removes the plugin, its accounts (and their history) and its storage. */
 export function deletePlugin(id: string): void {
   db.transaction(() => {
     db.prepare('DELETE FROM accounts WHERE id IN (SELECT account_id FROM plugin_accounts WHERE plugin_id = ?)').run(id)
@@ -240,7 +243,7 @@ export const setPluginAccountInputs = (accountId: number, inputs: Record<string,
   db.prepare('UPDATE plugin_accounts SET inputs = ? WHERE account_id = ?').run(JSON.stringify(inputs), accountId)
 }
 
-/** Rattache un compte existant (et tout son historique) à un plugin. */
+/** Attaches an existing account (and all its history) to a plugin. */
 export function convertToPluginAccount(accountId: number, pluginId: string, inputs: Record<string, string>): void {
   db.transaction(() => {
     db.prepare("UPDATE accounts SET platform = 'plugin', input = '' WHERE id = ?").run(accountId)
@@ -265,7 +268,7 @@ const PA_SELECT = `SELECT pa.account_id, pa.plugin_id, pa.inputs, a.display_name
 export const listPluginAccountRows = (): PluginAccountRow[] => db.prepare(`${PA_SELECT} ORDER BY pa.account_id`).all() as PluginAccountRow[]
 export const getPluginAccountRow = (accountId: number): PluginAccountRow | undefined => db.prepare(`${PA_SELECT} WHERE pa.account_id = ?`).get(accountId) as PluginAccountRow | undefined
 
-/** Tout le stockage d'un compte de plugin (copié dans le processus des plugins avant une exécution). */
+/** All the storage of a plugin account (copied into the plugin process before a run). */
 export function pluginStorageAll(pluginId: string, accountId: number): Record<string, string> {
   const out: Record<string, string> = {}
   for (const r of db.prepare('SELECT key, value FROM plugin_storage WHERE plugin_id = ? AND account_id = ?').all(pluginId, accountId) as { key: string; value: string }[]) out[r.key] = r.value
@@ -279,10 +282,10 @@ export const pluginStorageSet = (pluginId: string, accountId: number, key: strin
   db.prepare('INSERT INTO plugin_storage VALUES (?,?,?,?) ON CONFLICT(plugin_id, account_id, key) DO UPDATE SET value = excluded.value').run(pluginId, accountId, key, value)
 }
 
-/** Ajoute des points d'historique fournis par un plugin, sans doublon (même compte, métrique et instant). */
-/** Historique renvoyé par un plugin : il fait foi de son premier point jusqu'à maintenant. Pour chaque métrique, les points
- *  déjà enregistrés sur cette période sont remplacés : un plugin qui complète des données passées corrige ainsi les cumuls
- *  calculés avant, y compris les relevés pris pendant qu'il rattrapait son retard. Les points plus anciens ne sont pas touchés. */
+/** Adds history points provided by a plugin, without duplicates (same account, metric and time). */
+/** History returned by a plugin: it is authoritative from its first point until now. For each metric, the points
+ *  already recorded over that period are replaced: a plugin that fills in past data thus corrects the totals
+ *  computed before, including readings taken while it was catching up. Older points are left untouched. */
 export function insertHistory(accountId: number, points: { ts: number; metrics: Record<string, number> }[], now = Date.now()): void {
   const span: Record<string, [number, number]> = {}
   for (const p of points) for (const m of Object.keys(p.metrics)) {
@@ -297,8 +300,8 @@ export function insertHistory(accountId: number, points: { ts: number; metrics: 
   })()
 }
 
-/* ---------- Éléments de plugin ---------- */
-/** `replace` : la liste remplace l'ancienne. `keep` : ajout ou mise à jour par identifiant, au plus `maxStoredItems` (les plus récents). */
+/* ---------- Plugin items ---------- */
+/** `replace`: the list replaces the old one. `keep`: add or update by identifier, at most `maxStoredItems` (the newest). */
 export function savePluginItems(accountId: number, items: PluginItem[], mode: 'replace' | 'keep'): void {
   const up = db.prepare('INSERT INTO plugin_items VALUES (?,?,?,?) ON CONFLICT(account_id, item_id) DO UPDATE SET ts = excluded.ts, data = excluded.data')
   db.transaction(() => {
@@ -311,11 +314,11 @@ export function savePluginItems(accountId: number, items: PluginItem[], mode: 'r
 
 const MONTH = "strftime('%Y-%m', ts / 1000, 'unixepoch', 'localtime')"
 
-/** Une page d'éléments, du plus récent au plus ancien, éventuellement limitée à un mois (AAAA-MM). */
-/** Tri : 'ts' (date), 'title' ou la clé d'une colonne du plugin ; les éléments sans valeur passent en dernier.
- *  Recherche : `scope` = 'all' (tout l'élément, détail compris), 'title' ou la clé d'une colonne. Pendant une recherche,
- *  `statKeys` donne les colonnes sur lesquelles calculer tes stats (moyennes, répartitions). */
-/** `match` : colonnes égales à une valeur (filtres de la barre du haut) ; `since` : éléments datés de cet instant ou après. */
+/** A page of items, newest to oldest, optionally limited to one month (YYYY-MM). */
+/** Sort: 'ts' (date), 'title' or a plugin column key; items without a value go last.
+ *  Search: `scope` = 'all' (the whole item, detail included), 'title' or a column key. During a search,
+ *  `statKeys` gives the columns to compute your stats on (averages, distributions). */
+/** `match`: columns equal to a value (top bar filters); `since`: items dated at or after this time. */
 export function listPluginItems(accountId: number, offset: number, limit: number, month?: string, sortKey = 'ts', desc = true, query = '',
   scope = 'all', statKeys: string[] = [], match: Record<string, string> = {}, since = 0): PluginItemsPage {
   let where = month ? `account_id = ? AND ts > 0 AND ${MONTH} = ?` : 'account_id = ?'
@@ -340,12 +343,12 @@ export function listPluginItems(accountId: number, offset: number, limit: number
   const months = db.prepare(`SELECT ${MONTH} AS month, COUNT(*) AS count FROM plugin_items WHERE account_id = ? AND ts > 0 GROUP BY month ORDER BY month DESC`)
     .all(accountId) as { month: string; count: number }[]
   const items: PluginItem[] = []
-  for (const r of rows) { try { items.push(JSON.parse(r.data) as PluginItem) } catch { /* ligne illisible ignorée */ } }
+  for (const r of rows) { try { items.push(JSON.parse(r.data) as PluginItem) } catch { /* unreadable row ignored */ } }
   const stats = query.trim() ? statKeys.map((k) => columnStat(where, args, k)).filter((x): x is ColumnStat => !!x) : undefined
   return { items, total, months, stats }
 }
 
-/** Stats d'une colonne sur les éléments filtrés : nombres (moyenne, min, max, total), durées « m:ss », ou valeurs les plus fréquentes. */
+/** Stats of a column over the filtered items: numbers (average, min, max, total), "m:ss" durations, or the most frequent values. */
 function columnStat(where: string, args: (number | string)[], key: string): ColumnStat | null {
   const path = `$.fields.${key}`
   const num = db.prepare(`SELECT COUNT(v) n, AVG(v) avg, MIN(v) min, MAX(v) max, SUM(v) sum FROM (SELECT json_extract(data, ?) v FROM plugin_items WHERE ${where})

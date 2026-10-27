@@ -1,5 +1,5 @@
-// TikTok (profil public) : lit les chiffres d'un profil depuis sa page publique, comme un navigateur.
-// Ce n'est pas une API officielle : si TikTok change sa page, le plugin le signale clairement au lieu d'inventer des chiffres.
+// TikTok (public profile): reads a profile's numbers from its public page, like a browser.
+// This is not an official API: if TikTok changes its page, the plugin says so clearly instead of making up numbers.
 var UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
 
 function clean(name) { return String(name || '').trim().replace(/^@/, '').replace(/^https?:\/\/(www\.)?tiktok\.com\/@/i, '').split(/[/?#]/)[0] }

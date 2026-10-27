@@ -5,10 +5,10 @@ import { manifest } from './helpers'
 
 const m = manifest({ metrics: [
   { key: 'n', label: 'N', primary: true }, { key: 'elo', label: 'ELO', milestone: { increment: 100, notifyDown: true } },
-  { key: 'pct', label: '%', format: 'percent' }, { key: 'rank', label: 'Rang', format: 'rank' }, { key: 'd', label: 'Durée', format: 'duration' }] })
+  { key: 'pct', label: '%', format: 'percent' }, { key: 'rank', label: 'Rank', format: 'rank' }, { key: 'd', label: 'Duration', format: 'duration' }] })
 const metric = (k: string) => m.metrics.find((x) => x.key === k)!
 
-test('paliers des plugins : métriques concernées et règles par défaut', () => {
+test('plugin milestones: eligible metrics and default rules', () => {
   assert.deepEqual(pluginMilestoneMetrics(m).map((x) => x.key), ['n', 'elo', 'pct'])
   const n = getPluginRule({}, m.id, metric('n')), elo = getPluginRule({}, m.id, metric('elo')), pct = getPluginRule({}, m.id, metric('pct'))
   assert.ok(n.enabled && n.sequence)
@@ -19,13 +19,13 @@ test('paliers des plugins : métriques concernées et règles par défaut', () =
   assert.equal(crossedUp(n, 18, 21), 20)
 })
 
-test('paliers des plugins : la règle de l’utilisateur l’emporte', () => {
+test('plugin milestones: the user rule wins', () => {
   const r = getPluginRule({ [`plugin:${m.id}.elo`]: { enabled: false, sequence: false, increment: 50, custom: [], notifyDown: false } }, m.id, metric('elo'))
   assert.equal(r.enabled, false)
   assert.equal(r.increment, 50)
 })
 
-test('notifications de plugin : seulement si déclarées, 3 au plus, tailles bornées', async () => {
+test('plugin notifications: only if declared, at most 3, bounded sizes', async () => {
   const { sanitizeRunResult } = await import('@shared/plugin')
   const raw = { metrics: { n: 1 }, notices: [{ id: 'a', title: 'T'.repeat(60), text: 'x' }, { id: 'b', title: '', text: 'x' }, { id: 'c', title: 'C', text: 'y', direction: 'down' }, { id: 'd', title: 'D', text: 'z' }, { id: 'e', title: 'E', text: 'z' }] }
   assert.deepEqual(sanitizeRunResult(raw, manifest()).notices, [])
@@ -35,17 +35,17 @@ test('notifications de plugin : seulement si déclarées, 3 au plus, tailles bor
   assert.equal(got[1].direction, 'down')
 })
 
-test('notifications de plugin : une seule fois par identifiant, coupables par plugin', async () => {
+test('plugin notifications: once per identifier, can be turned off per plugin', async () => {
   const db = await import('../src/main/db')
   const { processPluginNotices } = await import('../src/main/milestones')
   db.initDb()
   db.upsertPlugin('test.plugin', '{}', '', 'h')
-  const acc = db.insertPluginAccount('test.plugin', 'Compte', 'n', {})
+  const acc = db.insertPluginAccount('test.plugin', 'Account', 'n', {})
   const m = manifest({ notices: true }), n = { id: 'x1', title: 'Platine', text: 'Nouveau rang', direction: 'up' as const }
   const count = (): number => db.listEvents(200).filter((e) => e.accountId === acc && e.metric === 'notice').length
-  processPluginNotices(acc, 'Compte', m, [n]); processPluginNotices(acc, 'Compte', m, [n])
+  processPluginNotices(acc, 'Account', m, [n]); processPluginNotices(acc, 'Account', m, [n])
   assert.equal(count(), 1)
   db.setSettings({ pluginNotices: { 'test.plugin': false } })
-  processPluginNotices(acc, 'Compte', m, [{ ...n, id: 'x2' }])
+  processPluginNotices(acc, 'Account', m, [{ ...n, id: 'x2' }])
   assert.equal(count(), 1)
 })

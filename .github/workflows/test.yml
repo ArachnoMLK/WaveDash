@@ -1,5 +1,5 @@
-# Vérifie chaque envoi : types et tests automatiques (bac à sable, réseau, fichiers, ZIP, base, plugins fournis).
-# Les tests tournent dans Electron en mode Node, sous Windows comme l'appli. Sans dossier de replays, le test sur replays réels est sauté.
+# Checks every push: types and automated tests (sandbox, network, files, ZIP, database, bundled plugins).
+# Tests run in Electron in Node mode, on Windows like the app. Without a replay folder, the real-replay test is skipped.
 name: Tests
 on:
   push:

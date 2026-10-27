@@ -1,4 +1,4 @@
-// Validation des thèmes : un fichier importé n'est jamais accepté tel quel, chaque valeur est contrôlée.
+// Theme validation: an imported file is never accepted as is, each value is checked.
 import { DEFAULT_SETTINGS, Settings, THEME_KEYS, ThemeData, ThemeKey } from './types'
 
 type Spec =
@@ -27,7 +27,7 @@ export const THEME_SPEC: Record<ThemeKey, Spec> = {
   animations: { t: 'num', min: 0, max: 100 }
 }
 
-/** Ne garde que les clés connues, aux valeurs du bon type et dans les bornes. */
+/** Keeps only known keys, with values of the right type and within bounds. */
 export function sanitizeTheme(raw: unknown): Partial<ThemeData> {
   const out: Record<string, unknown> = {}
   if (!raw || typeof raw !== 'object') return out
@@ -41,7 +41,7 @@ export function sanitizeTheme(raw: unknown): Partial<ThemeData> {
     else if (s.t === 'enum' && typeof v === 'string' && s.values.includes(v)) out[k] = v
     else if (s.t === 'color' && typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)) out[k] = v
   }
-  // L'image de fond est un fichier local : elle ne voyage pas avec un thème.
+  // The background image is a local file: it does not travel with a theme.
   if (out.bgMode === 'image') out.bgMode = 'default'
   return out as Partial<ThemeData>
 }

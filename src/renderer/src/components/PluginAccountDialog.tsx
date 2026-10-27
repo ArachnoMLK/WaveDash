@@ -1,9 +1,9 @@
-// Ajout d'un compte pour un plugin : champs définis par le manifeste (texte, nombre, dossier).
+// Adding an account for a plugin: fields defined by the manifest (text, number, folder).
 import { useState } from 'react'
 import { InstalledPlugin, loc, PluginAccount } from '@shared/plugin'
 import { useApp } from '../lib/AppContext'
 
-/** Ajout d'un compte, ou modification de ses champs quand `account` est donné. */
+/** Adds an account, or edits its fields when `account` is given. */
 export function PluginAccountDialog({ plugin, account, onClose }: { plugin: InstalledPlugin; account?: PluginAccount; onClose: () => void }): JSX.Element {
   const { t, settings, reloadPlugins } = useApp()
   const [values, setValues] = useState<Record<string, string>>(account?.inputs ?? {})

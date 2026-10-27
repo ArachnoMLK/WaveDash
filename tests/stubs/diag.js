@@ -1,5 +1,5 @@
-// Mode diagnostic (WAVEDASH_TEST_DIAG=1) : 3 s après les tests d'un fichier, liste ce qui l'empêche de se fermer
-// (connexions, minuteries…). La minuterie est « unref » : elle ne retient pas le processus elle-même.
+// Diagnostic mode (WAVEDASH_TEST_DIAG=1): 3 s after a file's tests, lists what keeps it from closing
+// (connections, timers…). The timer is "unref": it does not hold the process itself.
 require('node:test').after(() => {
   setTimeout(() => {
     const handles = (process._getActiveHandles?.() ?? []).map((h) => {

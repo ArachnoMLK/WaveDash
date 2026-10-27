@@ -1,24 +1,24 @@
 #!/usr/bin/env node
-// Empaquette un dossier de plugin en fichier .wdsh (archive ZIP) : node tools/wdsh-pack.mjs <dossier> [sortie.wdsh]
-// Le dossier doit contenir manifest.json et le script indiqué par "entry" (main.js par défaut). Aucune dépendance.
+// Packs a plugin folder into a .wdsh file (ZIP archive): node tools/wdsh-pack.mjs <folder> [output.wdsh]
+// The folder must contain manifest.json and the script named by "entry" (main.js by default). No dependencies.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import zlib from 'node:zlib'
 
 const { deflateRawSync } = zlib
-// zlib.crc32 n'existe que dans les Node récents : repli sur un calcul maison pour les versions plus anciennes.
+// zlib.crc32 only exists in recent Node versions: fall back to a home-made computation for older ones.
 const TABLE = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0 })
 const crc32 = zlib.crc32 ?? ((buf) => { let c = 0xffffffff; for (const b of buf) c = TABLE[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0 })
 
 const dir = resolve(process.argv[2] ?? '')
-if (!process.argv[2]) { console.error('Usage : node tools/wdsh-pack.mjs <dossier> [sortie.wdsh]'); process.exit(1) }
+if (!process.argv[2]) { console.error('Usage: node tools/wdsh-pack.mjs <folder> [output.wdsh]'); process.exit(1) }
 
 const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'))
 const entry = manifest.entry ?? 'main.js'
 const out = process.argv[3] ?? `${manifest.id}-${manifest.version}.wdsh`
 const files = [['manifest.json', readFileSync(join(dir, 'manifest.json'))], [entry, readFileSync(join(dir, entry))]]
 
-// Écriture ZIP minimale : en-têtes locaux, répertoire central, fin d'archive. Date fixe pour des archives reproductibles.
+// Minimal ZIP writing: local headers, central directory, end of archive. Fixed date for reproducible archives.
 const DOS_TIME = 0, DOS_DATE = (1 << 5) | 1                                   // 1980-01-01
 const parts = [], central = []
 let offset = 0
@@ -40,4 +40,4 @@ const cd = Buffer.concat(central)
 const end = Buffer.alloc(22)
 end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10); end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(offset, 16)
 writeFileSync(out, Buffer.concat([...parts, cd, end]))
-console.log(`${out} créé (${files.length} fichiers : ${files.map(([n]) => n).join(', ')})`)
+console.log(`${out} created (${files.length} files: ${files.map(([n]) => n).join(', ')})`)

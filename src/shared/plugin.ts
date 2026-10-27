@@ -1,18 +1,19 @@
-// Format des plugins .wdsh : manifeste, validation, résultats renvoyés par un plugin.
-// Un plugin est une archive ZIP contenant `manifest.json` et un script JavaScript (point d'entrée).
-import type { Lang } from './types'
+// .wdsh plugin format: manifest, validation, results returned by a plugin.
+// A plugin is a ZIP archive containing `manifest.json` and a JavaScript script (entry point).
+import { LANGS, type Lang } from './types'
 
-/** Texte simple ou traduit : "Prix" ou { "fr": "Prix", "en": "Price" }. */
-export type LocalText = string | { fr?: string; en?: string }
+/** Plain or translated text: "Price" or { "en": "Price", "fr": "Prix", "ja": "価格" }. */
+export type LocalText = string | Partial<Record<Lang, string>>
+/** The text in the interface language; otherwise English (French first for a French interface), then any language. */
 export const loc = (t: LocalText | undefined, lang: Lang): string =>
-  !t ? '' : typeof t === 'string' ? t : t[lang] ?? t.fr ?? t.en ?? ''
+  !t ? '' : typeof t === 'string' ? t : t[lang] ?? (lang === 'fr' ? t.fr ?? t.en : t.en ?? t.fr) ?? Object.values(t).find(Boolean) ?? ''
 
-/** `images` : dossier d'images que WaveDash affiche (permission `images`) ; le script ne le lit jamais, il donne seulement un nom de fichier. */
+/** `images`: image folder shown by WaveDash (`images` permission); the script never reads it, it only gives a file name. */
 export type InputType = 'text' | 'number' | 'folder' | 'images'
 export interface PluginInput { key: string; label: LocalText; type: InputType; placeholder?: string; required: boolean; help?: LocalText }
 export interface PluginSecret { key: string; label: LocalText; help?: LocalText }
 export type MetricFormat = 'number' | 'percent' | 'rank' | 'duration'
-/** Paliers proposés par défaut pour une métrique (l'utilisateur peut les changer dans Paramètres › Notifications). */
+/** Milestones offered by default for a metric (the user can change them in Settings › Notifications). */
 export interface PluginMilestone { enabled?: boolean; increment?: number; notifyDown?: boolean }
 export interface PluginMetric { key: string; label: LocalText; unit?: string; format: MetricFormat; decimals: number; primary: boolean; milestone?: PluginMilestone }
 export interface PluginColumn { key: string; label: LocalText; unit?: string }
@@ -27,28 +28,28 @@ export interface PluginManifest {
   minAppVersion?: string
   entry: string
   permissions: {
-    /** Domaines autorisés (HTTPS uniquement). `*.exemple.com` = tous les sous-domaines. */
+    /** Allowed domains (HTTPS only). `*.example.com` = all subdomains. */
     network: string[]
-    /** Lecture d'un dossier choisi par l'utilisateur (non récursive, jamais en écriture). */
+    /** Reading of a folder chosen by the user (non-recursive, never writing). */
     folder: boolean
     folderExtensions: string[]
-    /** Affichage d'images d'un dossier choisi par l'utilisateur (ex. vignettes du jeu), sans que le script y ait accès. */
+    /** Display of images from a folder chosen by the user (e.g. game thumbnails), without the script having access to it. */
     images: boolean
   }
   inputs: PluginInput[]
   secrets: PluginSecret[]
   metrics: PluginMetric[]
   itemColumns: PluginColumn[]
-  /** `replace` (défaut) : chaque actualisation remplace la liste d'éléments. `keep` : les éléments s'ajoutent et sont
-   *  conservés (même `id` = mis à jour), pour garder un historique, par exemple une partie par fichier lu. */
+  /** `replace` (default): each refresh replaces the item list. `keep`: items are added and
+   *  kept (same `id` = updated), to keep a history, for example one game per file read. */
   itemsMode: 'replace' | 'keep'
-  /** Le script définit `search` : WaveDash affiche la barre de recherche en haut de la page du compte. */
+  /** The script defines `search`: WaveDash shows the search bar at the top of the account page. */
   search: boolean
-  /** Le plugin peut envoyer des notifications (`notices` dans son résultat), désactivables dans les réglages. */
+  /** The plugin can send notifications (`notices` in its result), which can be turned off in the settings. */
   notices: boolean
-  /** Le script définit `view` : avec les filtres de la barre du haut (`filters` dans son résultat), il recalcule le bilan. */
+  /** The script defines `view`: with the top bar filters (`filters` in its result), it recomputes the overview. */
   views: boolean
-  /** Outil « Croiser tes données » : mesures et axes proposés dans les menus ; le script définit alors `cross`. */
+  /** "Cross your data" tool: measures and axes offered in the menus; the script then defines `cross`. */
   cross?: { measures: { key: string; label: LocalText }[]; dimensions: { key: string; label: LocalText }[] }
   refreshMinutes: number
 }
@@ -68,14 +69,14 @@ type Result = { ok: true; manifest: PluginManifest } | { ok: false; error: strin
 function text(v: unknown, max: number): LocalText | null {
   if (typeof v === 'string') return v.trim() && v.length <= max ? v.trim() : null
   if (v && typeof v === 'object' && !Array.isArray(v)) {
-    const o = v as Record<string, unknown>, out: { fr?: string; en?: string } = {}
-    for (const l of ['fr', 'en'] as const) if (o[l] !== undefined) { if (typeof o[l] !== 'string' || (o[l] as string).length > max) return null; out[l] = (o[l] as string).trim() }
-    return out.fr || out.en ? out : null
+    const o = v as Record<string, unknown>, out: Partial<Record<Lang, string>> = {}
+    for (const { id } of LANGS) if (o[id] !== undefined) { if (typeof o[id] !== 'string' || (o[id] as string).length > max) return null; out[id] = (o[id] as string).trim() }
+    return Object.values(out).some(Boolean) ? out : null
   }
   return null
 }
 
-/** Menus de l'outil de croisement : 2 à 12 entrées chacun, clés simples, libellés courts ; sinon l'outil est ignoré. */
+/** Menus of the cross tool: 2 to 12 entries each, simple keys, short labels; otherwise the tool is ignored. */
 function crossOf(raw: unknown): PluginManifest['cross'] {
   const r = raw as { measures?: unknown; dimensions?: unknown } | undefined
   const list = (v: unknown): { key: string; label: LocalText }[] | null => {
@@ -93,7 +94,7 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
-/** Contrôle strict du manifeste : tout ce qui n'est pas reconnu est ignoré, tout ce qui est incorrect est refusé. */
+/** Strict manifest check: anything unrecognized is ignored, anything incorrect is rejected. */
 export function validateManifest(raw: unknown): Result {
   const fail = (error: string): Result => ({ ok: false, error })
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return fail('manifest')
@@ -185,15 +186,15 @@ export function validateManifest(raw: unknown): Result {
     inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, notices: m.notices === true, views: m.views === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
 }
 
-/* ---------- Résultats renvoyés par un plugin ---------- */
-/** Détail facultatif d'un élément (affiché au clic) ou bilan d'un compte : badges, chiffres clés, tableaux,
- *  grilles de chaleur, courbes et frise d'événements. Toutes les parties sont facultatives. */
+/* ---------- Results returned by a plugin ---------- */
+/** Optional detail of an item (shown on click) or account overview: badges, key figures, tables,
+ *  heat grids, curves and event timeline. Every part is optional. */
 export interface DetailTable { title?: string; columns: string[]; rows: (string | number)[][] }
 export interface DetailGrid { title?: string; rows: string[]; cols: string[]; values: number[][] }
 export interface DetailSeries { title?: string; unit?: string; step: number; lines: { name: string; values: number[] }[] }
-/** Barres par catégorie, une couleur par série (groupées, ou empilées avec `stacked`). */
+/** Bars by category, one colour per series (grouped, or stacked with `stacked`). */
 export interface DetailBars { title?: string; unit?: string; stacked?: boolean; categories: string[]; series: { name: string; values: number[] }[] }
-/** Image affichée en tête du détail : un fichier du dossier d'images du compte (permission `images`). */
+/** Image shown at the top of the detail: a file from the account's image folder (`images` permission). */
 export interface DetailImage { file: string; caption?: string }
 export const IMAGE_FILE_RE = /^[\w .()'&,+-]{1,100}\.(jpg|jpeg|png|webp)$/i
 export interface PluginDetail {
@@ -205,7 +206,7 @@ export interface PluginDetail {
   grids?: DetailGrid[]
   series?: DetailSeries[]
   bars?: DetailBars[]
-  /** Frise : `kind` choisit la forme du point (`ko` losange, par défaut ; `action` petit rond ; `mark` triangle). */
+  /** Timeline: `kind` picks the point shape (`ko` diamond, the default; `action` small dot; `mark` triangle). */
   timeline?: { duration: number; lanes: string[]; events: { t: number; lane: number; label?: string; kind?: TimelineKind }[] }
 }
 export type TimelineKind = 'ko' | 'action' | 'mark'
@@ -218,18 +219,18 @@ export interface PluginRunResult {
   metrics: Record<string, number>
   items: PluginItem[]
   history: { ts: number; metrics: Record<string, number> }[]
-  /** Bilan du compte (même format que le détail d'un élément), affiché en haut de sa page. */
+  /** Account overview (same format as an item detail), shown at the top of its page. */
   summary?: PluginDetail
-  /** Travail restant signalé par le plugin (ex. fichiers pas encore lus) : s'il est positif, WaveDash relance le plugin peu après. */
+  /** Remaining work reported by the plugin (e.g. files not read yet): if positive, WaveDash reruns the plugin shortly after. */
   backlog: number
-  /** Notifications (manifeste `notices: true`) : 3 au plus, chacune envoyée une seule fois (même `id` = ignorée ensuite). */
+  /** Notifications (manifest `notices: true`): at most 3, each sent only once (same `id` = ignored afterwards). */
   notices: PluginNotice[]
-  /** Filtres de la barre du haut (manifeste `views: true`). */
+  /** Top bar filters (manifest `views: true`). */
   filters: PluginFilter[]
 }
 export interface PluginNotice { id: string; title: string; text: string; direction: 'up' | 'down' }
-/** Filtre de la barre du haut (ex. Mode, Patch, Période). `field` : colonne des éléments filtrée à l'identique ; « $ts » : les
- *  éléments des N derniers jours (valeur = nombre de jours). Sans `field`, seul le bilan (fonction `view`) est filtré. */
+/** Top bar filter (e.g. Mode, Patch, Period). `field`: item column filtered by exact match; "$ts": the
+ *  items of the last N days (value = number of days). Without `field`, only the overview (`view` function) is filtered. */
 export interface PluginFilter { key: string; label: string; field?: string; options: { value: string; label: string }[] }
 export const FILTER_LIMITS = { filters: 4, options: 60, text: 60 }
 export function sanitizeFilters(raw: unknown): PluginFilter[] {
@@ -249,7 +250,7 @@ export const NOTICE_LIMITS = { perRun: 3, id: 80, title: 40, text: 200 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e15 ? v : null)
 
-/** Détail d'un élément ou bilan : tailles bornées, types vérifiés, rien d'autre n'est conservé. */
+/** Item detail or overview: bounded sizes, checked types, nothing else is kept. */
 export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const r = raw as Record<string, unknown>, L = DETAIL_LIMITS, out: PluginDetail = {}
@@ -372,17 +373,17 @@ export function sanitizeResolveResult(raw: unknown): { externalId: string; displ
   return id && name ? { externalId: id, displayName: name } : null
 }
 
-/* ---------- Types échangés avec l'interface ---------- */
+/* ---------- Types exchanged with the interface ---------- */
 export interface PluginItemsPage {
   items: PluginItem[]
-  /** Nombre d'éléments correspondant au filtre. */
+  /** Number of items matching the filter. */
   total: number
-  /** Mois disponibles (AAAA-MM, heure locale), du plus récent au plus ancien, avec leur nombre d'éléments. */
+  /** Available months (YYYY-MM, local time), newest to oldest, with their number of items. */
   months: { month: string; count: number }[]
-  /** Pendant une recherche : tes stats sur les éléments trouvés, colonne par colonne. */
+  /** During a search: your stats on the items found, column by column. */
   stats?: ColumnStat[]
 }
-/** num : moyenne, min, max, total. dur : durées « m:ss » (en secondes). cat : valeurs les plus fréquentes avec leur nombre. */
+/** num: average, min, max, total. dur: "m:ss" durations (in seconds). cat: most frequent values with their count. */
 export interface ColumnStat { key: string; kind: 'num' | 'dur' | 'cat'; n: number; avg?: number; min?: number; max?: number; sum?: number; top?: { value: string; n: number }[] }
 export interface InstalledPlugin {
   id: string
@@ -391,7 +392,7 @@ export interface InstalledPlugin {
   installedAt: number
   failures: number
   lastError: string | null
-  /** Clés de secrets déjà enregistrées. */
+  /** Secret keys already saved. */
   secretsSet: string[]
 }
 export interface PluginAccount {
@@ -406,6 +407,6 @@ export interface PluginAccount {
 export interface PluginInspect {
   token: string
   manifest: PluginManifest
-  /** Version déjà installée (mise à jour) ou null (nouvelle installation). */
+  /** Version already installed (update) or null (new install). */
   installedVersion: string | null
 }

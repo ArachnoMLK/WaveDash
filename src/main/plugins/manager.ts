@@ -1,4 +1,4 @@
-// Gestion des plugins : installation (avec validation), comptes, actualisation, clés.
+// Plugin management: install (with validation), accounts, refresh, keys.
 import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync } from 'fs'
@@ -15,23 +15,23 @@ import { PluginError, RunRequest } from './sandbox'
 import { runIsolated } from './isolated'
 import { readZip, ZipError } from './zip'
 
-/** Après 5 échecs consécutifs, le plugin est désactivé pour ne pas s'exécuter en boucle. */
+/** After 5 consecutive failures, the plugin is disabled so it does not run in a loop. */
 const MAX_FAILURES = 5
 const MAX_STORAGE_KEYS = 100
-/** Délai avant de relancer un plugin qui signale du travail restant (`backlog`). */
+/** Delay before running again a plugin that reports remaining work (`backlog`). */
 const CATCH_UP_MS = 5_000
-/** Relances rapides sans que le retard baisse avant d'arrêter (le plugin reprend à l'actualisation normale suivante). */
+/** Quick reruns without the backlog going down before stopping (the plugin resumes at the next normal refresh). */
 const MAX_STALLED = 3
 
 let notify: () => void = () => {}
-/** Appelé quand un rattrapage en arrière-plan a enregistré de nouvelles données (pour rafraîchir l'interface). */
+/** Called when a background catch-up saved new data (to refresh the interface). */
 export const setPluginNotifier = (f: () => void): void => { notify = f }
 const running = new Set<number>(), catchUps = new Map<number, NodeJS.Timeout>()
 
 const secretKey = (pluginId: string, key: string): `plugin:${string}:${string}` => `plugin:${pluginId}:${key}`
 
 function loadManifest(row: db.PluginRow): PluginManifest {
-  const v = validateManifest(JSON.parse(row.manifest))     // revalidé à chaque usage : la base n'est jamais crue sur parole
+  const v = validateManifest(JSON.parse(row.manifest))     // revalidated on every use: the database is never taken at its word
   if (!v.ok) throw new PluginError('script', `Manifeste invalide : ${v.error}`)
   return v.manifest
 }
@@ -96,11 +96,11 @@ export function listPluginAccounts(): PluginAccount[] {
 export function uninstallPlugin(id: string): void {
   const row = db.getPluginRow(id)
   if (!row) return
-  try { for (const s of loadManifest(row).secrets) secrets.deleteSecret(secretKey(id, s.key)) } catch { /* manifeste illisible : rien à effacer */ }
+  try { for (const s of loadManifest(row).secrets) secrets.deleteSecret(secretKey(id, s.key)) } catch { /* unreadable manifest: nothing to delete */ }
   db.deletePlugin(id)
 }
 
-/* ---------- Clés ---------- */
+/* ---------- Keys ---------- */
 export function setPluginSecret(pluginId: string, key: string, value: string): boolean {
   const row = db.getPluginRow(pluginId)
   if (!row || !loadManifest(row).secrets.some((s) => s.key === key) || !value.trim() || value.length > 500) return false
@@ -112,15 +112,20 @@ export function deletePluginSecret(pluginId: string, key: string): void {
   if (row && loadManifest(row).secrets.some((s) => s.key === key)) secrets.deleteSecret(secretKey(pluginId, key))
 }
 
-/* ---------- Exécution ---------- */
-/** Dossier géré par WaveDash où sont copiés les fichiers importés pour un compte (lu en plus du dossier choisi). */
-/** Dossier « Parties importées » d'un compte, dans Documents\WaveDash : les fichiers importés y sont copiés avant d'être lus. */
+/* ---------- Run ---------- */
+/** Folder managed by WaveDash where files imported for an account are copied (read in addition to the chosen folder). */
+/** "Imported" folder of an account, in Documents\WaveDash: imported files are copied there before being read. */
 export function importDirOf(accountId: number): string {
-  const dir = join(app.getPath('documents'), 'WaveDash', 'Parties importées', String(accountId))
-  // Migration : avant la 0.9.3, les imports étaient dans le dossier caché de l'appli.
+  const dir = join(app.getPath('documents'), 'WaveDash', 'Imported', String(accountId))
+  // Before 1.6.0 the folder had a French name.
+  const french = join(app.getPath('documents'), 'WaveDash', 'Parties importées', String(accountId))
+  if (existsSync(french)) {
+    try { mkdirSync(dir, { recursive: true }); for (const n of readdirSync(french)) if (!existsSync(join(dir, n))) renameSync(join(french, n), join(dir, n)); rmSync(french, { recursive: true, force: true }) } catch { /* retried on next access */ }
+  }
+  // Migration: before 0.9.3, imports were in the app's hidden folder.
   const old = join(app.getPath('userData'), 'plugin-imports', String(accountId))
   if (existsSync(old)) {
-    try { mkdirSync(dir, { recursive: true }); for (const n of readdirSync(old)) if (!existsSync(join(dir, n))) renameSync(join(old, n), join(dir, n)); rmSync(old, { recursive: true, force: true }) } catch { /* nouvel essai au prochain accès */ }
+    try { mkdirSync(dir, { recursive: true }); for (const n of readdirSync(old)) if (!existsSync(join(dir, n))) renameSync(join(old, n), join(dir, n)); rmSync(old, { recursive: true, force: true }) } catch { /* retried on the next access */ }
   }
   return dir
 }
@@ -130,8 +135,8 @@ function folderOf(manifest: PluginManifest, inputs: Record<string, string>, acco
   const key = manifest.inputs.find((i) => i.type === 'folder')?.key
   const dir = key ? inputs[key] : undefined
   let real: string | null = null
-  try { if (dir && statSync(dir).isDirectory()) real = realpathSync(dir) } catch { /* dossier supprimé, déplacé ou inaccessible */ }
-  if (!real) throw new PluginError('blocked', 'Le dossier choisi est introuvable')
+  try { if (dir && statSync(dir).isDirectory()) real = realpathSync(dir) } catch { /* folder deleted, moved or inaccessible */ }
+  if (!real) throw new PluginError('blocked', 'The chosen folder was not found')
   return { dir: real, extra: accountId === undefined ? undefined : importDirOf(accountId), extensions: manifest.permissions.folderExtensions }
 }
 
@@ -139,11 +144,11 @@ function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh' | 'search' | 
   const manifest = loadManifest(row)
   const secretValues: Record<string, string> = {}
   for (const s of manifest.secrets) secretValues[s.key] = secrets.getSecret(secretKey(row.id, s.key)) ?? ''
-  const memory = new Map<string, string>()                       // stockage éphémère pour `resolve` (compte pas encore créé)
+  const memory = new Map<string, string>()                       // ephemeral storage for `resolve` (account not created yet)
   const accountId = account?.id
   return {
     manifest, script: row.script, fn,
-    // Le dossier d'images ne regarde que l'interface : le script ne reçoit même pas son chemin.
+    // The image folder only concerns the interface: the script does not even get its path.
     ctx: { inputs: Object.fromEntries(Object.entries(inputs).filter(([k]) => manifest.inputs.find((i) => i.key === k)?.type !== 'images')), secrets: secretValues, lang: db.getSettings().lang, account: account ? { externalId: account.externalId, displayName: account.displayName } : undefined, query, cross, filters },
     folder: folderOf(manifest, inputs, accountId),
     storage: accountId === undefined
@@ -151,14 +156,14 @@ function buildRequest(row: db.PluginRow, fn: 'resolve' | 'refresh' | 'search' | 
       : {
         get: (k) => db.pluginStorageGet(row.id, accountId, k),
         set: (k, v) => {
-          if (db.pluginStorageGet(row.id, accountId, k) === null && db.pluginStorageCount(row.id, accountId) >= MAX_STORAGE_KEYS) throw new Error('trop de clés de stockage')
+          if (db.pluginStorageGet(row.id, accountId, k) === null && db.pluginStorageCount(row.id, accountId) >= MAX_STORAGE_KEYS) throw new Error('too many storage keys')
           db.pluginStorageSet(row.id, accountId, k, v)
         }
       }
   }
 }
 
-/** Valide les champs saisis selon le manifeste. */
+/** Validates the fields entered according to the manifest. */
 function cleanInputs(manifest: PluginManifest, raw: Record<string, string>): { ok: true; inputs: Record<string, string> } | { ok: false; error: string } {
   const inputs: Record<string, string> = {}
   for (const i of manifest.inputs) {
@@ -181,7 +186,7 @@ export async function addPluginAccount(pluginId: string, rawInputs: Record<strin
   const c = cleanInputs(manifest, rawInputs)
   if (!c.ok) return c
 
-  // Le plugin peut valider les saisies et fournir un nom d'affichage (fonction `resolve`, facultative).
+  // The plugin can validate inputs and provide a display name (optional `resolve` function).
   let externalId = createHash('sha1').update(JSON.stringify(c.inputs)).digest('hex').slice(0, 16)
   let displayName = Object.entries(c.inputs).find(([k]) => !['folder', 'images'].includes(manifest.inputs.find((i) => i.key === k)?.type ?? ''))?.[1] ?? manifest.name
   try {
@@ -199,7 +204,7 @@ export async function addPluginAccount(pluginId: string, rawInputs: Record<strin
   return { ok: true }
 }
 
-/** Modifie les champs d'un compte (ex. ajouter le dossier d'images) ; l'identité du compte ne change pas. */
+/** Changes an account's fields (e.g. adding the image folder); the account identity does not change. */
 export function updatePluginAccount(accountId: number, raw: Record<string, string>): { ok: boolean; error?: string } {
   const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
   if (!pa || !row) return { ok: false, error: 'disabled' }
@@ -210,8 +215,8 @@ export function updatePluginAccount(accountId: number, raw: Record<string, strin
 }
 
 const MIME: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }
-/** Image du dossier d'images d'un compte (permission `images`) : un simple nom de fichier, image uniquement, 3 Mo au plus.
- *  Le script du plugin n'y a jamais accès ; seule l'interface l'affiche. */
+/** Image from an account's image folder (`images` permission): a plain file name, image only, at most 3 MB.
+ *  The plugin script never has access to it; only the interface shows it. */
 export function pluginImage(accountId: number, file: string): string | null {
   const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
   if (!pa || !row || !IMAGE_FILE_RE.test(file)) return null
@@ -227,11 +232,11 @@ export function pluginImage(accountId: number, file: string): string | null {
 export function removePluginAccount(accountId: number): void {
   if (!db.getPluginAccountRow(accountId)) return
   db.deleteAccount(accountId)
-  try { rmSync(importDirOf(accountId), { recursive: true, force: true }) } catch { /* rien à supprimer */ }
+  try { rmSync(importDirOf(accountId), { recursive: true, force: true }) } catch { /* nothing to delete */ }
 }
 
-/** Copie des fichiers choisis par l'utilisateur dans le dossier d'imports du compte, en gardant leur date
- *  (les plugins s'en servent pour dater les données). Seules les extensions autorisées par le manifeste sont acceptées. */
+/** Copies the files chosen by the user into the account's import folder, keeping their date
+ *  (plugins use it to date the data). Only the extensions allowed by the manifest are accepted. */
 export function importPluginFiles(accountId: number, paths: string[]): { imported: number; skipped: number } {
   const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
   if (!pa || !row) return { imported: 0, skipped: paths.length }
@@ -246,7 +251,7 @@ export function importPluginFiles(accountId: number, paths: string[]): { importe
       if (!st.isFile() || (exts.length && !exts.includes(ext)) || st.size > 8 * 1024 * 1024) { skipped++; continue }
       let target = join(dir, name)
       for (let n = 2; existsSync(target); n++) {
-        if (statSync(target).size === st.size && readFileSync(target).equals(readFileSync(p))) { target = ''; break }   // déjà importé
+        if (statSync(target).size === st.size && readFileSync(target).equals(readFileSync(p))) { target = ''; break }   // already imported
         target = join(dir, `${name.slice(0, name.length - ext.length)} (import ${n})${ext}`)
       }
       if (!target) { skipped++; continue }
@@ -258,7 +263,7 @@ export function importPluginFiles(accountId: number, paths: string[]): { importe
   return { imported, skipped }
 }
 
-/** Exécute le plugin pour un compte et enregistre le résultat. Les erreurs sont conservées pour l'affichage. */
+/** Runs the plugin for an account and saves the result. Errors are kept for display. */
 export async function refreshPluginAccount(accountId: number): Promise<void> {
   const pa = db.getPluginAccountRow(accountId)
   const row = pa && db.getPluginRow(pa.plugin_id)
@@ -271,21 +276,21 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
     const inputs = JSON.parse(pa.inputs) as Record<string, string>
     const run = await runIsolated(buildRequest(row, 'refresh', inputs, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }), { pluginId: row.id, accountId })
     const result = sanitizeRunResult(run.value, manifest)
-    if (!Object.keys(result.metrics).length && !result.history.length) throw new PluginError('invalid_result', 'Aucune métrique déclarée n’a été renvoyée')
-    // Paliers : comparés au relevé précédent, avant d'enregistrer le nouveau ; une erreur de notification ne bloque rien.
+    if (!Object.keys(result.metrics).length && !result.history.length) throw new PluginError('invalid_result', 'No declared metric was returned')
+    // Milestones: compared with the previous reading, before saving the new one; a notification error blocks nothing.
     try { processPluginRefresh(accountId, pa.display_name, manifest, db.getLatest(accountId) as Record<string, number>, result.metrics) } catch (e) { console.error('Paliers plugin :', e) }
     try { processPluginNotices(accountId, pa.display_name, manifest, result.notices) } catch (e) { console.error('Notifications plugin :', e) }
     db.insertHistory(accountId, result.history)
     db.insertSnapshots(accountId, result.metrics)
     db.savePluginItems(accountId, result.items, manifest.itemsMode)
-    // Garde-fou : un retard qui ne baisse jamais (plugin qui se trompe) ne doit pas relancer le plugin toutes les 5 s sans fin.
+    // Safety net: a backlog that never goes down (buggy plugin) must not rerun the plugin every 5 s forever.
     const prevBacklog = Number(db.getMeta(accountId, 'backlog')) || 0
     const stalled = result.backlog > 0 && result.backlog >= prevBacklog ? (Number(db.getMeta(accountId, 'stalled')) || 0) + 1 : 0
     db.setMeta(accountId, 'stalled', String(stalled))
     db.setMeta(accountId, 'backlog', String(result.backlog))
     if (result.summary) db.setMeta(accountId, 'summary', JSON.stringify(result.summary))
     if (manifest.views) db.setMeta(accountId, 'filters', JSON.stringify(result.filters))
-    // Travail restant (ex. fichiers pas encore lus) : on relance bientôt, sans attendre la prochaine actualisation.
+    // Remaining work (e.g. files not read yet): rerun soon, without waiting for the next refresh.
     if (result.backlog > 0 && stalled < MAX_STALLED) catchUps.set(accountId, setTimeout(() => { catchUps.delete(accountId); void refreshPluginAccount(accountId).then(() => notify()) }, CATCH_UP_MS))
     db.setMeta(accountId, 'log', JSON.stringify(run.logs))
     db.setMeta(accountId, 'error', '')
@@ -303,14 +308,14 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
   }
 }
 
-/** Actualise les comptes de plugins arrivés à échéance, un par un pour borner la charge. */
+/** Refreshes the plugin accounts that are due, one at a time to bound the load. */
 export async function refreshAllPlugins(): Promise<void> {
   for (const pa of db.listPluginAccountRows()) {
     const row = db.getPluginRow(pa.plugin_id)
     if (!row || !row.enabled) continue
     let minutes = 30
     try { minutes = loadManifest(row).refreshMinutes } catch { continue }
-    // Un compte qui a encore du retard (backlog) est relancé même s'il vient d'être actualisé (ex. après un redémarrage).
+    // An account that is still behind (backlog) is rerun even if it was just refreshed (e.g. after a restart).
     const behind = Number(db.getMeta(pa.account_id, 'backlog')) > 0 && (Number(db.getMeta(pa.account_id, 'stalled')) || 0) < MAX_STALLED
     if (!behind && pa.last_sync_at && Date.now() - pa.last_sync_at < minutes * 60_000 * 0.9) continue
     await refreshPluginAccount(pa.account_id)
@@ -323,7 +328,7 @@ export function pluginAccountData(accountId: number): { logs: string[]; error: s
     summary: parse<PluginDetail | null>('summary', null), filters: parse<PluginFilter[]>('filters', []) }
 }
 
-/** Filtres choisis dans la barre du haut, limités à ceux que le plugin a proposés (clé et valeur connues). */
+/** Filters chosen in the top bar, limited to those the plugin offered (known key and value). */
 function cleanFilters(accountId: number, raw: unknown): { sel: Record<string, string>; match: Record<string, string>; since: number } {
   const out = { sel: {} as Record<string, string>, match: {} as Record<string, string>, since: 0 }
   if (!raw || typeof raw !== 'object') return out
@@ -345,18 +350,18 @@ export function pluginAccountItems(accountId: number, offset: number, limit: num
   const key = sortKey === 'title' || sortKey === 'ts' || (typeof sortKey === 'string' && /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/.test(sortKey)) ? sortKey : 'ts'
   const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
   let cols: string[] = []
-  try { if (row) cols = loadManifest(row).itemColumns.map((c) => c.key) } catch { /* manifeste illisible : pas de stats */ }
+  try { if (row) cols = loadManifest(row).itemColumns.map((c) => c.key) } catch { /* unreadable manifest: no stats */ }
   const sc = scope === 'all' || scope === 'title' || cols.includes(scope) ? scope : 'all'
   const f = cleanFilters(accountId, filters)
   return db.listPluginItems(accountId, from, page, m, key, desc !== false, typeof query === 'string' ? query.slice(0, 100) : '', sc, cols, f.match, f.since)
 }
 
-/* ---------- Fichier .wdsh reçu à l'ouverture (double-clic) ---------- */
+/* ---------- .wdsh file received on open (double-click) ---------- */
 let pendingFile: string | null = null
 export const setPendingFile = (p: string | null): void => { pendingFile = p }
 export const takePendingFile = (): string | null => { const p = pendingFile; pendingFile = null; return p }
 
-/* ---------- Plugins fournis avec l'appli ---------- */
+/* ---------- Plugins bundled with the app ---------- */
 const bundledDir = (): string => (app.isPackaged ? join(process.resourcesPath, 'plugins') : join(app.getAppPath(), 'examples'))
 const samePermissions = (a: PluginManifest, b: PluginManifest): boolean =>
   JSON.stringify([...a.permissions.network].sort()) === JSON.stringify([...b.permissions.network].sort()) &&
@@ -364,7 +369,7 @@ const samePermissions = (a: PluginManifest, b: PluginManifest): boolean =>
 
 export interface BundledPlugin { path: string; id: string; name: string; version: string; description: PluginManifest['description']; installedVersion: string | null }
 
-/** Plugins livrés avec l'appli (une version par plugin, la plus récente). */
+/** Plugins shipped with the app (one version per plugin, the latest). */
 export function listBundled(): BundledPlugin[] {
   let names: string[] = []
   try { names = readdirSync(bundledDir()).filter((n) => n.toLowerCase().endsWith('.wdsh')) } catch { return [] }
@@ -378,8 +383,8 @@ export function listBundled(): BundledPlugin[] {
   return [...best.values()]
 }
 
-/** Au démarrage : met à jour en silence les plugins installés dont l'appli fournit une version plus récente,
- *  seulement si les permissions sont identiques (sinon l'utilisateur confirme depuis la page Plugins). */
+/** At startup: silently updates installed plugins for which the app ships a newer version,
+ *  only if the permissions are identical (otherwise the user confirms from the Plugins page). */
 export function syncBundledPlugins(): string[] {
   const updated: string[] = []
   for (const b of listBundled()) {
@@ -391,7 +396,7 @@ export function syncBundledPlugins(): string[] {
   return updated
 }
 
-/** Mises à jour depuis le catalogue en ligne : même règle que les plugins fournis (permissions identiques, sinon confirmation). */
+/** Updates from the online catalog: same rule as bundled plugins (identical permissions, otherwise confirmation). */
 export async function syncCatalogUpdates(): Promise<string[]> {
   const updated: string[] = []
   const view = await getCatalog()
@@ -402,7 +407,7 @@ export async function syncCatalogUpdates(): Promise<string[]> {
       if (!row || !r.ok || !r.inspect || !samePermissions(loadManifest(row), r.inspect.manifest)) continue
       if (installPending(r.inspect.token).ok) {
         updated.push(`${e.name} ${e.version}`)
-        // Les comptes du plugin profitent de la nouvelle version tout de suite, sans attendre leur prochaine actualisation.
+        // The plugin's accounts benefit from the new version right away, without waiting for their next refresh.
         for (const pa of db.listPluginAccountRows()) if (pa.plugin_id === e.id) await refreshPluginAccount(pa.account_id)
       }
     } catch (err) { console.error('Catalogue :', e.id, err) }
@@ -410,8 +415,8 @@ export async function syncCatalogUpdates(): Promise<string[]> {
   return updated
 }
 
-/** Recherche libre (barre du haut) : la fonction `search` du plugin, si elle existe, calcule un détail pour la requête
- *  (ex. toutes les stats d'un joueur). Aucune donnée n'est enregistrée et un échec ne compte pas comme une panne du plugin. */
+/** Free search (top bar): the plugin's `search` function, if any, computes a detail for the query
+ *  (e.g. all the stats of a player). No data is saved and a failure does not count as a plugin fault. */
 export async function pluginAccountSearch(accountId: number, query: string, filters?: unknown): Promise<{ ok: boolean; unsupported?: boolean; detail?: PluginDetail; error?: string }> {
   const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
   const q = String(query ?? '').trim().slice(0, 100)
@@ -426,8 +431,8 @@ export async function pluginAccountSearch(accountId: number, query: string, filt
   }
 }
 
-/** Outil « Croiser tes données » : la fonction `cross` du plugin reçoit le joueur, la mesure et les deux axes choisis
- *  (valeurs limitées aux menus du manifeste) et renvoie un détail (barres, tableau). Rien n'est enregistré. */
+/** "Cross your data" tool: the plugin's `cross` function gets the player, the measure and the two chosen axes
+ *  (values limited to the manifest menus) and returns a detail (bars, table). Nothing is saved. */
 export async function pluginAccountCross(accountId: number, req: Record<string, string>, filters?: unknown): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }> {
   const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
   if (!pa || !row || !row.enabled) return { ok: false }
@@ -444,7 +449,7 @@ export async function pluginAccountCross(accountId: number, req: Record<string, 
   } catch (e) { return { ok: false, error: msgOf(e) } }
 }
 
-/** Barre du haut : la fonction `view` du plugin recalcule le bilan pour les filtres choisis (ex. un seul mode). Rien n'est enregistré. */
+/** Top bar: the plugin's `view` function recomputes the overview for the chosen filters (e.g. a single mode). Nothing is saved. */
 export async function pluginAccountView(accountId: number, filters: unknown): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }> {
   const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
   if (!pa || !row || !row.enabled) return { ok: false }

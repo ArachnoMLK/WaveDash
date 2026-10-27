@@ -1,5 +1,5 @@
-// YouTube Data API v3 (clé API gratuite). Statistiques publiques uniquement.
-// Quota : ~4 unités par actualisation sur 10 000/jour.
+// YouTube Data API v3 (free API key). Public statistics only.
+// Quota: ~4 units per refresh out of 10,000/day.
 import { ItemStat, ProviderResult } from '@shared/types'
 import { getSecret } from '../secrets'
 import { getJson, Provider, ProviderError, ResolvedAccount } from './types'
@@ -12,7 +12,7 @@ const key = (): string => {
   return k
 }
 
-/** Extrait un identifiant exploitable depuis un lien, un @handle ou un ID de chaîne. */
+/** Extracts a usable identifier from a link, an @handle or a channel ID. */
 function parseInput(raw: string): { kind: 'id' | 'handle' | 'username'; value: string } {
   const s = raw.trim()
   if (/^UC[\w-]{20,}$/.test(s)) return { kind: 'id', value: s }
@@ -24,7 +24,7 @@ function parseInput(raw: string): { kind: 'id' | 'handle' | 'username'; value: s
     if (parts[0] === 'channel' && parts[1]) return { kind: 'id', value: parts[1] }
     if (parts[0] === 'user' && parts[1]) return { kind: 'username', value: parts[1] }
     if (parts[0] === 'c' && parts[1]) return { kind: 'handle', value: `@${parts[1]}` }
-  } catch { /* on retombe sur l'erreur ci-dessous */ }
+  } catch { /* falls through to the error below */ }
   throw new ProviderError('invalid_input')
 }
 
@@ -54,7 +54,7 @@ export const youtube: Provider = {
       videos: Number(ch.statistics.videoCount ?? 0)
     }
 
-    // Likes et commentaires : somme sur les 50 dernières vidéos (l'API ne fournit pas de total de chaîne).
+    // Likes and comments: sum over the last 50 videos (the API gives no channel total).
     const items: ItemStat[] = []
     const uploads = ch.contentDetails?.relatedPlaylists.uploads
     if (uploads) {

@@ -1,5 +1,13 @@
-// Traductions FR / EN. `t('clé', { variable })` remplace les {variable}.
+// Interface texts. English is the reference; every other language falls back to it for a missing key.
+// `t('key', { name })` replaces {name}.
 import { Lang } from '@shared/types'
+import es from './es'
+import pt from './pt'
+import de from './de'
+import it from './it'
+import ja from './ja'
+import zh from './zh'
+import ar from './ar'
 
 const fr = {
   'nav.overview': 'Vue d’ensemble', 'nav.settings': 'Paramètres',
@@ -305,11 +313,11 @@ const fr = {
   "plugins.catalogOffline": "Hors ligne : dernière liste connue.",
   "plugins.upToDate": "À jour",
   "pp.import": "Importer des fichiers",
-  "pp.importHint": "Les fichiers ({ext}) sont d'abord copiés dans le dossier « Parties importées » (Documents › WaveDash), avec leur date d'origine, puis lus. Ton dossier de jeu n'est jamais modifié.",
+  "pp.importHint": "Les fichiers ({ext}) sont d'abord copiés dans le dossier « Imported » (Documents › WaveDash), avec leur date d'origine, puis lus. Ton dossier de jeu n'est jamais modifié.",
   "pp.dropHere": "Glisse tes fichiers ici",
   "pp.importing": "Copie et lecture en cours…",
   "pp.chooseFiles": "Choisir des fichiers",
-  "pp.openImportDir": "Ouvrir « Parties importées »",
+  "pp.openImportDir": "Ouvrir le dossier des fichiers importés",
   "pp.imported": "{imported} fichier(s) importé(s), {skipped} ignoré(s) (déjà présents ou non pris en charge).",
   "pp.month": "Mois",
   "pp.prev": "Page précédente",
@@ -644,7 +652,7 @@ const en: typeof fr = {
   "plugins.catalogOffline": "Offline: last known list.",
   "plugins.upToDate": "Up to date",
   "pp.import": "Import files",
-  "pp.importHint": "Files ({ext}) are first copied to the \"Parties importées\" folder (Documents › WaveDash), keeping their original date, then read. Your game folder is never changed.",
+  "pp.importHint": "Files ({ext}) are first copied to the \"Imported\" folder (Documents › WaveDash), keeping their original date, then read. Your game folder is never changed.",
   "pp.dropHere": "Drop your files here",
   "pp.importing": "Copying and reading…",
   "pp.chooseFiles": "Choose files",
@@ -680,10 +688,14 @@ const en: typeof fr = {
   "st.defaultSkin": "Default"
 }
 
-export type TKey = keyof typeof fr
-const dict = { fr, en }
+export type TKey = keyof typeof en
+/** A language's texts; any missing key falls back to English. */
+export type Dict = Partial<Record<TKey, string>>
+const dict: Record<Lang, Dict> = { en, fr, es, pt, de, it, ja, zh, ar }
+/** English reference texts (used by the tests to check that every language is complete). */
+export { en }
 export function translate(lang: Lang, key: string, vars?: Record<string, string | number>): string {
-  let s: string = (dict[lang] as Record<string, string>)[key] ?? key
+  let s: string = (dict[lang] as Record<string, string> | undefined)?.[key] ?? (en as Record<string, string>)[key] ?? key
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, String(v))
   return s
 }

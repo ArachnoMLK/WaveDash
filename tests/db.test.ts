@@ -5,11 +5,11 @@ import { PluginItem } from '@shared/plugin'
 
 db.initDb()
 db.upsertPlugin('test.plugin', '{}', '', 'h')
-const acc = db.insertPluginAccount('test.plugin', 'Compte', 'ext', {})
+const acc = db.insertPluginAccount('test.plugin', 'Account', 'ext', {})
 const ts = (d: string): number => new Date(d).getTime()
-const item = (id: string, date: string, fields: Record<string, string | number>, title = `Partie ${id}`): PluginItem => ({ id, title, ts: ts(date), fields })
+const item = (id: string, date: string, fields: Record<string, string | number>, title = `Game ${id}`): PluginItem => ({ id, title, ts: ts(date), fields })
 
-test('éléments : mode keep (ajout et mise à jour) puis replace', () => {
+test('items: keep mode (add and update) then replace', () => {
   db.savePluginItems(acc, [item('1', '2026-09-01T12:00', { mode: '2v2', dur: '3:10', kos: 3 }), item('2', '2026-10-02T12:00', { mode: '1v1', dur: '2:50', kos: 1 })], 'keep')
   db.savePluginItems(acc, [item('2', '2026-10-02T12:00', { mode: '1v1', dur: '2:50', kos: 5 }), item('3', '2026-10-05T12:00', { mode: '2v2', dur: '4:00', kos: 2 }, '100%_vrai')], 'keep')
   const p = db.listPluginItems(acc, 0, 50)
@@ -19,21 +19,21 @@ test('éléments : mode keep (ajout et mise à jour) puis replace', () => {
   assert.deepEqual(p.months, [{ month: '2026-10', count: 2 }, { month: '2026-09', count: 1 }])
 })
 
-test('éléments : tri par colonne, filtre par mois, pagination', () => {
+test('items: sort by column, filter by month, pagination', () => {
   assert.deepEqual(db.listPluginItems(acc, 0, 50, undefined, 'kos', false).items.map((i) => i.id), ['3', '1', '2'])
   assert.deepEqual(db.listPluginItems(acc, 0, 50, undefined, 'title', true).items.map((i) => i.id), ['2', '1', '3'])
   assert.deepEqual(db.listPluginItems(acc, 0, 50, '2026-09').items.map((i) => i.id), ['1'])
   assert.deepEqual(db.listPluginItems(acc, 1, 1).items.map((i) => i.id), ['2'])
-  assert.equal(db.listPluginItems(acc, 0, 50, undefined, 'n\'existe pas').items.length, 3)
+  assert.equal(db.listPluginItems(acc, 0, 50, undefined, 'does not exist').items.length, 3)
 })
 
-test('recherche : mots, caractères spéciaux littéraux, colonne choisie, stats', () => {
+test('search: words, literal special characters, chosen column, stats', () => {
   assert.deepEqual(db.listPluginItems(acc, 0, 50, undefined, 'ts', true, '2v2').items.map((i) => i.id), ['3', '1'])
   assert.deepEqual(db.listPluginItems(acc, 0, 50, undefined, 'ts', true, '100%').items.map((i) => i.id), ['3'])
   assert.equal(db.listPluginItems(acc, 0, 50, undefined, 'ts', true, '%').total, 1)
   assert.equal(db.listPluginItems(acc, 0, 50, undefined, 'ts', true, '_').total, 1)
   assert.equal(db.listPluginItems(acc, 0, 50, undefined, 'ts', true, "'; DROP TABLE plugin_items; --").total, 0)
-  assert.deepEqual(db.listPluginItems(acc, 0, 50, undefined, 'ts', true, 'Partie', 'title').items.map((i) => i.id), ['2', '1'])
+  assert.deepEqual(db.listPluginItems(acc, 0, 50, undefined, 'ts', true, 'Game', 'title').items.map((i) => i.id), ['2', '1'])
   assert.deepEqual(db.listPluginItems(acc, 0, 50, undefined, 'ts', true, '1v1', 'mode').items.map((i) => i.id), ['2'])
   const st = db.listPluginItems(acc, 0, 50, undefined, 'ts', true, 'v', 'all', ['kos', 'dur', 'mode']).stats!
   assert.deepEqual(st.find((s) => s.key === 'kos'), { key: 'kos', kind: 'num', n: 3, avg: 10 / 3, min: 2, max: 5, sum: 10 })
@@ -43,7 +43,7 @@ test('recherche : mots, caractères spéciaux littéraux, colonne choisie, stats
   assert.equal(db.listPluginItems(acc, 0, 50).stats, undefined)
 })
 
-test('historique fourni par un plugin : il fait foi de son premier point à maintenant', () => {
+test('history provided by a plugin: authoritative from its first point until now', () => {
   const now = ts('2026-10-10T00:00')
   db.insertSnapshots(acc, { n: 1 }, ts('2026-08-01T00:00'))
   db.insertSnapshots(acc, { n: 99 }, ts('2026-10-01T00:00'))
@@ -51,7 +51,7 @@ test('historique fourni par un plugin : il fait foi de son premier point à main
   assert.deepEqual(db.getSeries(acc, 'n', 0).map((p) => p.value), [1, 5, 7])
 })
 
-test('stockage et suppression d’un compte : tout part avec lui', () => {
+test('storage and removal of an account: everything goes with it', () => {
   db.pluginStorageSet('test.plugin', acc, 'k', 'v')
   db.setMeta(acc, 'backlog', '3')
   assert.deepEqual(db.pluginStorageAll('test.plugin', acc), { k: 'v' })
@@ -62,7 +62,7 @@ test('stockage et suppression d’un compte : tout part avec lui', () => {
   assert.equal(db.getSeries(acc, 'n', 0).length, 0)
 })
 
-test('réglages : valeurs par défaut et enregistrement', () => {
+test('settings: defaults and saving', () => {
   assert.equal(db.getSettings().seeThroughMaximized, true)
   assert.equal(db.setSettings({ seeThroughMaximized: false }).seeThroughMaximized, false)
 })

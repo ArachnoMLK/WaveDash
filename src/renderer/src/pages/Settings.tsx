@@ -9,7 +9,7 @@ import { AppearanceSettings } from './AppearanceSettings'
 import { DataSettings } from './DataSettings'
 import { NotificationSettings } from './NotificationSettings'
 
-/** Saisie d'une clé API : elle part chiffrée vers le processus principal et n'est jamais relue par l'interface. */
+/** API key input: it goes encrypted to the main process and is never read back by the interface. */
 function KeyRow({ platform }: { platform: Platform }): JSX.Element {
   const { t, info } = useApp()
   const secret = SECRET_OF[platform]

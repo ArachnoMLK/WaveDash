@@ -1,4 +1,4 @@
-// Remplace le module electron pendant les tests : un dossier temporaire tient lieu de dossier de l'appli.
+// Replaces the electron module during tests: a temporary folder stands in for the app folder.
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

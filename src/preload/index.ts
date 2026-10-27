@@ -1,4 +1,4 @@
-// Pont sécurisé : expose uniquement les fonctions nécessaires à l'interface.
+// Secure bridge: exposes only the functions the interface needs.
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { MilestoneEvent, UpdateStatus } from '@shared/types'
 import type { WaveApi } from '@shared/types'

@@ -1,16 +1,16 @@
 {
   "wdsh": 1,
   "id": "wavedash.example.folder-stats",
-  "name": "Statistiques d'un dossier",
-  "version": "1.0.0",
+  "name": "Folder stats",
+  "version": "1.0.1",
   "author": "WaveDash",
-  "description": { "fr": "Exemple : compte les fichiers d'un dossier que tu choisis, suit leur taille et liste les plus récents. Aucun accès réseau.", "en": "Example: counts the files of a folder you choose, tracks their size and lists the most recent ones. No network access." },
+  "description": { "en": "Example: counts the files of a folder you choose, tracks their size and lists the most recent ones. No network access.", "fr": "Exemple : compte les fichiers d'un dossier que tu choisis, suit leur taille et liste les plus récents. Aucun accès réseau." },
   "permissions": { "network": [], "folder": true, "folderExtensions": [] },
-  "inputs": [ { "key": "folder", "type": "folder", "required": true, "label": { "fr": "Dossier à suivre", "en": "Folder to track" } } ],
+  "inputs": [ { "key": "folder", "type": "folder", "required": true, "label": { "en": "Folder to track", "fr": "Dossier à suivre" } } ],
   "metrics": [
-    { "key": "files", "label": { "fr": "Fichiers", "en": "Files" }, "primary": true },
-    { "key": "size_mb", "label": { "fr": "Taille totale", "en": "Total size" }, "unit": "Mo", "decimals": 2 }
+    { "key": "files", "label": { "en": "Files", "fr": "Fichiers" }, "primary": true },
+    { "key": "size_mb", "label": { "en": "Total size", "fr": "Taille totale" }, "unit": "Mo", "decimals": 2 }
   ],
-  "itemColumns": [ { "key": "size_kb", "label": { "fr": "Taille", "en": "Size" }, "unit": "Ko" } ],
+  "itemColumns": [ { "key": "size_kb", "label": { "en": "Size", "fr": "Taille" }, "unit": "Ko" } ],
   "refreshMinutes": 15
 }

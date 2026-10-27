@@ -1,4 +1,4 @@
-// Petits composants réutilisables : onglets, carte de statistique, interrupteur, volet de transition.
+// Small reusable components: tabs, stat card, toggle, transition pane.
 import { motion } from 'framer-motion'
 import { ReactNode, useId } from 'react'
 import { useApp } from '../lib/AppContext'
@@ -30,9 +30,9 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boo
     onClick={() => onChange(!on)} onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && onChange(!on)} />
 }
 
-/** Apparition douce d'un bloc ; `delay` permet un léger décalage entre éléments voisins. */
-// Animation purement CSS (fill-mode « backwards ») : une fois terminée, l'élément reprend son style normal,
-// et elle ne dépend plus de JavaScript, donc rien ne peut rester invisible après une réduction de la fenêtre.
+/** Soft appearance of a block; `delay` allows a slight offset between neighbouring elements. */
+// Pure CSS animation (fill-mode "backwards"): once finished, the element returns to its normal style,
+// and it no longer depends on JavaScript, so nothing can stay invisible after the window is minimized.
 export function Reveal({ children, delay = 0, className }: { children: ReactNode; delay?: number; className?: string }): JSX.Element {
   const { dur } = useApp()
   return <div className={`reveal ${className ?? ''}`} style={{ animationDuration: `${dur}s`, animationDelay: dur ? `${delay}s` : '0s' }}>{children}</div>

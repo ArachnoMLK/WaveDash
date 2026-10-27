@@ -1,4 +1,4 @@
-// Pont entre l'interface et le processus principal.
+// Bridge between the interface and the main process.
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { extname, join } from 'path'
@@ -17,13 +17,13 @@ import { fetchPackage, getCatalog } from './plugins/catalog'
 import { fireTest, initMilestones } from './milestones'
 import { checkUpdate, getUpdateStatus, installUpdate } from './updater'
 
-const DEMO_NAMES = { youtube: 'Chaîne démo' }
+const DEMO_NAMES = { youtube: 'Demo channel' }
 
-/** Empreinte simple d'un texte : rend les comptes démo différents selon ce qui est saisi. */
+/** Simple hash of a text: makes demo accounts differ depending on what is entered. */
 const hash = (s: string): number => [...s.trim().toLowerCase()].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
 
 async function addAccount(a: AddAccountInput): Promise<AddAccountResult> {
-  // Un seul compte par plateforme ; `replace` permet d'en changer sans perdre l'ancien si le nouveau échoue.
+  // One account per platform; `replace` lets you switch without losing the old one if the new one fails.
   const existing = db.listAccounts().find((x) => x.platform === a.platform)
   if (existing && !a.replace) return { ok: false, error: 'already_added' }
   try {
@@ -44,7 +44,7 @@ export function registerIpc(win: () => BrowserWindow | null): void {
   const notifyUpdated = (): void => win()?.webContents.send('data:updated')
   startScheduler(notifyUpdated)
   plugins.setPluginNotifier(notifyUpdated)
-  // Un palier franchi : l'interface joue le son et affiche la célébration ; un clic sur la notification ouvre la fenêtre.
+  // A milestone reached: the interface plays the sound and shows the celebration; clicking the notification opens the window.
   initMilestones((e) => win()?.webContents.send('milestone:fired', e), () => { const w = win(); w?.show(); w?.focus() })
 
   ipcMain.handle('app:info', (): AppInfo => ({
@@ -66,7 +66,7 @@ export function registerIpc(win: () => BrowserWindow | null): void {
   ipcMain.handle('data:latest', (_e, id: number) => db.getLatest(id))
   ipcMain.handle('data:items', (_e, id: number) => db.getItems(id))
   ipcMain.handle('data:refresh', () => refreshAll())
-  /* ---------- Image de fond : copiée dans le dossier de l'appli, relue en data URL ---------- */
+  /* ---------- Background image: copied into the app folder, read back as a data URL ---------- */
   const MIME: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }
   const dir = (): string => app.getPath('userData')
   const removeBackgrounds = (): void => {
@@ -91,7 +91,7 @@ export function registerIpc(win: () => BrowserWindow | null): void {
   })
   ipcMain.handle('bg:clear', () => removeBackgrounds())
 
-  /* ---------- Thèmes : export / import en fichier .wdtheme (JSON validé) ---------- */
+  /* ---------- Themes: export / import as a .wdtheme file (validated JSON) ---------- */
   ipcMain.handle('theme:export', async (_e, name: string, theme: ThemeData) => {
     const opts = { defaultPath: `${(name || 'WaveDash').replace(/[^\w .-]/g, '_')}.wdtheme`, filters: [{ name: 'WaveDash theme', extensions: ['wdtheme'] }] }
     const w = win()
@@ -110,11 +110,11 @@ export function registerIpc(win: () => BrowserWindow | null): void {
       if (statSync(file).size > 100_000) return { ok: false, error: 'invalid' }
       const json = JSON.parse(readFileSync(file, 'utf8'))
       if (json?.wavedashTheme !== 1) return { ok: false, error: 'invalid' }
-      return { ok: true, name: String(json.name ?? 'Thème').slice(0, 40), theme: sanitizeTheme(json.theme) }
+      return { ok: true, name: String(json.name ?? 'Theme').slice(0, 40), theme: sanitizeTheme(json.theme) }
     } catch { return { ok: false, error: 'invalid' } }
   })
 
-  /* ---------- Paliers, export, sauvegarde ---------- */
+  /* ---------- Milestones, export, backup ---------- */
   ipcMain.handle('milestones:events', (_e, limit?: number) => db.listEvents(Math.min(Math.max(limit ?? 50, 1), 200)))
   ipcMain.handle('notify:test', () => fireTest())
   ipcMain.handle('export:data', (_e, format: 'csv' | 'json' | 'pdf') => (['csv', 'json', 'pdf'].includes(format) ? exportData(win(), format) : { ok: false }))
@@ -161,12 +161,12 @@ export function registerIpc(win: () => BrowserWindow | null): void {
   ipcMain.handle('plugins:catalogFetch', async (_e, id: string) => {
     try { return { ok: true, path: await fetchPackage(String(id)) } } catch (e) { return { ok: false, error: (e as Error).message } }
   })
-  // Au démarrage (après coup, sans bloquer) : mises à jour silencieuses depuis le catalogue quand les permissions sont identiques.
-  // Puis toutes les 3 h : un plugin publié sur le catalogue arrive sans relancer l'appli.
+  // At startup (afterwards, without blocking): silent updates from the catalog when the permissions are identical.
+  // Then every 3 h: a plugin published to the catalog arrives without restarting the app.
   const syncCatalog = (): void => { void plugins.syncCatalogUpdates().then((up) => { if (up.length) { console.log('Catalogue :', up.join(', ')); notifyUpdated() } }).catch(() => {}) }
   setTimeout(syncCatalog, 20_000)
   setInterval(syncCatalog, 3 * 3_600_000)
-  // Fichiers glissés-déposés dans la fenêtre d'import : mêmes contrôles que le sélecteur (extensions, taille), copie puis lecture.
+  // Files dropped onto the import window: same checks as the picker (extensions, size), copied then read.
   ipcMain.handle('plugins:importPaths', async (_e, id: number, paths: string[]) => {
     const list = Array.isArray(paths) ? paths.filter((p) => typeof p === 'string' && p.length < 1000).slice(0, 5000) : []
     const res = plugins.importPluginFiles(Number(id), list)
@@ -192,7 +192,7 @@ export function registerIpc(win: () => BrowserWindow | null): void {
   ipcMain.handle('plugins:secretDelete', (_e, id: string, key: string) => { plugins.deletePluginSecret(String(id), String(key)); notifyUpdated() })
   ipcMain.handle('plugins:takePendingFile', () => plugins.takePendingFile())
 
-  /* ---------- Mises à jour ---------- */
+  /* ---------- Updates ---------- */
   ipcMain.handle('update:check', () => checkUpdate())
   ipcMain.handle('update:install', () => installUpdate())
   ipcMain.handle('update:status', () => getUpdateStatus())

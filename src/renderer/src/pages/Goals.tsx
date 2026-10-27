@@ -1,6 +1,6 @@
-// Objectifs : progression vers le prochain palier (avec date estimée), comparaison de périodes, derniers paliers.
+// Goals: progress towards the next milestone (with estimated date), period comparison, latest milestones.
 import { useEffect, useState } from 'react'
-import { Account, MetricKey, MilestoneEvent, Point } from '@shared/types'
+import { Account, MetricKey, MilestoneEvent, Point, localeOf } from '@shared/types'
 import { getRule, MILESTONE_METRICS, nextThreshold, prevThreshold } from '@shared/milestones'
 import { Reveal } from '../components/ui'
 import { useApp } from '../lib/AppContext'
@@ -9,14 +9,14 @@ import { fmt, fmtDelta, fmtMetric } from '../lib/format'
 const DAY = 86_400_000
 type SeriesMap = Record<number, Partial<Record<MetricKey, Point[]>>>
 
-/** Dernière valeur connue à l'instant t (ou avant) ; null si l'historique ne remonte pas jusque-là. */
+/** Last known value at time t (or before); null if the history does not go back that far. */
 function valueAt(pts: Point[], t: number): number | null {
   let v: number | null = null
   for (const p of pts) { if (p.ts <= t) v = p.value; else break }
   return v
 }
 
-/** Gain sur une période de `days` jours se terminant il y a `offset` jours (null si l'historique est trop court). */
+/** Gain over a period of `days` days ending `offset` days ago (null if the history is too short). */
 function gain(pts: Point[], days: number, offset: number): number | null {
   if (!pts.length) return null
   const end = Date.now() - offset * DAY
@@ -25,7 +25,7 @@ function gain(pts: Point[], days: number, offset: number): number | null {
   return vEnd === null || vStart === null ? null : vEnd - vStart
 }
 
-/** Croissance moyenne par jour sur les 14 derniers jours (régression linéaire), null si insuffisant. */
+/** Average growth per day over the last 14 days (linear regression), null if not enough data. */
 function slopePerDay(pts: Point[]): number | null {
   const w = pts.filter((p) => p.ts >= Date.now() - 14 * DAY)
   if (w.length < 2) return null
@@ -45,14 +45,14 @@ function Goal({ account, metric, pts }: { account: Account; metric: MetricKey; p
   const prev = prevThreshold(rule, cur) ?? 0
   const pct = Math.max(0, Math.min(100, ((cur - prev) / (next - prev)) * 100))
 
-  // Date estimée : d'après la tendance des derniers relevés.
+  // Estimated date: from the trend of the latest readings.
   let eta: string | null = null
   {
     const slope = slopePerDay(pts)
     if (slope && slope > 0) {
       const days = (next - cur) / slope
       if (days < 1) eta = t('goals.eta.today')
-      else if (days <= 3650) eta = t('goals.eta.days', { n: Math.ceil(days), date: new Date(Date.now() + days * DAY).toLocaleDateString(settings.lang === 'fr' ? 'fr-FR' : 'en-US') })
+      else if (days <= 3650) eta = t('goals.eta.days', { n: Math.ceil(days), date: new Date(Date.now() + days * DAY).toLocaleDateString(localeOf(settings.lang)) })
     }
     eta = eta ?? t('goals.eta.none')
   }
@@ -99,7 +99,7 @@ export function Goals(): JSX.Element {
     return <Reveal><div className="page-head"><h1>{t('goals.title')}</h1></div><div className="glass empty"><p>{t('goals.noAccounts')}</p></div></Reveal>
   }
 
-  // Cellule de comparaison : gain de la période + variation par rapport à la précédente.
+  // Comparison cell: gain of the period + change versus the previous one.
   const cell = (pts: Point[], days: number): JSX.Element => {
     const now = gain(pts, days, 0), before = gain(pts, days, days)
     const pct = now !== null && before !== null && before !== 0 ? ((now - before) / Math.abs(before)) * 100 : null
@@ -142,7 +142,7 @@ export function Goals(): JSX.Element {
         {events.map((e) => (
           <div className="list-item" key={e.id}>
             <span>{e.direction === 'up' ? '▲' : '▼'} {e.platform === 'plugin' ? e.source : t(`platform.${e.platform}`)} · {e.message}{e.demo && <span className="badge" style={{ marginLeft: 8 }}>{t('platform.demo')}</span>}</span>
-            <span className="muted small">{new Date(e.ts).toLocaleString(settings.lang === 'fr' ? 'fr-FR' : 'en-US')}</span>
+            <span className="muted small">{new Date(e.ts).toLocaleString(localeOf(settings.lang))}</span>
           </div>
         ))}
       </Reveal>

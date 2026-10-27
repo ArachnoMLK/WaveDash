@@ -1,6 +1,6 @@
-// Personnalisation : verre, fond, couleur, interface, navigation, préréglages de thème.
+// Customization: glass, background, colour, interface, navigation, theme presets.
 import { useState } from 'react'
-import { BgMode, ChartPalette, Density, FontFamily, NativeMaterial, ThemeMode } from '@shared/types'
+import { BgMode, ChartPalette, Density, FontFamily, NativeMaterial, ThemeMode, Lang, LANGS } from '@shared/types'
 import { DEFAULT_THEME, themeFromSettings } from '@shared/theme'
 import { Row, Section, Slider } from '../components/settingsUi'
 import { Switch, Tabs } from '../components/ui'
@@ -10,7 +10,7 @@ import { pluginAccountOfRoute, pluginNavIds, pluginNavLabel } from '../lib/plugi
 
 const ACCENTS = ['#8ab4ff', '#7ee0a1', '#ff8f8f', '#ffd479', '#c9a0ff', '#ff9ec7']
 
-/** Nom d'un onglet : modifiable sur place, enregistré en quittant le champ (vide = nom par défaut). */
+/** Tab name: editable in place, saved when leaving the field (empty = default name). */
 function NavName({ value, placeholder, aria, onCommit }: { value: string; placeholder: string; aria: string; onCommit: (v: string) => void }): JSX.Element {
   const [v, setV] = useState(value)
   return (
@@ -41,7 +41,7 @@ export function AppearanceSettings(): JSX.Element {
   const importTheme = async (): Promise<void> => {
     const r = await window.api.importTheme()
     if (!r.ok) { if (r.error) setMsg(t('ap.importFail')); return }
-    const name = r.name ?? 'Thème'
+    const name = r.name ?? 'Theme'
     await up({ themePresets: { ...s.themePresets, [name]: { ...themeFromSettings(s), ...r.theme } } })
     setMsg(t('ap.imported', { name }))
   }
@@ -162,7 +162,9 @@ export function AppearanceSettings(): JSX.Element {
 
       <Section title={t('ap.interface')} delay={0.16}>
         <Row title={t('settings.language')}>
-          <Tabs value={s.lang} onChange={(v) => void up({ lang: v })} options={[{ id: 'fr', label: 'Français' }, { id: 'en', label: 'English' }]} />
+          <select value={s.lang} onChange={(e) => void up({ lang: e.target.value as Lang })} aria-label={t('settings.language')}>
+            {LANGS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
         </Row>
         <Row title={t('ap.radius')}><Slider value={s.radius} min={0} max={28} unit=" px" onChange={(v) => void up({ radius: v })} /></Row>
         <Row title={t('ap.density')}>

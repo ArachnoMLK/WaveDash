@@ -1,13 +1,14 @@
-// Animations d'une légende rangées automatiquement : signatures, attaques de ses deux armes, emotes, postures.
-// Sources : HeroTypes.xml (armes, pouvoirs) et powerTypes.csv (animation de chaque pouvoir) lus dans Game.swz.
+// A legend's animations sorted automatically: signatures, attacks of both weapons, emotes, stances.
+// Sources: HeroTypes.xml (weapons, powers) and powerTypes.csv (animation of each power) read from Game.swz.
 import type { StudioAnim, StudioAnimGroup, StudioHero, StudioItem } from '@shared/studio'
-import { WEAPON_ANM, WEAPON_FR } from '@shared/studio'
+import { groupLabels, WEAPON_ANM, weaponName } from '@shared/studio'
+import type { Lang } from '@shared/types'
 
-export { WEAPON_ANM, WEAPON_FR }
+export { WEAPON_ANM }
 
 export type AnimListing = { classes: Record<string, { name: string; frames: number; loopStart?: number; recoveryStart?: number }[]> }
 
-/** Champs simples des <HeroType> (pas besoin d'un parseur XML complet). */
+/** Simple fields of <HeroType> (no need for a full XML parser). */
 export function parseHeroes(xml: string): (StudioHero & { powers: Record<string, string> })[] {
   const out: (StudioHero & { powers: Record<string, string> })[] = []
   for (const m of xml.matchAll(/<HeroType HeroName="([^"]+)">([\s\S]*?)<\/HeroType>/g)) {
@@ -25,7 +26,7 @@ export function parseHeroes(xml: string): (StudioHero & { powers: Record<string,
   return out
 }
 
-/** CSV du jeu : 1re ligne ignorée, puis en-tête ; champs éventuellement entre guillemets. */
+/** Game CSV: 1st line ignored, then the header; fields possibly quoted. */
 export function parseCsv(text: string): Record<string, string>[] {
   const rows: string[][] = []
   let row: string[] = [], field = '', quoted = false
@@ -47,7 +48,7 @@ export function parseCsv(text: string): Record<string, string>[] {
   return rest.filter((r) => r.length > 1).map((r) => Object.fromEntries(head.map((h, i) => [h, r[i] ?? ''])))
 }
 
-/** Pouvoir → animations jouées (le pouvoir puis ses enchaînements `ComboName`). */
+/** Power → animations played (the power then its `ComboName` follow-ups). */
 export function powerAnims(power: string, powers: Map<string, Record<string, string>>): string[] {
   const out: string[] = []
   let cur: string | undefined = power
@@ -63,7 +64,7 @@ export function powerAnims(power: string, powers: Map<string, Record<string, str
   return out
 }
 
-/** Classe principale d'un fichier .anm : la classe « a__ » la plus fournie. */
+/** Main class of a .anm file: the "a__" class with the most content. */
 export function mainClass(listing: AnimListing): string | null {
   const main = Object.entries(listing.classes).filter(([k]) => k.includes('/a__')).sort((a, b) => b[1].length - a[1].length)
   return main[0]?.[0] ?? null
@@ -71,17 +72,17 @@ export function mainClass(listing: AnimListing): string | null {
 
 const clean = (n: string): boolean => !/Swap|_IW|UI$|Po$/.test(n)
 const DIR: Record<string, string> = { '': 'NSig', _Forward: 'SSig', _Down: 'DSig' }
-/** Préfixe des pouvoirs d'une arme dans powerTypes.csv (SwordNeutral, LanceAir…). */
+/** Prefix of a weapon's powers in powerTypes.csv (SwordNeutral, LanceAir…). */
 const POWER_PREFIX: Record<string, string> = { RocketLance: 'Lance' }
-/** Attaques normales, dans l'ordre habituel des joueurs : nom → suffixe du pouvoir. */
+/** Normal attacks, in the order players usually list them: name → power suffix. */
 export const MOVESET: [string, string][] = [
   ['NLight', 'Neutral'], ['SLight', 'Side'], ['DLight', 'Down'],
   ['NAir', 'Air'], ['SAir', 'AirSide'], ['DAir', 'AirDown'], ['Recovery', 'AirUpHeavy'], ['GP', 'GroundPound']
 ]
-/** Suites d'un même coup (enchaînement, touche, variante au sol…), sans déborder sur le coup voisin (Air → AirSide). */
+/** Follow-ups of the same move (combo, hit, ground variant…), without spilling over the next move (Air → AirSide). */
 const FOLLOW = /^(Combo\d*|Hit\d*|Miss|Release|Exhaust|Ground\w*|Far|Near|Forward|BounceRecover)?$/
 
-/** Animations d'un coup : la chaîne d'enchaînements du pouvoir, puis ses suites (touché, au sol…). */
+/** Animations of a move: the power's combo chain, then its follow-ups (hit, ground…). */
 export function moveAnims(base: string, powers: Map<string, Record<string, string>>): string[] {
   const out = powerAnims(base, powers)
   for (const name of powers.keys()) {
@@ -91,7 +92,7 @@ export function moveAnims(base: string, powers: Map<string, Record<string, strin
   return out
 }
 
-/** Un coup en plusieurs parties : l'enchaînement complet, puis chaque partie. */
+/** A multi-part move: the full chain, then each part. */
 function moveItems(label: string, names: string[], find: (n: string) => StudioAnim | null): StudioAnim[] {
   const parts = names.map(find).filter((a): a is StudioAnim => !!a)
   if (!parts.length) return []
@@ -107,9 +108,11 @@ export function buildLegendGroups(
   hero: { name: string; weapons: string[]; powers: Record<string, string> },
   powers: Map<string, Record<string, string>>,
   listings: Record<string, AnimListing>,
-  emotes: AnimListing
+  emotes: AnimListing,
+  lang: Lang = 'en'
 ): StudioAnimGroup[] {
   const groups: StudioAnimGroup[] = []
+  const L = groupLabels(lang)
   const find = (file: string, name: string): StudioAnim | null => {
     const l = listings[file]; if (!l) return null
     for (const [cls, anims] of Object.entries(l.classes)) {
@@ -119,24 +122,24 @@ export function buildLegendGroups(
     return null
   }
 
-  // Signatures : pour chaque arme, neutre / côté / bas (avec leurs enchaînements).
+  // Signatures: for each weapon, neutral / side / down (with their follow-ups).
   const sigs: StudioAnim[] = []
   hero.weapons.forEach((w, i) => {
     const file = WEAPON_ANM[w]; if (!file) return
     for (const [suffix, dir] of Object.entries(DIR)) {
       const power = hero.powers[`SpecialPower${i + 1}${suffix}`]; if (!power) continue
-      sigs.push(...moveItems(`★ ${dir} · ${WEAPON_FR[w] ?? w}`, moveAnims(power, powers), (n) => find(file, n)))
+      sigs.push(...moveItems(`★ ${dir} · ${weaponName(w, lang)}`, moveAnims(power, powers), (n) => find(file, n)))
     }
   })
-  if (sigs.length) groups.push({ id: 'sigs', label: 'Signatures', items: sigs })
+  if (sigs.length) groups.push({ id: 'sigs', label: L.sigs, items: sigs })
 
-  // Attaques normales et postures de chaque arme (classe principale du fichier).
+  // Normal attacks and stances of each weapon (main class of the file).
   for (const w of hero.weapons) {
     const file = WEAPON_ANM[w]; const l = listings[file]; if (!l) continue
     const cls = mainClass(l); if (!cls) continue
     const all = l.classes[cls].filter((a) => clean(a.name))
     const attacks = all.filter((a) => a.name.startsWith('Attack') && !a.name.startsWith('AttackSpecial'))
-    // coups nommés (NLight, SAir, Recovery…) d'après powerTypes, puis le reste des animations d'attaque
+    // named moves (NLight, SAir, Recovery…) from powerTypes, then the rest of the attack animations
     const prefix = POWER_PREFIX[w] ?? w
     const byName = (n: string): StudioAnim | null => { const a = l.classes[cls].find((x) => x.name === n); return a ? { name: a.name, label: a.name, animClass: cls, frames: a.frames } : null }
     const named: StudioAnim[] = [], used = new Set<string>()
@@ -146,23 +149,23 @@ export function buildLegendGroups(
       named.push(...items)
     }
     const rest = attacks.filter((a) => !used.has(a.name)).map((a) => ({ name: a.name, label: `${a.name.replace(/^Attack/, '')}`, animClass: cls, frames: a.frames }))
-    groups.push({ id: `atk-${w}`, label: `Attaques ${WEAPON_FR[w] ?? w}`, items: [...named, ...rest] })
+    groups.push({ id: `atk-${w}`, label: `${L.attacks} ${weaponName(w, lang)}`, items: [...named, ...rest] })
     const moves = all.filter((a) => MOVES.test(a.name) && a.frames > 1)
-    if (moves.length) groups.push({ id: `mv-${w}`, label: `Postures ${WEAPON_FR[w] ?? w}`, items: moves.map((a) => ({ name: a.name, label: a.name, animClass: cls, frames: a.frames })) })
+    if (moves.length) groups.push({ id: `mv-${w}`, label: `${L.stances} ${weaponName(w, lang)}`, items: moves.map((a) => ({ name: a.name, label: a.name, animClass: cls, frames: a.frames })) })
   }
 
-  // Emotes et danses (communes à toutes les légendes).
+  // Emotes and dances (shared by all legends).
   const ecls = mainClass(emotes)
   if (ecls) {
     const items = emotes.classes[ecls].filter((a) => a.name.startsWith('Taunt') && clean(a.name))
       .map((a) => ({ name: a.name, label: a.name.replace(/^Taunt/, '').replace(/([a-z])([A-Z])/g, '$1 $2'), animClass: ecls, frames: a.frames }))
       .sort((a, b) => a.label.localeCompare(b.label))
-    groups.push({ id: 'emotes', label: 'Emotes & danses', items })
+    groups.push({ id: 'emotes', label: L.emotes, items })
   }
   return groups
 }
 
-/** Symboles d'un SFX ; ceux numérotés d'une même famille (Sparkle01, Sparkle02…) ne forment qu'un effet joué à la suite. */
+/** Symbols of an SFX; numbered ones of the same family (Sparkle01, Sparkle02…) form a single effect played in sequence. */
 export function effectItems(file: string, symbols: string[]): StudioItem[] {
   const families = new Map<string, { n: number; name: string }[]>()
   const single: string[] = []
@@ -175,13 +178,13 @@ export function effectItems(file: string, symbols: string[]): StudioItem[] {
   for (const [prefix, parts] of families) {
     if (parts.length < 2) { list.push({ name: parts[0].name, display: parts[0].name.replace(/^a_/, ''), animClass: `${file}/${parts[0].name}` }); continue }
     parts.sort((a, b) => a.n - b.n)
-    const mid = parts[Math.floor(parts.length / 2)].name   // vignette : une image du milieu, plus parlante que la 1re
+    const mid = parts[Math.floor(parts.length / 2)].name   // thumbnail: a frame from the middle, more telling than the 1st
     list.push({ name: prefix, display: prefix.replace(/^a_/, ''), animClass: `${file}/${mid}`, sequence: parts.map((p) => p.name) })
   }
   return list.sort((a, b) => a.display.localeCompare(b.display))
 }
 
-/** Le nom interne d'une légende dans ses effets : AttackSpecialMonk2… pour Wu Shang (Monk), sans attraper MonkeyKing. */
+/** A legend's internal name in its effects: AttackSpecialMonk2… for Wu Shang (Monk), without catching MonkeyKing. */
 export function heroEffectTest(heroName: string): (symbol: string) => boolean {
   const re = new RegExp(`${heroName.replace(/[^\w]/g, '')}(?![a-z])`)
   return (symbol) => re.test(symbol)

@@ -1,12 +1,12 @@
-// Discord (serveurs) : suit des serveurs Discord via l'API officielle.
-// - Bot seul : tous les serveurs où le bot est présent (totaux, une ligne et un détail par serveur).
-// - Bot + ID de serveur : un seul serveur, avec une ligne par salon.
-// - Invitation seule (sans bot) : membres, membres en ligne et boosts d'un serveur.
-// Les messages sont comptés au fil de l'eau (les 7 derniers jours au premier passage, jamais l'historique plus ancien) ;
-// leur contenu n'est ni lu ni gardé, et les messages des bots ne comptent pas.
+// Discord (servers): follows Discord servers through the official API.
+// - Bot only: every server the bot is in (totals, one row and one detail per server).
+// - Bot + server ID: a single server, with one row per channel.
+// - Invite only (no bot): members, online members and boosts of a server.
+// Messages are counted as they come (the last 7 days on the first pass, never older history);
+// their content is neither read nor kept, and bot messages do not count.
 var API = 'https://discord.com/api/v10'
-var EPOCH = 1420070400000                       // époque des identifiants Discord (snowflakes)
-var MAX_REQ = 26                                // le bac à sable autorise 30 requêtes par exécution
+var EPOCH = 1420070400000                       // epoch of Discord identifiers (snowflakes)
+var MAX_REQ = 26                                // the sandbox allows 30 requests per run
 var KEEP_DAYS = 35, AUTHOR_DAYS = 8, MAX_AUTHORS = 200, MAX_GUILDS = 45
 
 function inviteCode(raw) {
@@ -14,14 +14,14 @@ function inviteCode(raw) {
   var m = /(?:discord(?:app)?\.(?:gg|com)\/(?:invite\/)?)([A-Za-z0-9-]{2,40})/i.exec(s)
   return m ? m[1] : (/^[A-Za-z0-9-]{2,40}$/.test(s) ? s : '')
 }
-function tsOf(id) { return Math.floor(Number(id) / 4194304) + EPOCH }     // précision de quelques ms, suffisante pour dater
-function newer(a, b) { return a.length !== b.length ? a.length > b.length : a > b }   // compare deux snowflakes (chaînes)
+function tsOf(id) { return Math.floor(Number(id) / 4194304) + EPOCH }     // precise to a few ms, enough for dating
+function newer(a, b) { return a.length !== b.length ? a.length > b.length : a > b }   // compares two snowflakes (strings)
 function pad(n) { return (n < 10 ? '0' : '') + n }
 function dayKey(ts) { var d = new Date(ts); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) }
 function dayStart(key) { var p = key.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]).getTime() }
 function sumSince(map, fromKey) { var s = 0; for (var k in map) if (k >= fromKey) s += map[k]; return s }
 function load(k, d) { try { var v = host.storage.get(k); return v ? JSON.parse(v) : d } catch (e) { return d } }
-function save(k, v) { var s = JSON.stringify(v); if (s.length <= 64000) host.storage.set(k, s); else host.log('Stockage plein pour ' + k + ' : données réduites au prochain passage') }
+function save(k, v) { var s = JSON.stringify(v); if (s.length <= 64000) host.storage.set(k, s); else host.log('Storage full for ' + k + ': data reduced on the next pass') }
 function fmtDate(ts) { var d = new Date(ts); return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) }
 
 var budget = 0
@@ -29,7 +29,7 @@ async function call(path, token) {
   if (budget >= MAX_REQ) return { skip: true }
   budget++
   var r = await host.http(API + path, { headers: token ? { authorization: 'Bot ' + token } : {} })
-  if (r.status === 429) { budget = MAX_REQ; return { limited: true } }       // limite de débit : on reprendra plus tard
+  if (r.status === 429) { budget = MAX_REQ; return { limited: true } }       // rate limit: resume later
   if (!r.ok) return { status: r.status }
   return { data: r.json() }
 }
@@ -46,8 +46,8 @@ function botError(status, F) {
   return new Error((F ? 'Discord a répondu ' : 'Discord answered ') + status)
 }
 
-/* ───────── état d'un serveur (stockage : « c.<id> » salons et jours, « a.<id> » membres actifs) ───────── */
-// « c.<id> » garde aussi la date de la dernière synchronisation (t) et les infos du serveur (boosts, niveau) : 2 clés par serveur.
+/* ───────── server state (storage: "c.<id>" channels and days, "a.<id>" active members) ───────── */
+// "c.<id>" also keeps the last sync date (t) and the server info (boosts, level): 2 keys per server.
 function loadGuild(id) { var c = load('c.' + id, { chans: {}, days: {} }); return { id: id, chans: c.chans, days: c.days, t: c.t || 0, info: c.info || null, authors: load('a.' + id, {}) } }
 function saveGuild(g) {
   var keep = dayKey(Date.now() - KEEP_DAYS * 86400000), keepA = dayKey(Date.now() - AUTHOR_DAYS * 86400000)
@@ -60,7 +60,7 @@ function saveGuild(g) {
   save('c.' + g.id, { chans: g.chans, days: g.days, t: g.t, info: g.info }); save('a.' + g.id, g.authors)
 }
 
-/** Toutes les 6 h : liste des salons et infos du serveur (boosts, niveau de boost, que la liste des serveurs ne donne pas). */
+/** Every 6 h: channel list and server info (boosts, boost level, which the server list does not give). */
 async function syncGuild(g, token, F) {
   if (Object.keys(g.chans).length && g.t > Date.now() - 6 * 3600000) return
   var r = await call('/guilds/' + g.id + '?with_counts=true', token)
@@ -68,14 +68,14 @@ async function syncGuild(g, token, F) {
   if (await syncChannels(g, token, F)) g.t = Date.now()
 }
 
-/** Met à jour la liste des salons textuels d'un serveur. */
+/** Updates the list of text channels of a server. */
 async function syncChannels(g, token, F) {
   var r = await call('/guilds/' + g.id + '/channels', token)
   if (r.status) throw botError(r.status, F)
   if (!r.data) return false
   var seen = {}
   r.data.forEach(function (c) {
-    if (c.type !== 0 && c.type !== 5) return                            // salons textuels et d'annonces
+    if (c.type !== 0 && c.type !== 5) return                            // text and announcement channels
     seen[c.id] = 1
     var x = g.chans[c.id] || (g.chans[c.id] = { n: c.name, last: '', total: 0, d: {} })
     x.n = c.name
@@ -85,8 +85,8 @@ async function syncChannels(g, token, F) {
   return true
 }
 
-/** Lit les nouveaux messages d'un salon (une page de 100 au plus). Renvoie true si le salon reste en retard.
- *  Un salon déjà interrogé (ch.at) n'est plus en retard, même s'il n'a aucun message : sinon il le resterait pour toujours. */
+/** Reads the new messages of a channel (one page of at most 100). Returns true if the channel is still behind.
+ *  A channel already queried (ch.at) is no longer behind, even with no message: otherwise it would stay behind forever. */
 async function readChannel(g, cid, token) {
   var ch = g.chans[cid]
   if (ch.denied) return false
@@ -99,7 +99,7 @@ async function readChannel(g, cid, token) {
   r.data.forEach(function (m) {
     if (!top || newer(m.id, top)) top = m.id
     var t = tsOf(m.id)
-    if (firstLook && t < cutoff) return                                  // premier passage : seulement les 7 derniers jours
+    if (firstLook && t < cutoff) return                                  // first pass: only the last 7 days
     if (!m.author || m.author.bot) return
     var k = dayKey(t)
     g.days[k] = (g.days[k] || 0) + 1
@@ -113,13 +113,13 @@ async function readChannel(g, cid, token) {
   return ch.more
 }
 
-/** Ordre de lecture : salons en retard d'abord, puis ceux lus le moins récemment. */
+/** Reading order: channels that are behind first, then the least recently read. */
 function queueOf(g) {
   return Object.keys(g.chans).filter(function (id) { return !g.chans[id].denied })
     .sort(function (a, b) { var A = g.chans[a], B = g.chans[b]; return (B.more ? 1 : 0) - (A.more ? 1 : 0) || (A.at || 0) - (B.at || 0) })
 }
 
-/* ───────── affichage ───────── */
+/* ───────── display ───────── */
 function guildFigures(g) {
   var today = dayKey(Date.now()), week = dayKey(Date.now() - 6 * 86400000)
   return { today: g.days[today] || 0, week: sumSince(g.days, week), total: Object.keys(g.chans).reduce(function (s, c) { return s + g.chans[c].total }, 0),
@@ -159,13 +159,13 @@ async function allServers(ctx, token, F) {
   if (guilds.length > MAX_GUILDS) host.log((F ? 'Seuls les ' : 'Only the first ') + MAX_GUILDS + (F ? ' premiers serveurs sont suivis en détail.' : ' servers are tracked in detail.'))
   var tracked = guilds.slice(0, MAX_GUILDS), states = {}, behind = 0
   tracked.forEach(function (gd) { states[gd.id] = loadGuild(gd.id) })
-  // Lecture répartie : chaque serveur à tour de rôle, un salon à la fois, tant qu'il reste des requêtes.
+  // Spread reading: each server in turn, one channel at a time, while requests remain.
   var order = tracked.map(function (gd) { return gd.id }).sort(function (a, b) { return states[a].t - states[b].t })
   for (var i = 0; i < order.length; i++) {
     var g = states[order[i]]
     try { await syncGuild(g, token, F) } catch (e) { host.log(gdName(tracked, g.id) + ' : ' + e.message) }
   }
-  // Chaque salon est lu au plus une fois par exécution, sauf s'il lui reste une page de messages.
+  // Each channel is read at most once per run, unless it still has a page of messages left.
   var done = {}, progressed = true
   while (budget < MAX_REQ && progressed) {
     progressed = false
@@ -245,8 +245,8 @@ async function inviteOnly(code, F) {
     { label: F ? 'En ligne' : 'Online', value: metrics.online }, { label: 'Boosts', value: metrics.boosts }] } }
 }
 
-/** Jeton du bot nettoyé (espaces, guillemets, préfixe « Bot ») et vérifié : un jeton de bot a trois parties séparées par des points.
- *  Les confusions courantes (Client Secret, Public Key, ID d'application) reçoivent un message précis. */
+/** Bot token cleaned (spaces, quotes, "Bot" prefix) and checked: a bot token has three dot-separated parts.
+ *  Common mix-ups (Client Secret, Public Key, Application ID) get a precise message. */
 function cleanToken(raw, F) {
   var t = String(raw || '').trim().replace(/^["']|["']$/g, '').replace(/^Bot\s+/i, '').trim()
   if (!t) return ''
@@ -260,7 +260,7 @@ function cleanToken(raw, F) {
 
 function modeOf(ctx) {
   var F = ctx.lang === 'fr', guildId = (ctx.inputs.guildId || '').trim(), code = inviteCode(ctx.inputs.invite), token = ''
-  // Le jeton est commun à tous les comptes du plugin : invalide, il ne doit pas casser un compte suivi par simple invitation.
+  // The token is shared by all accounts of the plugin: if invalid, it must not break an account followed by invite only.
   try { token = cleanToken(ctx.secrets.botToken, F) } catch (e) {
     if (!code || guildId) throw e
     host.log(e.message + (F ? ' Compte par invitation : jeton ignoré.' : ' Invite account: token ignored.'))
@@ -273,9 +273,9 @@ var plugin = {
   resolve: async function (ctx) {
     budget = 0
     var m = modeOf(ctx)
-    // Le jeton est saisi après l'ajout du compte : sans invitation ni ID, le compte suivra tous les serveurs du bot.
+    // The token is entered after the account is added: with no invite or ID, the account follows every server of the bot.
     if (m.code) { var inv = await readInvite(m.code, m.F); return { externalId: inv.guild.id, displayName: inv.guild.name } }
-    // Avec un jeton : on le teste tout de suite, pour que l'erreur s'affiche à l'ajout du compte et pas plus tard.
+    // With a token: test it right away, so the error shows when the account is added and not later.
     var bot = null
     if (m.token) {
       var me = await call('/users/@me', m.token)
@@ -292,7 +292,7 @@ var plugin = {
     var m = modeOf(ctx)
     if (m.token && m.guildId) return oneServer(ctx, m.token, m.guildId, m.F)
     if (m.token && !m.code) return allServers(ctx, m.token, m.F)
-    if (m.code && m.token) {                                            // invitation + bot : le serveur de l'invitation, en détail
+    if (m.code && m.token) {                                            // invite + bot: the invite's server, in detail
       var inv = await readInvite(m.code, m.F)
       return oneServer(ctx, m.token, inv.guild.id, m.F)
     }

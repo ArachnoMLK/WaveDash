@@ -1,6 +1,6 @@
-// Processus des plugins : un processus utilitaire Electron, séparé de l'interface, qui exécute les scripts dans QuickJS.
-// Il ne touche ni à la base ni aux secrets : il reçoit tout ce qu'une exécution demande (script, contexte, copie du
-// stockage du compte) et renvoie le résultat et les changements de stockage, que le processus principal enregistre.
+// Plugin process: an Electron utility process, separate from the interface, which runs the scripts in QuickJS.
+// It touches neither the database nor the secrets: it gets everything a run needs (script, context, copy of the
+// account storage) and returns the result and the storage changes, which the main process saves.
 import { PluginError, runPlugin, RunRequest } from './sandbox'
 
 interface Job extends Omit<RunRequest, 'storage'> { snapshot: Record<string, string>; maxKeys: number }
@@ -16,7 +16,7 @@ port.on('message', ({ data }) => {
     storage: {
       get: (k) => store.get(k) ?? null,
       set: (k, v) => {
-        if (!store.has(k) && store.size >= job.maxKeys) throw new Error('trop de clés de stockage')
+        if (!store.has(k) && store.size >= job.maxKeys) throw new Error('too many storage keys')
         store.set(k, v); changes[k] = v
       }
     }

@@ -1,4 +1,4 @@
-// Composition : plusieurs rendus superposés dans l'aperçu (animés ou figés), déplaçables, puis fusionnés en un nouveau rendu.
+// Composition: several renders stacked in the preview (animated or still), movable, then merged into a new render.
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import type { StudioRender } from '@shared/studio'
 
@@ -7,9 +7,9 @@ const studio = window.api.studio
 export interface StackItem {
   id: string; render: StudioRender; visible: boolean
   x: number; y: number; scale: number; flip: boolean
-  delay: number          // images d'attente avant de démarrer
+  delay: number          // waiting frames before starting
   mode: 'once' | 'loop' | 'still'
-  still: number          // image affichée en mode figé
+  still: number          // frame shown in still mode
 }
 export const stackItem = (render: StudioRender, x = 0, y = 0): StackItem => ({
   id: Math.random().toString(36).slice(2), render, visible: true, x, y, scale: 1, flip: false, delay: 0, mode: 'loop', still: 0
@@ -27,7 +27,7 @@ const loaded = (src: string): Promise<HTMLImageElement> => new Promise((ok, ko) 
   const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => { imgs.set(src, im); ok(im) }; im.onerror = ko; im.src = src
 })
 
-/** Image d'un calque à l'instant `t` (null : pas encore commencé). */
+/** Frame of a layer at time `t` (null: not started yet). */
 function frameAt(s: StackItem, t: number): number | null {
   const n = s.render.files.length
   if (s.mode === 'still') return Math.min(n - 1, s.still)
@@ -35,7 +35,7 @@ function frameAt(s: StackItem, t: number): number | null {
   if (k < 0) return null
   return s.mode === 'loop' ? k % n : Math.min(n - 1, k)
 }
-/** Cadre commun : l'union des calques (centrés sur leur position). */
+/** Common frame: the union of the layers (centred on their position). */
 function bounds(stack: StackItem[]): { x: number; y: number; w: number; h: number } {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
   for (const s of stack) {
@@ -61,7 +61,7 @@ function paint(c: CanvasRenderingContext2D, stack: StackItem[], b: { x: number; 
 }
 
 export function Composer({ stack, setStack, tr, onMerged }: {
-  stack: StackItem[]; setStack: (s: StackItem[]) => void; tr: (fr: string, en: string) => string; onMerged: (r: StudioRender) => void
+  stack: StackItem[]; setStack: (s: StackItem[]) => void; tr: (en: string, fr: string) => string; onMerged: (r: StudioRender) => void
 }): JSX.Element {
   const cv = useRef<HTMLCanvasElement>(null)
   const [t, setT] = useState(0)
@@ -105,11 +105,11 @@ export function Composer({ stack, setStack, tr, onMerged }: {
     set(d.id, { x: d.x + (e.clientX - d.px) * f, y: d.y + (e.clientY - d.py) * f })
   }
 
-  /** Toutes les images de la composition, en pleine taille, enregistrées comme un nouveau rendu. */
+  /** All the frames of the composition, full size, saved as a new render. */
   const merge = async (): Promise<void> => {
     setBusy(true)
     try {
-      // toutes les images chargées avant de dessiner
+      // all frames loaded before drawing
       await Promise.all(stack.filter((s) => s.visible).flatMap((s) => s.render.files.map((f) => loaded(`studio://renders/${s.render.id}/${f}`))))
       const c = document.createElement('canvas'); c.width = b.w; c.height = b.h
       const x = c.getContext('2d')!
@@ -129,7 +129,7 @@ export function Composer({ stack, setStack, tr, onMerged }: {
       <canvas ref={cv} className="st-canvas cmp-canvas" onPointerDown={down} onPointerMove={move} onPointerUp={() => { drag.current = null }} />
       <div className="st-ctrl">
         <div className="row">
-          <button className="btn small primary st-play" onClick={() => setPlaying(!playing)}>{playing ? tr('Pause', 'Pause') : tr('Lecture', 'Play')}</button>
+          <button className="btn small primary st-play" onClick={() => setPlaying(!playing)}>{playing ? tr('Pause', 'Pause') : tr('Play', 'Lecture')}</button>
           <span className="small st-fnum">{t + 1} / {n}</span>
           <input className="st-range" type="range" min={0} max={n - 1} value={Math.min(t, n - 1)} onChange={(e) => { setPlaying(false); setT(Number(e.target.value)) }} style={{ flex: 1 }} />
         </div>
@@ -139,29 +139,29 @@ export function Composer({ stack, setStack, tr, onMerged }: {
           <div key={s.id} className={`cmp-item ${s.id === sel ? 'on' : ''}`} onClick={() => setSel(s.id)}>
             <img src={`studio://renders/${s.render.id}/${s.render.files[0]}`} alt="" />
             <span className="grow mm-ln">{s.render.label}</span>
-            <button className={`mm-tg ${s.visible ? '' : 'off'}`} title={tr('Afficher', 'Show')} onClick={(e) => { e.stopPropagation(); set(s.id, { visible: !s.visible }) }}>👁</button>
-            <button className="mm-tg" title={tr('Monter', 'Up')} onClick={(e) => { e.stopPropagation(); const i = stack.indexOf(s); if (i < stack.length - 1) { const a = [...stack]; [a[i], a[i + 1]] = [a[i + 1], a[i]]; setStack(a) } }}>▲</button>
-            <button className="mm-tg" title={tr('Descendre', 'Down')} onClick={(e) => { e.stopPropagation(); const i = stack.indexOf(s); if (i > 0) { const a = [...stack]; [a[i], a[i - 1]] = [a[i - 1], a[i]]; setStack(a) } }}>▼</button>
-            <button className="mm-tg" title={tr('Retirer', 'Remove')} onClick={(e) => { e.stopPropagation(); setStack(stack.filter((x) => x.id !== s.id)) }}>✕</button>
+            <button className={`mm-tg ${s.visible ? '' : 'off'}`} title={tr('Show', 'Afficher')} onClick={(e) => { e.stopPropagation(); set(s.id, { visible: !s.visible }) }}>👁</button>
+            <button className="mm-tg" title={tr('Up', 'Monter')} onClick={(e) => { e.stopPropagation(); const i = stack.indexOf(s); if (i < stack.length - 1) { const a = [...stack]; [a[i], a[i + 1]] = [a[i + 1], a[i]]; setStack(a) } }}>▲</button>
+            <button className="mm-tg" title={tr('Down', 'Descendre')} onClick={(e) => { e.stopPropagation(); const i = stack.indexOf(s); if (i > 0) { const a = [...stack]; [a[i], a[i - 1]] = [a[i - 1], a[i]]; setStack(a) } }}>▼</button>
+            <button className="mm-tg" title={tr('Remove', 'Retirer')} onClick={(e) => { e.stopPropagation(); setStack(stack.filter((x) => x.id !== s.id)) }}>✕</button>
           </div>
         ))}
       </div>
       {cur && (
         <div className="cmp-props">
           <div className="mm-tabs">
-            {(['loop', 'once', 'still'] as const).map((m) => <button key={m} className={cur.mode === m ? 'on' : ''} onClick={() => set(cur.id, { mode: m })}>{m === 'loop' ? tr('En boucle', 'Loop') : m === 'once' ? tr('Une fois', 'Once') : tr('Image fixe', 'Still')}</button>)}
+            {(['loop', 'once', 'still'] as const).map((m) => <button key={m} className={cur.mode === m ? 'on' : ''} onClick={() => set(cur.id, { mode: m })}>{m === 'loop' ? tr('Loop', 'En boucle') : m === 'once' ? tr('Once', 'Une fois') : tr('Still', 'Image fixe')}</button>)}
             <button className={cur.flip ? 'on' : ''} onClick={() => set(cur.id, { flip: !cur.flip })}>⇆ Flip</button>
           </div>
-          <label className="mm-slider"><span>{tr('Taille', 'Scale')}</span><input type="range" min={0.1} max={3} step={0.05} value={cur.scale} onChange={(e) => set(cur.id, { scale: Number(e.target.value) })} /><em>{Math.round(cur.scale * 100)} %</em></label>
+          <label className="mm-slider"><span>{tr('Scale', 'Taille')}</span><input type="range" min={0.1} max={3} step={0.05} value={cur.scale} onChange={(e) => set(cur.id, { scale: Number(e.target.value) })} /><em>{Math.round(cur.scale * 100)} %</em></label>
           {cur.mode === 'still'
-            ? <label className="mm-slider"><span>{tr('Image', 'Frame')}</span><input type="range" min={0} max={cur.render.files.length - 1} value={cur.still} onChange={(e) => set(cur.id, { still: Number(e.target.value) })} /><em>{cur.still + 1}</em></label>
-            : <label className="mm-slider"><span>{tr('Départ', 'Start')}</span><input type="range" min={0} max={120} value={cur.delay} onChange={(e) => set(cur.id, { delay: Number(e.target.value) })} /><em>{cur.delay} i</em></label>}
-          <p className="muted small">{tr('Glisse un calque sur l’aperçu pour le placer.', 'Drag a layer on the preview to place it.')}</p>
+            ? <label className="mm-slider"><span>{tr('Frame', 'Image')}</span><input type="range" min={0} max={cur.render.files.length - 1} value={cur.still} onChange={(e) => set(cur.id, { still: Number(e.target.value) })} /><em>{cur.still + 1}</em></label>
+            : <label className="mm-slider"><span>{tr('Start', 'Départ')}</span><input type="range" min={0} max={120} value={cur.delay} onChange={(e) => set(cur.id, { delay: Number(e.target.value) })} /><em>{cur.delay} i</em></label>}
+          <p className="muted small">{tr('Drag a layer on the preview to place it.', 'Glisse un calque sur l’aperçu pour le placer.')}</p>
         </div>
       )}
       <div className="row">
-        <button className="btn primary small" disabled={busy || !stack.some((s) => s.visible)} onClick={() => void merge()}>{busy ? tr('Fusion…', 'Merging…') : tr('Fusionner en un rendu', 'Merge into one render')}</button>
-        <button className="btn small" onClick={() => setStack([])}>{tr('Fermer la composition', 'Close composition')}</button>
+        <button className="btn primary small" disabled={busy || !stack.some((s) => s.visible)} onClick={() => void merge()}>{busy ? tr('Merging…', 'Fusion…') : tr('Merge into one render', 'Fusionner en un rendu')}</button>
+        <button className="btn small" onClick={() => setStack([])}>{tr('Close composition', 'Fermer la composition')}</button>
       </div>
     </div>
   )

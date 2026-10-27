@@ -1,225 +1,225 @@
-# Écrire un plugin WaveDash (`.wdsh`)
+# Writing a WaveDash plugin (`.wdsh`)
 
-Un plugin ajoute une **source de données** à WaveDash : il récupère des chiffres (une API, un dossier de fichiers…) et WaveDash s'occupe du reste : stockage, historique, cartes, graphiques, export.
+A plugin adds a **data source** to WaveDash: it fetches numbers (an API, a folder of files…) and WaveDash takes care of the rest: storage, history, cards, charts, export.
 
-Un fichier `.wdsh` est une **archive ZIP** contenant deux fichiers : `manifest.json` et un script JavaScript (`main.js` par défaut).
+A `.wdsh` file is a **ZIP archive** containing two files: `manifest.json` and a JavaScript script (`main.js` by default).
 
-## Démarrage rapide
+## Quick start
 
 ```bash
-node tools/wdsh-pack.mjs examples/plugins/weather-open-meteo      # crée le fichier .wdsh
+node tools/wdsh-pack.mjs examples/plugins/weather-open-meteo      # creates the .wdsh file
 ```
 
-Puis dans WaveDash : **Plugins › Installer un plugin** (ou glisse le fichier dans la fenêtre, ou double-clique dessus). Deux exemples complets sont fournis dans `examples/plugins/` : une météo (réseau) et des statistiques de dossier (fichiers).
+Then in WaveDash: **Plugins › Install a plugin** (or drop the file onto the window, or double-click it). Two complete examples are provided in `examples/plugins/`: a weather plugin (network) and folder stats (files).
 
-## Le manifeste (`manifest.json`)
+## The manifest (`manifest.json`)
 
 ```json
 {
   "wdsh": 1,
-  "id": "mon.plugin",
-  "name": "Mon plugin",
+  "id": "my.plugin",
+  "name": "My plugin",
   "version": "1.0.0",
-  "author": "Moi",
-  "description": { "fr": "Ce que fait le plugin.", "en": "What the plugin does." },
-  "permissions": { "network": ["api.exemple.com", "*.cdn.exemple.com"], "folder": false, "folderExtensions": [".replay"] },
-  "inputs":  [ { "key": "ville", "type": "text", "required": true, "label": { "fr": "Ville", "en": "City" } } ],
-  "secrets": [ { "key": "apiKey", "label": "Clé API" } ],
-  "metrics": [ { "key": "temperature", "label": "Température", "unit": "°C", "decimals": 1, "primary": true } ],
-  "itemColumns": [ { "key": "size_kb", "label": "Taille", "unit": "Ko" } ],
+  "author": "Me",
+  "description": { "en": "What the plugin does.", "fr": "Ce que fait le plugin." },
+  "permissions": { "network": ["api.example.com", "*.cdn.example.com"], "folder": false, "folderExtensions": [".replay"] },
+  "inputs":  [ { "key": "city", "type": "text", "required": true, "label": { "en": "City", "fr": "Ville" } } ],
+  "secrets": [ { "key": "apiKey", "label": "API key" } ],
+  "metrics": [ { "key": "temperature", "label": "Temperature", "unit": "°C", "decimals": 1, "primary": true } ],
+  "itemColumns": [ { "key": "size_kb", "label": "Size", "unit": "KB" } ],
   "refreshMinutes": 30
 }
 ```
 
-| Champ | Règles |
+| Field | Rules |
 |---|---|
-| `id` | minuscules, chiffres, `.` `_` `-`, 3 à 64 caractères. Identifie le plugin (une mise à jour réutilise le même `id`). |
+| `id` | lowercase letters, digits, `.` `_` `-`, 3 to 64 characters. Identifies the plugin (an update reuses the same `id`). |
 | `version` | `x.y.z`. |
-| `entry` | script d'entrée, `main.js` par défaut. |
-| `minAppVersion` | version minimale de WaveDash (facultatif). |
-| `permissions.network` | domaines joignables en **HTTPS**. `*.exemple.com` = tous les sous-domaines (pas le domaine nu). Jusqu'à 10. |
-| `permissions.folder` | `true` pour lire **un dossier choisi par l'utilisateur**. Exige exactement un champ `inputs` de type `folder`. |
-| `permissions.folderExtensions` | extensions lisibles (ex. `[".replay"]`). Vide = toutes. |
-| `permissions.images` | `true` pour **afficher** des images d'un dossier choisi par l'utilisateur (ex. vignettes d'un jeu). Exige exactement un champ `inputs` de type `images`. Le script ne lit jamais ce dossier et ne reçoit pas son chemin : il nomme seulement un fichier dans `detail.image`, que WaveDash affiche (JPG, PNG ou WebP, 3 Mo au plus). |
-| `inputs` | jusqu'à 8 champs saisis à l'ajout d'un compte (modifiables ensuite avec le bouton **Modifier** de la page du compte) : `text`, `number`, `folder` ou `images`. |
-| `secrets` | jusqu'à 4 valeurs (clés API…) enregistrées **chiffrées** par WaveDash, jamais en clair. |
-| `metrics` | de 1 à 20. `format` : `number` (défaut), `percent`, `rank`, `duration` (secondes → mm:ss). `decimals` de 0 à 4. `primary` : métrique affichée d'abord. `milestone` (facultatif) : paliers proposés par défaut, `{ "increment": 100, "notifyDown": true, "enabled": true }` (incrément entier ≥ 1 ; sans incrément, séquence 10, 20, 50…). |
-| `itemColumns` | colonnes du tableau d'éléments (facultatif). |
-| `views` | `true` si le script définit `view` : la page affiche une **barre de filtres** (menus déroulants) d'après `filters` dans son résultat ; un filtre choisi recalcule le bilan (`view`), filtre la liste des éléments, la recherche et le croisement (`ctx.filters`). |
-| `notices` | `true` si le plugin envoie des notifications (`notices` dans son résultat, voir plus bas). Affiché à l'installation ; chaque plugin peut être coupé dans Paramètres › Notifications. |
-| `search` | `true` si le script définit `search` : la page du compte affiche alors la barre de recherche du haut. |
-| `cross` | Outil « Croiser tes données » : `{ "measures": [{ "key", "label" }], "dimensions": [{ "key", "label" }] }` (2 à 12 chacun). Le script définit `cross(ctx)` ; `ctx.cross` = `{ who, measure, a, b }` (`b` peut valoir `none`) ; il renvoie un détail, en général des `bars` (`{ title, categories, series: [{ name, values }], stacked }`) et un tableau. |
-| `itemsMode` | `replace` (défaut) : chaque actualisation remplace la liste d'éléments. `keep` : les éléments renvoyés s'ajoutent à ceux déjà enregistrés (même `id` = mis à jour), jusqu'à 20 000 par compte ; la page les affiche par 50, avec un filtre par mois. Utile pour un historique (une partie par fichier, par exemple). |
-| `refreshMinutes` | délai minimal entre deux actualisations (5 à 1440, 30 par défaut). |
+| `entry` | entry script, `main.js` by default. |
+| `minAppVersion` | minimum WaveDash version (optional). |
+| `permissions.network` | domains reachable over **HTTPS**. `*.example.com` = all subdomains (not the bare domain). Up to 10. |
+| `permissions.folder` | `true` to read **one folder chosen by the user**. Requires exactly one `inputs` field of type `folder`. |
+| `permissions.folderExtensions` | readable extensions (e.g. `[".replay"]`). Empty = all. |
+| `permissions.images` | `true` to **show** images from a folder chosen by the user (e.g. a game's thumbnails). Requires exactly one `inputs` field of type `images`. The script never reads this folder and never gets its path: it only names a file in `detail.image`, which WaveDash shows (JPG, PNG or WebP, at most 3 MB). |
+| `inputs` | up to 8 fields entered when adding an account (editable later with the **Edit** button of the account page): `text`, `number`, `folder` or `images`. |
+| `secrets` | up to 4 values (API keys…) stored **encrypted** by WaveDash, never in plain text. |
+| `metrics` | 1 to 20. `format`: `number` (default), `percent`, `rank`, `duration` (seconds → mm:ss). `decimals` from 0 to 4. `primary`: metric shown first. `milestone` (optional): milestones offered by default, `{ "increment": 100, "notifyDown": true, "enabled": true }` (integer increment ≥ 1; without an increment, the sequence 10, 20, 50…). |
+| `itemColumns` | columns of the item table (optional). |
+| `views` | `true` if the script defines `view`: the page shows a **filter bar** (drop-down menus) from `filters` in its result; a chosen filter recomputes the overview (`view`) and filters the item list, the search and the cross tool (`ctx.filters`). |
+| `notices` | `true` if the plugin sends notifications (`notices` in its result, see below). Shown at install time; each plugin can be muted in Settings › Notifications. |
+| `search` | `true` if the script defines `search`: the account page then shows the top search bar. |
+| `cross` | "Cross your data" tool: `{ "measures": [{ "key", "label" }], "dimensions": [{ "key", "label" }] }` (2 to 12 each). The script defines `cross(ctx)`; `ctx.cross` = `{ who, measure, a, b }` (`b` may be `none`); it returns a detail, usually `bars` (`{ title, categories, series: [{ name, values }], stacked }`) and a table. |
+| `itemsMode` | `replace` (default): each refresh replaces the item list. `keep`: returned items are added to the ones already saved (same `id` = updated), up to 20,000 per account; the page shows them 50 at a time, with a month filter. Useful for a history (one game per file, for example). |
+| `refreshMinutes` | minimum delay between two refreshes (5 to 1440, 30 by default). |
 
-Les textes (`label`, `description`, `help`) sont une chaîne simple ou `{ "fr": "…", "en": "…" }`.
+Texts (`label`, `description`, `help`) are a plain string or an object with one entry per language: `{ "en": "…", "fr": "…", "ja": "…" }` (`en`, `fr`, `es`, `pt`, `de`, `it`, `ja`, `zh`, `ar`). WaveDash shows the interface language, otherwise English, otherwise French, otherwise the first one given.
 
-## Le script
+## The script
 
-Le script définit un objet global `plugin` avec une ou deux fonctions asynchrones :
+The script defines a global `plugin` object with a few async functions:
 
 ```js
 var plugin = {
-  // Facultatif. Appelée à l'ajout d'un compte : valide les saisies et donne un nom au compte.
+  // Optional. Called when an account is added: validates the inputs and names the account.
   resolve: async function (ctx) {
-    return { externalId: 'identifiant-stable', displayName: 'Nom affiché' }
+    return { externalId: 'stable-identifier', displayName: 'Display name' }
   },
 
-  // Facultatif. Barre de recherche en haut de la page d'un compte : `ctx.query` est le texte tapé ; renvoie un détail
-  // (même format que `detail`, voir plus bas) ou rien. Rien n'est enregistré ; une erreur ici ne désactive pas le plugin.
+  // Optional. Search bar at the top of an account page: `ctx.query` is the typed text; returns a detail
+  // (same format as `detail`, see below) or nothing. Nothing is saved; an error here does not disable the plugin.
   search: async function (ctx) {
-    return { chips: ['Résultat pour ' + ctx.query], stats: [{ label: 'Parties', value: 12 }] }
+    return { chips: ['Result for ' + ctx.query], stats: [{ label: 'Games', value: 12 }] }
   },
 
-  // Obligatoire. Appelée à chaque actualisation.
+  // Required. Called on every refresh.
   refresh: async function (ctx) {
     return {
-      metrics: { temperature: 17.4 },                       // clés déclarées dans le manifeste
-      items:   [{ id: 'a', title: 'Élément', ts: Date.now(), fields: { size_kb: 12 } }],   // facultatif, 200 max
-      history: [{ ts: 1700000000000, metrics: { temperature: 12 } }],                   // facultatif : points passés, 5000 max (voir plus bas)
-      backlog: 0,                                                                        // facultatif : travail restant (voir plus bas)
-      notices: [{ id: 'rang:42', title: 'Platine 0', text: 'Nouveau rang : Platine 0.', direction: 'up' }]   // facultatif, manifeste notices: true
+      metrics: { temperature: 17.4 },                       // keys declared in the manifest
+      items:   [{ id: 'a', title: 'Item', ts: Date.now(), fields: { size_kb: 12 } }],      // optional, 200 max
+      history: [{ ts: 1700000000000, metrics: { temperature: 12 } }],                   // optional: past points, 5000 max (see below)
+      backlog: 0,                                                                        // optional: remaining work (see below)
+      notices: [{ id: 'rank:42', title: 'Platinum 0', text: 'New rank: Platinum 0.', direction: 'up' }]   // optional, manifest notices: true
     }
   }
 }
 ```
 
-**`backlog`** : si le plugin ne peut pas tout traiter en une fois (budget de calcul), il indique ce qui reste (par exemple le nombre de fichiers pas encore lus). Tant que `backlog` est positif, WaveDash le relance 5 s après la fin de l'exécution, sans attendre `refreshMinutes`, et la page affiche la progression. Si le retard ne baisse pas pendant 3 relances de suite, WaveDash cesse ces relances rapides et attend l'actualisation normale suivante : un retard mal calculé ne peut pas faire tourner un plugin en boucle.
+**`backlog`**: if the plugin cannot process everything at once (compute budget), it reports what is left (for example the number of files not read yet). While `backlog` is positive, WaveDash runs it again 5 s after the run ends, without waiting for `refreshMinutes`, and the page shows the progress. If the backlog does not go down over 3 reruns in a row, WaveDash stops these quick reruns and waits for the next normal refresh: a miscalculated backlog cannot make a plugin run in a loop.
 
-**`filters`** (manifeste `views: true`) : jusqu'à 4 filtres `{ key, label, field, options: [{ value, label }] }` (60 choix au plus). `field` : colonne des éléments filtrée à l'identique ; `"$ts"` : période, la valeur est un nombre de jours ; sans `field`, seul le bilan est filtré. Quand un filtre est choisi, WaveDash appelle `view(ctx)` avec `ctx.filters` (`{ mode: '1v1 Ranked' }`, seulement des valeurs proposées) ; le script renvoie un bilan (même format que `detail`), qui remplace compteurs, courbe et bilan de la page. `search` et `cross` reçoivent aussi `ctx.filters`.
+**`filters`** (manifest `views: true`): up to 4 filters `{ key, label, field, options: [{ value, label }] }` (at most 60 choices). `field`: item column filtered by exact match; `"$ts"`: period, the value is a number of days; without `field`, only the overview is filtered. When a filter is chosen, WaveDash calls `view(ctx)` with `ctx.filters` (`{ mode: '1v1 Ranked' }`, only offered values); the script returns an overview (same format as `detail`), which replaces the counters, curve and overview of the page. `search` and `cross` also receive `ctx.filters`.
 
-**`notices`** (manifeste `notices: true`) : 3 notifications au plus par exécution (`title` 40 caractères, `text` 200, `direction` `up` ou `down`), envoyées comme un palier (notification Windows, son, célébration, historique). Chaque `id` n'est envoyé **qu'une fois** par compte : donne un identifiant nouveau à chaque événement. L'utilisateur peut couper les notifications d'un plugin dans Paramètres › Notifications.
+**`notices`** (manifest `notices: true`): at most 3 notifications per run (`title` 40 characters, `text` 200, `direction` `up` or `down`), sent like a milestone (Windows notification, sound, celebration, history). Each `id` is sent **only once** per account: give each event a new identifier. The user can mute a plugin's notifications in Settings › Notifications.
 
-**`history` fait foi** : pour chaque métrique, les points déjà enregistrés entre le premier point renvoyé et maintenant sont remplacés par ceux-ci. Un plugin qui complète des données passées (par exemple des fichiers lus en plusieurs fois) corrige ainsi les valeurs calculées avant ; les points plus anciens ne sont pas touchés.
+**`history` is authoritative**: for each metric, the points already saved between the first returned point and now are replaced by these. A plugin that fills in past data (for example files read over several runs) thus corrects the values computed before; older points are left untouched.
 
-`ctx` contient : `inputs` (valeurs saisies), `secrets` (vos clés, déchiffrées), `lang` (`fr` ou `en`), `account` (`{ externalId, displayName }`, dans `refresh`).
+`ctx` contains: `inputs` (entered values), `secrets` (your keys, decrypted), `lang` (interface language: `en`, `fr`, `es`, `pt`, `de`, `it`, `ja`, `zh` or `ar`), `account` (`{ externalId, displayName }`, in `refresh`).
 
-Un élément peut aussi porter un **`detail`** facultatif, affiché sous sa ligne quand on clique dessus. Toutes les parties sont facultatives :
+An item can also carry an optional **`detail`**, shown under its row when clicked. Every part is optional:
 
 ```js
 detail: {
-  image:    { file: 'BrawlhavenSmall.jpg', caption: 'Small Brawlhaven' },                   // permission images : fichier du dossier d'images
-  chips:    ['Small Brawlhaven', 'Patch 11.00', '3:04'],                                   // badges : 16 max
-  stats:    [{ label: 'Parties', value: 12 }],                                               // chiffres clés : 24 max
-  table:    { columns: ['Joueur', 'Score'], rows: [['Alby', 2], ['Close', 1]] },             // 10 colonnes, 80 lignes max
-  tables:   [{ title: 'Actions', columns: [...], rows: [...] }],                             // 8 tableaux max
-  grids:    [{ title: 'Esquives', rows: ['↑', '·', '↓'], cols: ['←', '·', '→'], values: [[1, 2, 3], [4, 5, 6], [7, 8, 9]] }],  // grilles de chaleur : 8 max, 8 × 8
-  series:   [{ title: 'Actions toutes les 15 s', step: 15, lines: [{ name: 'Close', values: [12, 9, 14] }] }],              // courbes : 4 max, 16 lignes, 600 points
-  timeline: { duration: 183, lanes: ['Alby', 'Close'], events: [{ t: 29.1, lane: 0, label: 'KO' }] }                       // frise : 16 lignes, 400 repères max, t en secondes
-  //        events[].kind facultatif : 'ko' (losange, par défaut), 'action' (petit rond), 'mark' (triangle)
+  image:    { file: 'BrawlhavenSmall.jpg', caption: 'Small Brawlhaven' },                   // images permission: file from the image folder
+  chips:    ['Small Brawlhaven', 'Patch 11.00', '3:04'],                                   // badges: 16 max
+  stats:    [{ label: 'Games', value: 12 }],                                                 // key figures: 24 max
+  table:    { columns: ['Player', 'Score'], rows: [['Alby', 2], ['Close', 1]] },            // 10 columns, 80 rows max
+  tables:   [{ title: 'Actions', columns: [...], rows: [...] }],                             // 8 tables max
+  grids:    [{ title: 'Dodges', rows: ['↑', '·', '↓'], cols: ['←', '·', '→'], values: [[1, 2, 3], [4, 5, 6], [7, 8, 9]] }],    // heat grids: 8 max, 8 × 8
+  series:   [{ title: 'Actions every 15 s', step: 15, lines: [{ name: 'Close', values: [12, 9, 14] }] }],                    // curves: 4 max, 16 lines, 600 points
+  timeline: { duration: 183, lanes: ['Alby', 'Close'], events: [{ t: 29.1, lane: 0, label: 'KO' }] }                       // timeline: 16 lanes, 400 markers max, t in seconds
+  //        optional events[].kind: 'ko' (diamond, default), 'action' (small dot), 'mark' (triangle)
 }
 ```
 
-`refresh` peut aussi renvoyer un **`summary`** au même format : c'est le **bilan** du compte, affiché en haut de sa page (par exemple des totaux par catégorie). Chaque bloc du bilan est un module que l'utilisateur peut réduire, déplacer ou masquer (disposition gardée par compte).
+`refresh` can also return a **`summary`** in the same format: it is the account **overview**, shown at the top of its page (for example totals per category). Each block of the overview is a module the user can collapse, move or hide (layout kept per account).
 
-La page d'un compte propose une **recherche** dans tout l'élément ou dans une seule colonne (menu « Chercher dans ») ; pendant une recherche, WaveDash affiche des stats sur les éléments trouvés, pour chaque colonne : moyenne, minimum, maximum et total pour les nombres, durée moyenne pour les valeurs « m:ss », répartition pour le texte (par exemple le taux de victoire d'après une colonne Résultat).
+An account page offers a **search** in the whole item or in a single column ("Search in" menu); during a search, WaveDash shows stats on the items found, for each column: average, minimum, maximum and total for numbers, average duration for "m:ss" values, distribution for text (for example the win rate from a Result column).
 
-Si le plugin lit un dossier (`permissions.folder`), la page du compte propose **Importer des fichiers** : une fenêtre où glisser-déposer les fichiers (ou les choisir). WaveDash les copie d'abord (extensions du manifeste, 8 Mo max chacun, doublons ignorés) dans le dossier **Documents › WaveDash › Parties importées › <n° du compte>**, en gardant leur date ; `host.files` les voit en plus de ceux du dossier choisi. Le dossier choisi n'est jamais modifié, et le dossier d'imports est supprimé avec le compte.
+If the plugin reads a folder (`permissions.folder`), the account page offers **Import files**: a window to drag and drop the files into (or pick them). WaveDash first copies them (manifest extensions, 8 MB max each, duplicates ignored) into the **Documents › WaveDash › Imported › <account number>** folder, keeping their date; `host.files` sees them in addition to the files of the chosen folder. The chosen folder is never modified, and the import folder is deleted with the account.
 
-**Tout ce qui n'est pas déclaré dans le manifeste est ignoré** : métriques inconnues, colonnes inconnues, valeurs non numériques, horodatages absurdes.
+**Anything not declared in the manifest is ignored**: unknown metrics, unknown columns, non-numeric values, absurd timestamps.
 
-### L'objet `host` : tout ce que le plugin peut faire
+### The `host` object: everything a plugin can do
 
-| Fonction | Rôle |
+| Function | Role |
 |---|---|
-| `await host.http(url, { method, headers, body })` | Requête HTTPS vers un domaine déclaré. Renvoie `{ status, ok, headers, text, json() }`. |
-| `host.log(...)` / `console.log(...)` | Journal visible dans la page du plugin (100 lignes max). |
-| `host.storage.get(clé)` / `.set(clé, texte)` | Mémoire persistante par compte (100 clés, 64 Ko par valeur) : utile pour ne retraiter que les nouveautés. Une clé ne contient que lettres, chiffres, `.`, `_` et `-` (1 à 64 caractères) : pas de `:` ni d'espace. |
-| `host.files.list()` | Les 20 000 fichiers les plus récents du dossier choisi, du plus récent au plus ancien : `[{ name, size, mtime }]` (permission `folder`). |
-| `host.files.readText(nom)` / `.readBytes(nom)` | Contenu d'un fichier (texte, ou `Uint8Array`). 8 Mo max par fichier. |
+| `await host.http(url, { method, headers, body })` | HTTPS request to a declared domain. Returns `{ status, ok, headers, text, json() }`. |
+| `host.log(...)` / `console.log(...)` | Log shown on the plugin page (100 lines max). |
+| `host.storage.get(key)` / `.set(key, text)` | Persistent memory per account (100 keys, 64 KB per value): useful to process only what is new. A key only contains letters, digits, `.`, `_` and `-` (1 to 64 characters): no `:` or spaces. |
+| `host.files.list()` | The 20,000 most recent files of the chosen folder, newest to oldest: `[{ name, size, mtime }]` (`folder` permission). |
+| `host.files.readText(name)` / `.readBytes(name)` | Content of a file (text, or `Uint8Array`). 8 MB max per file. |
 
-Le reste n'existe pas : ni `fetch`, ni `require`, ni `process`, ni `setTimeout`, ni accès au disque en dehors de `host.files`.
+Nothing else exists: no `fetch`, `require`, `process` or `setTimeout`, and no disk access outside `host.files`.
 
-## Sécurité et limites
+## Security and limits
 
-Le script s'exécute dans **QuickJS**, un moteur JavaScript isolé (WebAssembly), lui-même lancé dans un **processus séparé** de WaveDash (« WaveDash · plugins ») : un plugin lent ne fige jamais l'interface, et si ce processus s'arrête, il est relancé et l'exécution réessayée une fois (ce qu'il écrit sur sa sortie d'erreur va dans `plugin-host.log`, dans le dossier de l'appli). Le stockage du compte est copié dans ce processus avant l'exécution, puis les changements sont enregistrés après. Le script ne voit que `host`. À chaque exécution :
+The script runs in **QuickJS**, an isolated JavaScript engine (WebAssembly), itself started in a **process separate** from WaveDash ("WaveDash · plugins"): a slow plugin never freezes the interface, and if that process stops, it is restarted and the run retried once (what it writes to its error output goes to `plugin-host.log`, in the app folder). The account storage is copied into that process before the run, then the changes are saved afterwards. The script only sees `host`. On every run:
 
-- **mémoire** : 48 Mo ; **pile** : 256 Ko ;
-- **calcul** : 8 s de temps de calcul cumulé ; **durée totale** : 45 s (réseau compris) ;
-- **réseau** : 30 requêtes, 5 Mo par réponse, 15 s par requête ; HTTPS uniquement ; redirections revérifiées (vers un autre hôte, les en-têtes `Authorization` et `Cookie` ne suivent pas) ; adresses locales et privées (`localhost`, `192.168.x.x`, `10.x.x.x`…) **toujours refusées**, y compris si un nom de domaine y pointe ;
-- **fichiers** : un seul dossier, sans sous-dossiers ni liens symboliques, lecture seule.
+- **memory**: 48 MB; **stack**: 256 KB;
+- **compute**: 8 s of cumulated compute time; **total duration**: 45 s (network included);
+- **network**: 30 requests, 5 MB per response, 15 s per request; HTTPS only; redirects rechecked (to another host, the `Authorization` and `Cookie` headers do not follow); local and private addresses (`localhost`, `192.168.x.x`, `10.x.x.x`…) **always rejected**, even if a domain name points to them;
+- **files**: a single folder, no subfolders or symbolic links, read-only.
 
-Après **5 échecs consécutifs**, le plugin est désactivé automatiquement. À l'installation, WaveDash affiche les permissions demandées et l'utilisateur doit confirmer.
+After **5 consecutive failures**, the plugin is disabled automatically. At install time, WaveDash shows the requested permissions and the user must confirm.
 
-> Cette isolation réduit fortement le risque mais ne le supprime pas, et WaveDash n'est pas signé numériquement : **n'installe que des plugins dont tu connais l'auteur.**
+> This isolation greatly reduces the risk but does not remove it, and WaveDash is not digitally signed: **only install plugins whose author you know.**
 
-## Catalogue en ligne
+## Online catalog
 
-La page **Plugins › Catalogue** liste les plugins publiés sur le dépôt [ArachnoMLK/WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins). WaveDash lit son `index.json` (adresse écrite dans l'application, cache de 3 h, dernière copie gardée pour le mode hors ligne). L'index est **signé** (Ed25519) : WaveDash contient la clé publique et refuse un index non signé par la clé privée du propriétaire, qui n'est jamais en ligne. Avant toute installation, le paquet téléchargé est vérifié : taille et empreinte SHA-256 identiques à celles de l'index signé, sinon il est refusé. L'installation passe ensuite par l'écran de confirmation habituel, avec les permissions. Au démarrage puis toutes les 3 heures, un plugin installé est mis à jour en silence depuis le catalogue si sa nouvelle version demande exactement les mêmes permissions ; ses comptes sont alors actualisés aussitôt. L'index est lu en contournant le cache de GitHub : une publication est visible tout de suite. Le catalogue ne fait jamais revenir un plugin à une version plus ancienne.
+The **Plugins › Catalog** page lists the plugins published in the [ArachnoMLK/WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins) repository. WaveDash reads its `index.json` (address built into the app, 3 h cache, last copy kept for offline use). The index is **signed** (Ed25519): WaveDash contains the public key and rejects an index not signed by the owner's private key, which is never online. Before any install, the downloaded package is checked: size and SHA-256 hash identical to those of the signed index, otherwise it is rejected. The install then goes through the usual confirmation screen, with the permissions. At startup and then every 3 hours, an installed plugin is updated silently from the catalog if its new version asks for exactly the same permissions; its accounts are then refreshed right away. The index is read bypassing the GitHub cache, so a release is visible immediately. The catalog never takes a plugin back to an older version.
 
-Pour publier un plugin : pull request sur WaveDash-Plugins (voir son README). Le propriétaire du dépôt relit chaque contribution ; l'action **Check** vérifie que paquets, empreintes et sources correspondent.
+To publish a plugin: open a pull request on WaveDash-Plugins (see its README). The repository owner reviews every contribution; the **Check** action verifies that packages, hashes and sources match.
 
-## Plugins fournis avec WaveDash
+## Plugins bundled with WaveDash
 
-Les plugins du dossier `examples/` sont livrés dans l'installateur. La page **Plugins** propose ceux qui ne sont pas installés (ou dont une version plus récente est fournie), en un clic, avec l'écran de confirmation habituel. Au démarrage, WaveDash met à jour **en silence** un plugin installé dont il fournit une version plus récente, **seulement si ses permissions sont identiques** ; sinon, la mise à jour attend ta confirmation depuis la page Plugins.
+The plugins of the `examples/` folder ship in the installer. The **Plugins** page offers the ones that are not installed (or for which a newer version is bundled), in one click, with the usual confirmation screen. At startup, WaveDash **silently** updates an installed plugin for which it bundles a newer version, **only if its permissions are identical**; otherwise the update waits for your confirmation on the Plugins page.
 
-## Paliers et vue d'ensemble
+## Milestones and overview
 
-Les comptes de plugins apparaissent dans la **vue d'ensemble** (jusqu'à 4 métriques, la principale d'abord ; un clic ouvre le compte). Les **paliers** se règlent dans **Paramètres › Notifications**, métrique par métrique (nombres et pourcentages), pour chaque plugin installé : notification Windows, son et célébration, comme pour les plateformes intégrées. Par défaut : le réglage `milestone` du manifeste s'il existe, sinon la séquence 10, 20, 50, 100… sur la métrique principale quand c'est un simple nombre. Les règles sont enregistrées sous `plugin:<id>.<métrique>` et suivent la sauvegarde de la configuration.
+Plugin accounts appear in the **overview** (up to 4 metrics, the main one first; a click opens the account). **Milestones** are set in **Settings › Notifications**, metric by metric (numbers and percentages), for each installed plugin: Windows notification, sound and celebration, as for the built-in platforms. By default: the manifest's `milestone` setting if any, otherwise the sequence 10, 20, 50, 100… on the main metric when it is a plain number. Rules are saved as `plugin:<id>.<metric>` and are part of the configuration backup.
 
-## Mises à jour d'un plugin
+## Updating a plugin
 
-Réinstaller un `.wdsh` de même `id` met le plugin à jour en conservant ses comptes, ses clés et son stockage. L'écran de confirmation affiche à nouveau les permissions.
+Reinstalling a `.wdsh` with the same `id` updates the plugin while keeping its accounts, keys and storage. The confirmation screen shows the permissions again.
 
-## Pour déboguer
+## Debugging
 
-La page d'un compte de plugin affiche l'erreur de la dernière actualisation et un **journal** (`host.log`). Une erreur lancée par ton code (`throw new Error('…')`) apparaît telle quelle.
+A plugin account page shows the error of the last refresh and a **log** (`host.log`). An error thrown by your code (`throw new Error('…')`) appears as is.
 
-## Plugin fourni : Brawlhalla Replays
+## Bundled plugin: Brawlhalla Replays
 
-`examples/brawlhalla-replays-1.10.0.wdsh` lit **tous** les fichiers `.replay` d'un dossier, plus ceux importés (permission `folder`, aucun réseau).
+`examples/brawlhalla-replays-1.10.1.wdsh` reads **all** the `.replay` files of a folder, plus the imported ones (`folder` permission, no network).
 
-- **Courbe et cartes** : parties, victoires, défaites, taux de victoire, stocks pris et perdus, durée moyenne, appuis par minute.
-- **Barre du haut** : Mode (1v1 Unranked, 1v1 Ranked, 2v2 Friendly, 2v2 Ranked, 3v3 Ranked, puis les autres modes joués), Patch et Période. Tout le bilan, la liste des parties, la recherche et le croisement se limitent au choix.
-- **Bilan** : chiffres clés, tableaux par légende, carte, mode, coéquipier, adversaire, jour et heure, direction de tes esquives, répartition de tes attaques.
-- **Détail d'une partie** : vignette de la carte (si tu indiques le dossier `images	humbnails` du jeu : WaveDash l'affiche depuis ton installation, aucune image n'est livrée), carte, mode, patch, date, durée, vies, réglages ; pour chaque joueur, légende, armes, posture, place, KOs subis, KOs infligés (en 1v1), attaques légères et lourdes par direction, esquives, sauts, lancers, provocations, temps de déplacement, appuis par minute ; grille de direction des esquives, courbe d'activité toutes les 15 s, frise de la partie (KOs, avec leur auteur en 1v1 ; lancers d'arme ; provocations).
+- **Curve and cards**: games, wins, losses, win rate, stocks taken and lost, average length, presses per minute.
+- **Top bar**: Mode (1v1 Unranked, 1v1 Ranked, 2v2 Friendly, 2v2 Ranked, 3v3 Ranked, then the other modes played), Patch and Period. The whole overview, the game list, the search and the cross tool are limited to the choice.
+- **Overview**: key figures, tables per legend, map, mode, teammate, opponent, day and hour, direction of your dodges, breakdown of your attacks.
+- **Game detail**: map thumbnail (if you give the game's `images\thumbnails` folder: WaveDash shows it from your install, no image ships with the plugin), map, mode, patch, date, length, lives, settings; for each player, legend, weapons, stance, placement, KOs taken, KOs dealt (in 1v1), light and heavy attacks per direction, dodges, jumps, throws, taunts, movement time, presses per minute; dodge direction grid, activity curve every 15 s, game timeline (KOs, with their author in 1v1; weapon throws; taunts).
 
-Toutes les parties du dossier comptent : les totaux, la courbe (datée par la date de chaque fichier) et la liste des parties remontent jusqu'au plus ancien replay. Le plugin décompresse lui-même chaque fichier (inflate en JavaScript à tables de décodage, vérifié identique à zlib sur 9012 fichiers) dans le bac à sable : environ 50 ms par replay dans WaveDash, 2 s de lecture par exécution. À la première installation, il signale le reste (`backlog`) et WaveDash le relance toutes les quelques secondes : environ 20 à 30 minutes pour 9000 replays, une seule fois. Ensuite, seuls les nouveaux fichiers sont lus. Le cache ne garde qu'un résumé de chaque partie (environ 100 octets) ; le détail est envoyé une fois à WaveDash, qui le conserve (`itemsMode: keep`). Le pseudo accepte plusieurs noms séparés par des virgules (utile après un changement de pseudo). Le rattrapage tourne dans le processus des plugins : l'interface reste fluide pendant ce temps.
+Every game of the folder counts: the totals, the curve (dated by each file's date) and the game list go back to the oldest replay. The plugin decompresses each file itself (table-driven inflate in JavaScript, checked identical to zlib on 9012 files) inside the sandbox: about 50 ms per replay in WaveDash, 2 s of reading per run. On first install, it reports the rest (`backlog`) and WaveDash reruns it every few seconds: about 20 to 30 minutes for 9000 replays, only once. Afterwards, only new files are read. The cache keeps only a summary of each game (about 100 bytes); the detail is sent once to WaveDash, which keeps it (`itemsMode: keep`). The name field accepts several names separated by commas (useful after a name change). The catch-up runs in the plugin process: the interface stays smooth meanwhile.
 
-### Ce qui est vérifié, ce qui ne l'est pas
+### What is verified, what is not
 
-Vérifié sur 9012 replays réels (versions 261 à 271, patchs 10.02 à 11.00) :
+Verified on 9012 real replays (versions 261 to 271, patches 10.02 to 11.00):
 
-- **Validation par checksum.** Le jeu écrit un checksum des données de partie (joueurs, cosmétiques, légendes, carte). Le plugin le recalcule ; s'il ne correspond pas, le replay est signalé « format non reconnu (version N) » et rien n'en est affiché. Les 9012 replays passent ; un parseur volontairement faussé est rejeté. Le bit de tête de chaque légende compte comme bit 31 de sa valeur combinée (constaté sur les modes à plusieurs légendes ; la bibliothèque C# l'ignorait).
-- **Légendes.** L'identifiant lu dans le replay est le `HeroID` du jeu, identique au `legend_id` de l'API officielle. La table (70 légendes, jusqu'à Qinghua & Baobao) vient du fichier `HeroTypes` des données du patch 11.00, et concorde avec le lecteur de replay du jeu sur Eternity's End. Une légende inconnue s'affiche `#id` et le journal le signale (« nouvelle légende ? ») : il faut alors mettre à jour la table.
-- **Carte.** Le nom vient de la table `LevelTypes` du jeu (patch 11.00), vérifiée contre les noms de 2930 fichiers ; sinon du nom du fichier (`[11.00] SmallBrawlhaven (42).replay` → Small Brawlhaven) ; à défaut, `Carte #id`.
-- **Armes.** Les deux armes de chaque légende viennent de la table `HeroTypes` du jeu.
-- **Identifiant de joueur.** Depuis la version 268 (patch 10.09), chaque joueur a un identifiant de compte (32 bits, 0 pour les bots), stable malgré les changements de pseudo ; le second joueur local (« pseudo•2 ») partage celui de son hôte. Le plugin apprend tes identifiants à partir d'un pseudo identique (avec ou sans tag de clan), puis te reconnaît par eux. Coéquipiers et adversaires sont regroupés par identifiant ; une partie plus ancienne, sans identifiant, est rattachée au joueur dont le pseudo sans tag correspond à un seul identifiant. Hypothèse non vérifiée : que ce soit le `brawlhalla_id` de l'API officielle.
-- **Victoire.** Le score d'un joueur est sa place (1 = vainqueur). Certains modes (Kung Foot) ajoutent une entité qui n'est pas un joueur, avec un score de 0 : elle est ignorée.
-- **Inputs.** Chaque joueur a la liste horodatée (ms) des changements d'état de ses touches (14 indicateurs : directions, saut, attaques légère et lourde, esquive, ramasser/lancer, quatre provocations). Le plugin compte les appuis, note la direction tenue au moment de chaque attaque et de chaque esquive, mesure le temps passé à tenir gauche ou droite et l'activité toutes les 15 s.
-- **Touche esquive : esquive, dash, gravity cancel, chase dodge.** Le jeu utilise la même touche pour les quatre ; le replay ne garde que l'appui. Chaque appui est classé d'après les règles du jeu ([wiki, page Movement](https://brawlhalla.wiki.gg/wiki/Movement)) : **gravity cancel** si une attaque suit dans les 18 frames (esquive sur place) ou dans les 3 frames dans la même direction (esquive dirigée) ; **chase dodge probable** entre 200 et 850 ms après une attaque (le replay ne dit pas si l'attaque a touché : surestimé) ; **dash probable** si latéral sans saut dans les 700 ms (le replay ne dit pas si le joueur est au sol). Le reste est une **esquive** : seules celles-ci forment les grilles de direction. Sur 277 parties réelles : 31 % d'esquives, 28 % de dashs probables, 33 % de chase dodges probables, 8 % de gravity cancels.
-- **Auteur d'un KO : non.** Un KO ne contient que le joueur qui perd un stock et l'instant. La seconde liste (type 7) n'apparaît que dans des modes spéciaux (Kung Foot, sans KO) et ne désigne pas d'auteur non plus. En 1v1 l'auteur est forcément l'adversaire ; ailleurs, le fichier ne permet pas de le savoir.
+- **Checksum validation.** The game writes a checksum of the game data (players, cosmetics, legends, map). The plugin recomputes it; if it does not match, the replay is reported as "unrecognized format (version N)" and nothing from it is shown. All 9012 replays pass; a deliberately broken parser is rejected. The leading bit of each legend counts as bit 31 of its combined value (seen in modes with several legends; the C# library ignored it).
+- **Legends.** The identifier read from the replay is the game's `HeroID`, identical to the `legend_id` of the official API. The table (70 legends, up to Qinghua & Baobao) comes from the `HeroTypes` file of the patch 11.00 data, and matches the game's replay viewer on Eternity's End. An unknown legend is shown as `#id` and the log reports it ("new legend?"): the table then needs an update.
+- **Map.** The name comes from the game's `LevelTypes` table (patch 11.00), checked against the names of 2930 files; otherwise from the file name (`[11.00] SmallBrawlhaven (42).replay` → Small Brawlhaven); failing that, `Map #id`.
+- **Weapons.** The two weapons of each legend come from the game's `HeroTypes` table.
+- **Player identifier.** Since version 268 (patch 10.09), each player has an account identifier (32 bits, 0 for bots), stable across name changes; the second local player ("name•2") shares its host's. The plugin learns your identifiers from an identical name (with or without clan tag), then recognizes you by them. Teammates and opponents are grouped by identifier; an older game without identifiers is attached to the player whose name without tag matches a single identifier. Unverified assumption: that it is the `brawlhalla_id` of the official API.
+- **Win.** A player's score is their placement (1 = winner). Some modes (Kung Foot) add an entity that is not a player, with a score of 0: it is ignored.
+- **Inputs.** Each player has the timestamped (ms) list of their key state changes (14 flags: directions, jump, light and heavy attacks, dodge, pick up/throw, four taunts). The plugin counts the presses, notes the direction held at each attack and dodge, measures the time spent holding left or right and the activity every 15 s.
+- **Dodge key: dodge, dash, gravity cancel, chase dodge.** The game uses the same key for all four; the replay only keeps the press. Each press is classified from the game rules ([wiki, Movement page](https://brawlhalla.wiki.gg/wiki/Movement)): **gravity cancel** if an attack follows within 18 frames (spot dodge) or within 3 frames in the same direction (directional dodge); **probable chase dodge** between 200 and 850 ms after an attack (the replay does not say whether the attack hit: overestimated); **probable dash** if sideways with no jump within 700 ms (the replay does not say whether the player is grounded). The rest is a **dodge**: only those make up the direction grids. Over 277 real games: 31 % dodges, 28 % probable dashes, 33 % probable chase dodges, 8 % gravity cancels.
+- **KO author: no.** A KO only holds the player who loses a stock and the time. The second list (type 7) only appears in special modes (Kung Foot, without KOs) and does not name an author either. In 1v1 the author must be the opponent; elsewhere, the file does not tell.
 
-Hypothèses non vérifiées : la signification exacte de la liste de type 7 ; les formats antérieurs à la version 261 ; le nom des postures (le fichier donne un numéro, affiché tel quel) ; la direction « tenue » ne dit pas si l'attaque a eu lieu au sol ou en l'air.
+Unverified assumptions: the exact meaning of the type 7 list; formats older than version 261; stance names (the file gives a number, shown as is); the "held" direction does not tell whether the attack happened on the ground or in the air.
 
-Dégâts infligés et subis, arme tenue, positions (air, sol, mur), combos, dashs, auteur des KOs hors 1v1 : rien de cela n'est **dans** le fichier. Il faudrait rejouer la partie avec le moteur du jeu à partir des inputs, ce que fait Yarralytics sur ses serveurs.
+Damage dealt and taken, weapon held, positions (air, ground, wall), combos, dashes, KO authors outside 1v1: none of this is **in** the file. It would take replaying the game with the game engine from the inputs, which Yarralytics does on its servers.
 
-Le format de fichier a été compris grâce aux projets open source BrawlhallaReplayLibrary (allhailcheese) et brawlhalla-replay-reader (itselectroz), tous deux sous licence MIT.
+The file format was understood thanks to the open-source projects BrawlhallaReplayLibrary (allhailcheese) and brawlhalla-replay-reader (itselectroz), both under the MIT license.
 
-## Plugin fourni : Brawlhalla (API officielle)
+## Bundled plugin: Brawlhalla (official API)
 
-`examples/brawlhalla-api-1.2.0.wdsh` remplace, depuis WaveDash 1.0.1, la plateforme Brawlhalla intégrée. Il lit ton profil par l'API officielle (seul domaine permis : `api.brawlhalla.com`) avec ta clé personnelle Blue Mammoth Games, enregistrée comme secret du plugin (chiffrée par Windows). Saisie : ID Brawlhalla, Steam ID64 ou lien `steamcommunity.com/profiles/…`. Métriques : ELO 1v1 (principale) et 2v2, ELO max, classements mondial et régional, parties, victoires, taux de victoire, niveau ; une ligne par légende (parties, victoires, KOs, chutes, niveau, temps de jeu) et un bilan (rang, région, clan, équipes 2v2).
+`examples/brawlhalla-api-1.2.1.wdsh` has replaced the built-in Brawlhalla platform since WaveDash 1.0.1. It reads your profile through the official API (only allowed domain: `api.brawlhalla.com`) with your personal Blue Mammoth Games key, stored as a plugin secret (encrypted by Windows). Input: Brawlhalla ID, Steam ID64 or a `steamcommunity.com/profiles/…` link. Metrics: 1v1 ELO (main) and 2v2, peak ELO, global and region rank, games, wins, win rate, level; one row per legend (games, wins, KOs, falls, level, play time) and an overview (rank, region, clan, 2v2 teams).
 
-À la mise à jour, un compte Brawlhalla intégré est rattaché à ce plugin avec son historique, sa clé et ses règles de paliers (l'ELO garde un palier tous les 100 points) ; un compte de démo est supprimé. Depuis la version 1.2.0 du plugin, le changement de rang 1v1 (Or 5 → Platine 0…) est de nouveau notifié, par les notifications de plugin (voir `notices`).
+On update, a built-in Brawlhalla account is attached to this plugin with its history, key and milestone rules (the ELO keeps a milestone every 100 points); a demo account is removed. Since version 1.2.0 of the plugin, 1v1 rank changes (Gold 5 → Platinum 0…) are notified again, through plugin notifications (see `notices`).
 
-## Plugin fourni : TikTok (profil public)
+## Bundled plugin: TikTok (public profile)
 
-`examples/tiktok-profile-1.0.0.wdsh` suit un profil TikTok public (abonnés, abonnements, likes reçus, vidéos, amis) en lisant sa page publique, sans compte ni clé, une fois par heure. Permission réseau : `www.tiktok.com` seulement. Ce n'est pas une API officielle : la lecture peut cesser si TikTok change sa page, et elle n'est pas prévue par ses conditions d'utilisation. En cas de changement, le plugin affiche une erreur au lieu de chiffres faux.
+`examples/tiktok-profile-1.0.1.wdsh` follows a public TikTok profile (followers, following, likes received, videos, friends) by reading its public page, without an account or key, once an hour. Network permission: `www.tiktok.com` only. This is not an official API: reading may stop working if TikTok changes its page, and it is not provided for by its terms of service. When that happens, the plugin shows an error instead of wrong numbers.
 
-## Plugin fourni : Discord (serveurs)
+## Bundled plugin: Discord (servers)
 
-`examples/discord-server-1.2.4.wdsh` suit des serveurs Discord avec l'API officielle (permission réseau : `discord.com` seulement). Trois façons de l'utiliser :
+`examples/discord-server-1.2.5.wdsh` follows Discord servers through the official API (network permission: `discord.com` only). Three ways to use it:
 
-- **Tous les serveurs d'un bot** : laisse l'invitation et l'ID vides, puis enregistre le jeton du bot dans les clés du plugin. Le compte liste chaque serveur où le bot est présent (membres, en ligne, messages du jour et des 7 jours, dernier message) ; un clic ouvre le détail du serveur (salons, membres les plus actifs, messages par jour). Jusqu'à 45 serveurs suivis en détail.
-- **Un seul serveur** : jeton du bot + ID du serveur ; la liste montre alors ses salons.
-- **Sans bot** : un lien d'invitation permanent donne membres, membres en ligne, part en ligne et boosts. Vérifié sur le serveur officiel Brawlhalla.
+- **Every server of a bot**: leave the invite and the ID empty, then save the bot token in the plugin keys. The account lists each server the bot is in (members, online, messages today and over 7 days, last message); a click opens the server detail (channels, most active members, messages per day). Up to 45 servers followed in detail.
+- **A single server**: bot token + server ID; the list then shows its channels.
+- **Without a bot**: a permanent invite link gives members, online members, online share and boosts. Verified on the official Brawlhalla server.
 
-Pour le bot : Discord Developer Portal › New Application › Bot › Reset Token, puis l'inviter sur chaque serveur (OAuth2 › URL Generator › `bot`, permissions « Voir les salons » et « Lire l'historique des messages »). Le jeton est enregistré chiffré par WaveDash et partagé par les comptes de ce plugin.
+For the bot: Discord Developer Portal › New Application › Bot › Reset Token, then invite it to each server (OAuth2 › URL Generator › `bot`, permissions "View Channels" and "Read Message History"). The token is stored encrypted by WaveDash and shared by the accounts of this plugin.
 
-Les messages sont comptés au fil de l'eau : au premier passage, les 100 derniers de chaque salon (dans la limite de 7 jours), ensuite tous les nouveaux. Leur contenu n'est ni lu ni gardé, et les messages des bots ne comptent pas. Au plus 26 requêtes par exécution : salons et serveurs sont lus à tour de rôle, et WaveDash relance le plugin tant qu'il reste du retard. Le mode bot a été vérifié sur une API Discord simulée (3 serveurs, salon interdit, 150 nouveaux messages), puis sur un vrai serveur (269 membres, 30 salons, 2 boosts). Un salon sans aucun message ne compte plus comme « en retard » (1.2.4) : avant, il faisait relancer le plugin toutes les 5 s.
+Messages are counted as they come: on the first pass, the last 100 of each channel (within 7 days), then every new one. Their content is neither read nor kept, and bot messages do not count. At most 26 requests per run: channels and servers are read in turn, and WaveDash reruns the plugin while it is still behind. Bot mode was verified on a simulated Discord API (3 servers, forbidden channel, 150 new messages), then on a real server (269 members, 30 channels, 2 boosts). A channel without any message no longer counts as "behind" (1.2.4): before, it made the plugin rerun every 5 s.
 
-Le plugin ne lit jamais l'application Discord de l'ordinateur ni un compte personnel (un « selfbot » est interdit par Discord).
+The plugin never reads the computer's Discord app or a personal account (a "selfbot" is forbidden by Discord).
 
-## Pas encore disponible
+## Not available yet
 
-Paliers sur les rangs et les durées.
+Milestones on ranks and durations.

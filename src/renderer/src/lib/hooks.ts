@@ -13,7 +13,7 @@ export interface AccountData {
   items: ItemStat[]
 }
 
-/** Charge dernières valeurs, historiques et contenus d'un compte ; se met à jour à chaque actualisation. */
+/** Loads latest values, history and contents of an account; updates on every refresh. */
 export function useAccountData(account: Account | undefined, range: RangeKey): AccountData | null {
   const { dataVersion } = useApp()
   const [data, setData] = useState<AccountData | null>(null)

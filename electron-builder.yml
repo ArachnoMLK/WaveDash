@@ -2,10 +2,10 @@ appId: app.wavedash.desktop
 productName: WaveDash
 directories: { buildResources: resources, output: dist }
 files: ["out/**/*", "package.json"]
-asarUnpack: ["node_modules/ffmpeg-static/**"]                  # ffmpeg du Studio : un exécutable ne peut pas tourner depuis l'archive asar
+asarUnpack: ["node_modules/ffmpeg-static/**"]                  # Studio ffmpeg: an executable cannot run from inside the asar archive
 extraResources:
-  - { from: resources, to: resources }                         # icônes lues à l'exécution (barre système)
-  - { from: examples, to: plugins, filter: ['*.wdsh'] }        # plugins fournis avec l'appli
+  - { from: resources, to: resources }                         # icons read at runtime (system tray)
+  - { from: examples, to: plugins, filter: ['*.wdsh'] }        # plugins bundled with the app
 fileAssociations:
   - ext: wdsh
     name: Plugin WaveDash
@@ -21,5 +21,5 @@ nsis:
   createDesktopShortcut: true
   shortcutName: WaveDash
 publish:
-  provider: github   # lu par electron-updater
-  releaseType: release   # publie directement la Release (sinon elle reste en brouillon et l’appli ne la voit pas)
+  provider: github   # read by electron-updater
+  releaseType: release   # publishes the Release directly (otherwise it stays a draft and the app cannot see it)

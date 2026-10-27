@@ -1,4 +1,4 @@
-// Processus principal : fenêtre en verre, barre système, mises à jour, démarrage des services.
+// Main process: glass window, system tray, updates, service startup.
 import { app, BrowserWindow, Menu, screen, shell, Tray } from 'electron'
 import { join } from 'path'
 import { getSettings, initDb } from './db'
@@ -8,7 +8,7 @@ import { applySystemSettings, materialFor, solidBackground } from './system'
 import { setPendingFile, syncBundledPlugins } from './plugins/manager'
 import { initUpdater } from './updater'
 import { stopPluginHost } from './plugins/isolated'
-import { migrateBuiltinBrawlhalla, removeSocialPlaceholders } from './migrations'
+import { languageDefaults, migrateBuiltinBrawlhalla, removeSocialPlaceholders } from './migrations'
 import { registerStudio, registerStudioScheme, stopStudio } from './studio'
 
 registerStudioScheme()
@@ -26,7 +26,7 @@ function createWindow(): void {
   win = new BrowserWindow({
     width: 1280, height: 820, minWidth: 980, minHeight: 640,
     title: 'WaveDash', icon: resource('icon.ico'), show: false,
-    // Matériau natif Windows 11 choisi dans les réglages ; sinon fond uni (le flou CSS des panneaux reste indépendant).
+    // Native Windows 11 material picked in the settings; otherwise a solid background (the CSS blur of the panels stays independent).
     backgroundMaterial: material,
     backgroundColor: material !== 'none' ? '#00000000' : solidBackground(s),
     titleBarStyle: 'hidden',
@@ -34,11 +34,11 @@ function createWindow(): void {
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   })
   win.once('ready-to-show', () => win?.show())
-  // Après une réduction, certaines configurations (fenêtre translucide) ne repeignent pas le contenu : on force le rendu.
+  // After a minimize, some setups (translucent window) do not repaint the content: force a render.
   const repaint = (): void => win?.webContents.invalidate()
   win.on('restore', repaint); win.on('show', repaint); win.on('maximize', repaint); win.on('unmaximize', repaint)
-  // Windows rend opaque le matériau (Mica/Acrylique) d'une fenêtre maximisée. Option « voir le bureau en plein écran » :
-  // la fenêtre occupe alors toute la zone de travail sans être maximisée ; agrandir à nouveau rend la taille d'avant.
+  // Windows makes the material (Mica/Acrylic) of a maximized window opaque. "See the desktop in full screen" option:
+  // the window then fills the whole work area without being maximized; maximizing again restores the previous size.
   let before: Electron.Rectangle | null = null
   win.on('maximize', () => {
     const w = win, cur = getSettings()
@@ -48,10 +48,10 @@ function createWindow(): void {
     const target = filled ? before : area
     before = filled ? null : normal
     w.unmaximize()
-    // Windows remet la taille d'avant juste après la sortie de l'état maximisé : on redimensionne ensuite.
+    // Windows restores the previous size right after leaving the maximized state: resize afterwards.
     if (target) setTimeout(() => { if (!w.isDestroyed() && !w.isMaximized()) w.setBounds(target) }, 60)
   })
-  // Les liens externes s'ouvrent dans le navigateur, jamais dans l'appli.
+  // External links open in the browser, never in the app.
   win.webContents.setWindowOpenHandler(({ url }) => { void shell.openExternal(url); return { action: 'deny' } })
   win.on('close', (e) => {
     if (!quitting && getSettings().closeToTray) { e.preventDefault(); win?.hide() }
@@ -73,10 +73,10 @@ function createTray(): void {
   tray.on('click', () => { win?.show(); win?.focus() })
 }
 
-/** Chemin d'un fichier .wdsh passé en argument (double-clic dans l'Explorateur). */
+/** Path of a .wdsh file passed as an argument (double-click in Explorer). */
 const wdshArg = (argv: string[]): string | undefined => argv.find((a) => a.toLowerCase().endsWith('.wdsh') && !a.startsWith('--'))
 
-// Une seule instance à la fois.
+// Only one instance at a time.
 if (!app.requestSingleInstanceLock()) app.quit()
 else {
   app.on('second-instance', (_e, argv) => {
@@ -85,10 +85,10 @@ else {
     win?.show(); win?.focus()
   })
   app.whenReady().then(() => {
-    app.setAppUserModelId('app.wavedash.desktop')   // requis pour les notifications Windows
+    app.setAppUserModelId('app.wavedash.desktop')   // required for Windows notifications
     initDb()
-    try { const up = syncBundledPlugins(); if (up.length) console.log('Plugins mis à jour :', up.join(', ')) } catch (e) { console.error('Plugins fournis :', e) }
-    try { migrateBuiltinBrawlhalla(); removeSocialPlaceholders() } catch (e) { console.error('Migrations :', e) }
+    try { const up = syncBundledPlugins(); if (up.length) console.log('Plugins updated:', up.join(', ')) } catch (e) { console.error('Bundled plugins:', e) }
+    try { languageDefaults(app.getPreferredSystemLanguages()); migrateBuiltinBrawlhalla(); removeSocialPlaceholders() } catch (e) { console.error('Migrations:', e) }
     createWindow()
     createTray()
     registerIpc(() => win)
@@ -99,5 +99,5 @@ else {
     initUpdater(() => win)
   })
   app.on('before-quit', () => { quitting = true; stopPluginHost(); stopStudio() })
-  app.on('window-all-closed', () => { /* l'appli reste dans la barre système */ })
+  app.on('window-all-closed', () => { /* the app stays in the system tray */ })
 }

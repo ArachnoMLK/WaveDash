@@ -1,154 +1,154 @@
-# Lecteur « vidéo » des replays Brawlhalla — étude de faisabilité
+# Brawlhalla replay "video" player: feasibility study
 
-> Étude du 16/10/2026, patch installé 11.00. Aucun code livré dans WaveDash.
-> **[V]** = vérifié pendant l'étude (fichier lu, code lu, commande exécutée).
-> **[H]** = hypothèse ou déduction, pas encore vérifiée.
+> Study from 2026-10-16, installed patch 11.00. No code shipped in WaveDash.
+> **[V]** = verified during the study (file read, code read, command run).
+> **[H]** = hypothesis or deduction, not verified yet.
 
-## En bref
+## In short
 
-Un `.replay` ne contient que les **inputs** des joueurs, pas les positions. Le lecteur du jeu
-ne lit pas une vidéo : il **re-simule toute la partie** avec le moteur complet. Pour obtenir
-une vraie vue « vidéo » hors du jeu, il faut réécrire ce moteur (physique, collisions, ~2 Mo
-de définitions d'attaques, états de combat, objets, modes) à l'identique, à chaque patch.
-Personne n'y est arrivé publiquement : le projet le plus avancé ne reproduit à ce jour que
-le saut au sol.
+A `.replay` only holds the players' **inputs**, not their positions. The game's player
+does not play a video: it **re-simulates the whole game** with the full engine. Getting
+a real "video" view outside the game means rewriting that engine (physics, collisions, ~2 MB
+of attack definitions, combat states, items, modes) identically, for every patch.
+Nobody has publicly managed it: the most advanced project only reproduces the ground jump
+so far.
 
-**Recommandation :**
+**Recommendation:**
 
-1. Faire maintenant (2–4 jours) : une **frise enrichie** à partir des inputs et des KOs, plus
-   la **carte réelle en image statique** (plateformes, zones de KO), sans personnages animés.
-2. Ne pas lancer de simulateur. Surveiller `NickTacke/brawlhalla-sim`, et réévaluer s'il
-   publie un jour une simulation validée sur un corpus de replays.
+1. Do now (2–4 days): an **enriched timeline** from the inputs and KOs, plus
+   the **real map as a static image** (platforms, KO zones), without animated characters.
+2. Do not start a simulator. Watch `NickTacke/brawlhalla-sim`, and reassess if it
+   ever publishes a simulation validated on a corpus of replays.
 
-Une vue 2D des positions qui « ressemble » au replay mais se trompe n'apporte rien : un
-seul écart d'une frame au début fausse toute la suite de la partie.
+A 2D view of positions that "looks like" the replay but is wrong adds nothing: a
+single one-frame gap at the start skews the rest of the game.
 
 ---
 
-## 1. Méthodes classiques : l'existant open source
+## 1. Classic methods: existing open source
 
-| Projet | Ce qu'il fait | Utile pour un lecteur ? |
+| Project | What it does | Useful for a player? |
 |---|---|---|
-| [NickTacke/brawlhalla-sim](https://github.com/NickTacke/brawlhalla-sim) (TS, MIT, pré-alpha, août 2026) | Seule tentative publique de **simulation déterministe** à partir des inputs. Lit les replays 264/268. | Son README le dit : *not a replay-accurate engine yet*. Seule la chaîne du **saut au sol** est prouvée (impulsion −57, gravité 3,75, pas de 16 ms) sur le patch **10.09**. Collisions, combat, respawn, dash, dodge : non faits ou provisoires. **[V]** |
-| [allhailcheese/WallyAnmRenderer](https://github.com/allhailcheese/WallyAnmRenderer) + BrawlhallaAnimLib + WallyAnmSpinzor (C#, MIT) | Rend **n'importe quelle animation** `.anm` avec skins, couleurs et armes ; export PNG/SVG/GIF. | Oui pour le **dessin** d'un personnage dans une pose donnée. Mais il ne sait pas **quelle** animation jouer ni à quel moment : c'est l'état de combat simulé qui le décide. Le README garde comme fonction à venir « *correct timing for attack animations (harder than it sounds)* ». **[V]** |
-| [moffel1020/WallyMapEditor](https://github.com/moffel1020/WallyMapEditor) + WallyMapSpinzor2 (C#, MIT) | Lit et rend les **cartes** (LevelDesc XML, assets, collisions, spawns). | Oui pour le **fond de carte** et la géométrie de collision. **[V]** |
-| [allhailcheese/BrawlhallaReplayLibrary](https://github.com/allhailcheese/BrawlhallaReplayLibrary) (+ CLI, NameHider) | Lit et réécrit les `.replay` (format 10.09+). Le plugin WaveDash s'en inspire déjà pour le checksum. | Lecture seulement, pas de simulation. **[V]** |
-| [allhailcheese/BrawlhallaDeobfuscate](https://github.com/allhailcheese/BrawlhallaDeobfuscate) | Classes AS3 copiées depuis JPEXS, renommées à la main, de 7.12 à 10.08 : *replay reader/writer/manager*, *collision manager*, *ActivePower*, *PowerType*, *hurtbox*… | Bonne carte d'orientation dans le code. Ce n'est qu'une collection de fichiers décompilés (statut juridique : voir §4), pas un moteur. **[V]** |
-| itselectroz/brawlhalla-replay-reader, Talafhah1/BrawlhallaReplayReader, Anton1P/Workspace-BRAT, sirgladshoes/improveBH | Parseurs et outils d'analyse (stats, habitudes d'inputs). | Pas de rendu de partie. BRAT annonce des « true combos / frame data », sans doute déduits des inputs : pas de simulation dans le README. **[V]** pour les README, **[H]** pour la méthode de BRAT. |
-| bhswz-rs, BrawlhallaSwz, npm `brawlhalla-swz` | Déchiffrement des `.swz`. | Donne accès aux données de jeu (§2). **[V]** |
+| [NickTacke/brawlhalla-sim](https://github.com/NickTacke/brawlhalla-sim) (TS, MIT, pre-alpha, August 2026) | The only public attempt at a **deterministic simulation** from the inputs. Reads replays 264/268. | Its README says so: *not a replay-accurate engine yet*. Only the **ground jump** chain is proven (impulse −57, gravity 3.75, 16 ms step) on patch **10.09**. Collisions, combat, respawn, dash, dodge: not done or provisional. **[V]** |
+| [allhailcheese/WallyAnmRenderer](https://github.com/allhailcheese/WallyAnmRenderer) + BrawlhallaAnimLib + WallyAnmSpinzor (C#, MIT) | Renders **any** `.anm` **animation** with skins, colours and weapons; PNG/SVG/GIF export. | Yes for **drawing** a character in a given pose. But it does not know **which** animation to play or when: the simulated combat state decides that. The README keeps as an upcoming feature "*correct timing for attack animations (harder than it sounds)*". **[V]** |
+| [moffel1020/WallyMapEditor](https://github.com/moffel1020/WallyMapEditor) + WallyMapSpinzor2 (C#, MIT) | Reads and renders **maps** (LevelDesc XML, assets, collisions, spawns). | Yes for the **map background** and the collision geometry. **[V]** |
+| [allhailcheese/BrawlhallaReplayLibrary](https://github.com/allhailcheese/BrawlhallaReplayLibrary) (+ CLI, NameHider) | Reads and rewrites `.replay` files (format 10.09+). The WaveDash plugin already follows it for the checksum. | Reading only, no simulation. **[V]** |
+| [allhailcheese/BrawlhallaDeobfuscate](https://github.com/allhailcheese/BrawlhallaDeobfuscate) | AS3 classes copied from JPEXS, renamed by hand, from 7.12 to 10.08: *replay reader/writer/manager*, *collision manager*, *ActivePower*, *PowerType*, *hurtbox*… | A good map for finding your way in the code. It is only a collection of decompiled files (legal status: see §4), not an engine. **[V]** |
+| itselectroz/brawlhalla-replay-reader, Talafhah1/BrawlhallaReplayReader, Anton1P/Workspace-BRAT, sirgladshoes/improveBH | Parsers and analysis tools (stats, input habits). | No game rendering. BRAT advertises "true combos / frame data", probably deduced from the inputs: no simulation in the README. **[V]** for the READMEs, **[H]** for BRAT's method. |
+| bhswz-rs, BrawlhallaSwz, npm `brawlhalla-swz` | Decryption of `.swz` files. | Gives access to the game data (§2). **[V]** |
 
-À éviter : la recherche « brawlhalla hitbox » renvoie surtout des dépôts de **triche**
-(« ESP, speed hack, hitbox visualizer… »). Ce sont probablement des malwares, et il ne
-faut pas s'en servir comme source. **[V]** pour leur présence, **[H]** pour leur nature.
+Avoid: searching "brawlhalla hitbox" mostly returns **cheat** repositories
+("ESP, speed hack, hitbox visualizer…"). They are probably malware and must not
+be used as a source. **[V]** for their presence, **[H]** for their nature.
 
-**Conclusion §1** : le **rendu** est résolu par la communauté (cartes et animations, en C#).
-La **simulation** (savoir où sont les joueurs et ce qu'ils font à chaque frame) ne l'est pas.
+**Conclusion §1**: **rendering** is solved by the community (maps and animations, in C#).
+**Simulation** (knowing where the players are and what they do on every frame) is not.
 
-## 2. Rétro-ingénierie : ce que le jeu utilise pour le lecteur
+## 2. Reverse engineering: what the game uses for its player
 
-Tout a été lu en **lecture seule** dans le dossier du jeu. Les sorties sont dans le
-scratchpad de la session, hors du dépôt. Aucun exécutable n'a été téléchargé ni lancé.
+Everything was read **read-only** in the game folder. Outputs are in the session
+scratchpad, outside the repository. No executable was downloaded or run.
 
-### 2.1 Le code : `BrawlhallaAir.swf` (Adobe AIR 51, 64 bits)
+### 2.1 The code: `BrawlhallaAir.swf` (Adobe AIR 51, 64-bit)
 
-- SWF compressé zlib (`CWS`, v43) avec 12 blocs DoABC. L'un d'eux fait **4,03 Mo** et contient
-  tout le jeu (SHA-256 `7d308423…6db9` pour le patch 11.00). **[V]**
-- Il n'est **pas chiffré**, mais il est **obfusqué** : on compte environ 25 600 identifiants du type
-  `_-y2E`, `_-V4R`. Les noms changent à chaque patch : brawlhalla-sim cite des classes
-  différentes pour la 10.09. **[V]**
-- Le source d'origine est du **Haxe** (54 fichiers `*.hx` cités dans les messages d'erreur :
+- zlib-compressed SWF (`CWS`, v43) with 12 DoABC blocks. One of them is **4.03 MB** and holds
+  the whole game (SHA-256 `7d308423…6db9` for patch 11.00). **[V]**
+- It is **not encrypted**, but it is **obfuscated**: about 25,600 identifiers like
+  `_-y2E`, `_-V4R`. The names change with every patch: brawlhalla-sim quotes different
+  classes for 10.09. **[V]**
+- The original source is **Haxe** (54 `*.hx` files quoted in error messages:
   `Game`, `Camera`, `CollisionObject`, `PowerType`, `HurtboxType`, `RulesManager`…). **[V]**
-- Le lecteur de replay est **dans ce même code** : chaînes `REPLAY_MODE_REWIND_*`,
+- The replay player is **in this same code**: strings `REPLAY_MODE_REWIND_*`,
   `REPLAY_MODE_FASTFORWARD_*`, `SLOWMO_*`, `UI_ReplayPlayback_*`, `Error in reading replay`,
-  `replayVer=`. On y trouve aussi tout le netcode **rollback** (`Rollback`,
+  `replayVer=`. All the **rollback** netcode is there too (`Rollback`,
   `RollbackFromInput`, `ForcedRollbacks`, `PostRollback`). **[V]**
-  - Déduction **[H]** (forte) : un netcode rollback impose une simulation **déterministe** qui
-    sait sauvegarder et restaurer son état. Le lecteur utilise ce même mécanisme : il rejoue
-    les inputs dans le vrai moteur, et le retour arrière se fait par snapshots et re-simulation.
-    Il n'existe donc **aucun fichier séparé** propre au lecteur.
-- `UI_Replays.swf` ne contient que l'interface (menus). **[V]** pour sa présence, **[H]** pour son contenu (non décompilé).
-- Avantage possible **[H]** : AS3 calcule en `Number` (double IEEE-754), comme JavaScript.
-  Un portage JS fidèle peut donc en théorie être exact au bit près. Exceptions : `Math.sin/cos`,
-  dont les résultats dépendent de l'implémentation, et les conversions int/uint.
+  - Deduction **[H]** (strong): rollback netcode requires a **deterministic** simulation that
+    can save and restore its state. The player uses that same mechanism: it replays
+    the inputs in the real engine, and rewinding works through snapshots and re-simulation.
+    So there is **no separate file** specific to the player.
+- `UI_Replays.swf` only holds the interface (menus). **[V]** for its presence, **[H]** for its content (not decompiled).
+- Possible advantage **[H]**: AS3 computes with `Number` (IEEE-754 double), like JavaScript.
+  A faithful JS port could in theory be bit-exact. Exceptions: `Math.sin/cos`,
+  whose results depend on the implementation, and int/uint conversions.
 
-### 2.2 Les données : archives `.swz`
+### 2.2 The data: `.swz` archives
 
-La clé **154281100** est **vérifiée** sur les 4 archives : le checksum de clé est valide et
-les 273 fichiers se décompressent sans erreur. Déchiffrement fait par un script Python
-écrit pour l'étude (portage de bhswz-rs, sans bibliothèque téléchargée). **[V]**
+The key **154281100** is **verified** on all 4 archives: the key checksum is valid and
+the 273 files decompress without errors. Decryption done by a Python script
+written for the study (port of bhswz-rs, no downloaded library). **[V]**
 
-| Archive | Contenu utile au lecteur |
+| Archive | Content useful for the player |
 |---|---|
-| `Dynamic.swz` (188 fichiers) | Une **`LevelDesc` par carte** : `CameraBounds`, `HardCollision`, `SoftCollision`, `Bouncy*Collision`, `Respawn`, `ItemSpawn`, plateformes et assets. Permet de **dessiner la carte exacte**. **[V]** |
-| `Init.swz` | `LevelTypes` (328 `LevelID` → nom, zones de KO `LeftKill/RightKill/TopKill/BottomKill`), `AnimTypes`, `BoneTypes`, `BoneSources`. **[V]** |
-| `Game.swz` | `powerTypes` (**1,9 Mo**, environ 180 colonnes par attaque : `CastTime`, `RecoverTime`, `BaseDamage`, `FixedImpulse`, `VariableImpulse`, `CastImpulseX/Y`, `CancelGravity`, combos…), `hurtboxTypes`, `HeroTypes` (stats Force/Dex/Défense/Vitesse, armes, signatures), `DodgeTypes`, `itemTypes`, `GameModeTypes`, `ScoringTypes`. **[V]** |
-| `Engine.swz` | `MasterFileList`, langues. **[V]** |
+| `Dynamic.swz` (188 files) | One **`LevelDesc` per map**: `CameraBounds`, `HardCollision`, `SoftCollision`, `Bouncy*Collision`, `Respawn`, `ItemSpawn`, platforms and assets. Enough to **draw the exact map**. **[V]** |
+| `Init.swz` | `LevelTypes` (328 `LevelID` → name, KO zones `LeftKill/RightKill/TopKill/BottomKill`), `AnimTypes`, `BoneTypes`, `BoneSources`. **[V]** |
+| `Game.swz` | `powerTypes` (**1.9 MB**, about 180 columns per attack: `CastTime`, `RecoverTime`, `BaseDamage`, `FixedImpulse`, `VariableImpulse`, `CastImpulseX/Y`, `CancelGravity`, combos…), `hurtboxTypes`, `HeroTypes` (Strength/Dexterity/Defense/Speed stats, weapons, signatures), `DodgeTypes`, `itemTypes`, `GameModeTypes`, `ScoringTypes`. **[V]** |
+| `Engine.swz` | `MasterFileList`, languages. **[V]** |
 
-Ce qui **manque** dans les données : `HeroTypes` ne donne que les 4 stats. Vitesse de course,
-friction, accélération, gravité et impulsions de saut sont **calculées dans le code**
-obfusqué. Le fichier de test de brawlhalla-sim les passe d'ailleurs en paramètre, avec des
-valeurs provisoires. **[V]**
+What is **missing** from the data: `HeroTypes` only gives the 4 stats. Run speed,
+friction, acceleration, gravity and jump impulses are **computed in the obfuscated
+code**. brawlhalla-sim's test file passes them as parameters, with
+provisional values. **[V]**
 
-### 2.3 Le rendu : `anims/*.anm`, `bones/Bones_*.swf`, `Gfx_*.swf`, `mapArt/`
+### 2.3 Rendering: `anims/*.anm`, `bones/Bones_*.swf`, `Gfx_*.swf`, `mapArt/`
 
-- 105 `.anm` (42 Mo), 112 `Bones_*.swf` (125 Mo), 372 `Gfx_*.swf`, `mapArt` (248 Mo). **[V]**
-- Ce sont les squelettes, les animations et les sprites vectoriels lus par WallyAnmRenderer.
-  Ils ne servent qu'à l'**affichage** et ne contiennent aucune logique de partie. **[V]** pour les
-  fichiers, **[H]** pour l'absence de logique (déduite du rôle de WallyAnmRenderer).
-- Les **hitboxes d'attaque** sont probablement des formes dans les animations, combinées à
-  `powerTypes` (`AoERadius*`, `CenterOffset*`). Elles sont liées au moteur de combat. **[H]**
+- 105 `.anm` (42 MB), 112 `Bones_*.swf` (125 MB), 372 `Gfx_*.swf`, `mapArt` (248 MB). **[V]**
+- These are the skeletons, animations and vector sprites read by WallyAnmRenderer.
+  They are only used for **display** and hold no game logic. **[V]** for the
+  files, **[H]** for the absence of logic (deduced from WallyAnmRenderer's role).
+- **Attack hitboxes** are probably shapes in the animations, combined with
+  `powerTypes` (`AoERadius*`, `CenterOffset*`). They are tied to the combat engine. **[H]**
 
-### 2.4 Ce que le plugin WaveDash a déjà
+### 2.4 What the WaveDash plugin already has
 
-`levelId`, `HeroID`, les inputs (horodatage et 14 bits de touches) et les KOs horodatés.
-Avec `LevelTypes` → `LevelDesc`, on peut déjà **afficher la vraie carte** d'un replay. **[V]**
-pour la correspondance des champs, **[H]** pour la couverture de toutes les cartes.
+`levelId`, `HeroID`, the inputs (timestamp and 14 key bits) and timestamped KOs.
+With `LevelTypes` → `LevelDesc`, the **real map** of a replay can already be shown. **[V]**
+for the field mapping, **[H]** for covering every map.
 
-## 3. Ce qu'il faudrait pour une vraie vue « vidéo »
+## 3. What a real "video" view would take
 
-Chaîne complète : inputs → **moteur déterministe** (déplacements, dash, dodge, saut mural,
-gravity cancel, collisions de plateformes, plus de 1 000 `powers` avec leurs combos, hitboxes
-et hurtboxes, dégâts, knockback, stun, armes ramassées et lancées, objets, respawn,
-invulnérabilité, règles de mode) → positions et état d'animation à chaque tick → rendu
-(cartes et `.anm`).
+Full chain: inputs → **deterministic engine** (movement, dash, dodge, wall jump,
+gravity cancel, platform collisions, over 1,000 `powers` with their combos, hitboxes
+and hurtboxes, damage, knockback, stun, weapons picked up and thrown, items, respawn,
+invulnerability, mode rules) → positions and animation state on every tick → rendering
+(maps and `.anm`).
 
-| Option | Résultat | Effort estimé **[H]** | Risque |
+| Option | Result | Estimated effort **[H]** | Risk |
 |---|---|---|---|
-| **A. Frise enrichie + carte statique** | Image de la vraie carte, légendes, frise des KOs et des inputs (sauts, dodges, attaques légères/lourdes, directions), vitesse de lecture et navigation entre KOs. Pas de positions. | **2–4 jours** (parser `LevelDesc` dans le plugin et le dessiner en SVG, frise synchronisée) | Faible. Seulement des données déjà lues ou des fichiers de configuration. Mais il faut déchiffrer les `.swz` sur la machine de l'utilisateur (clé à retrouver à chaque patch), ou livrer une table de cartes générée (voir §4). |
-| **B. Vue 2D « schématique » approximative** | Points qui bougent selon une physique approchée. | 3–6 semaines | **Élevé, et sans intérêt** : sans combat ni knockback exacts, les trajectoires divergent en quelques secondes. Les points deviennent faux tout en ayant l'air plausibles. **Déconseillé.** |
-| **C. Simulateur exact (vue 2D fidèle)** | Positions exactes, puis un rendu comme le jeu (avec les bibliothèques Wally, portées ou en processus annexe). | **6 à 18 mois à temps plein** pour une personne expérimentée en rétro-ingénierie AS3, plus **plusieurs jours par patch** (noms obfusqués qui changent, équilibrages). | Très élevé. Il faut une équivalence exacte à chaque tick : sans vérité de référence dans le fichier, on ne valide que sur le résultat final (KOs et scores). brawlhalla-sim y travaille depuis des mois et n'a que le saut. Risque juridique (§4). |
-| **D. Piloter le vrai jeu** | Ouvrir le replay dans Brawlhalla (copie dans le dossier des replays) et laisser le jeu l'afficher, éventuellement capturé par OBS. | 1–3 jours | Pas d'intégration dans WaveDash : rendu externe, jeu requis et seulement pour la **même version de patch**. Rejouer un replay est une fonction prévue par le jeu, donc aucun problème de conditions d'utilisation (**[H]**). |
+| **A. Enriched timeline + static map** | Image of the real map, legends, timeline of KOs and inputs (jumps, dodges, light/heavy attacks, directions), playback speed and jumping between KOs. No positions. | **2–4 days** (parse `LevelDesc` in the plugin and draw it as SVG, synchronized timeline) | Low. Only data already read or configuration files. But the `.swz` files must be decrypted on the user's machine (key to find again for every patch), or a generated map table must ship (see §4). |
+| **B. Approximate "schematic" 2D view** | Dots moving according to approximate physics. | 3–6 weeks | **High, and pointless**: without exact combat and knockback, trajectories diverge within seconds. The dots become wrong while looking plausible. **Not recommended.** |
+| **C. Exact simulator (faithful 2D view)** | Exact positions, then rendering like the game (with the Wally libraries, ported or in a side process). | **6 to 18 months full time** for someone experienced in AS3 reverse engineering, plus **several days per patch** (changing obfuscated names, balance changes). | Very high. It needs exact equivalence on every tick: with no ground truth in the file, only the final outcome (KOs and scores) can be validated. brawlhalla-sim has worked on it for months and only has the jump. Legal risk (§4). |
+| **D. Drive the real game** | Open the replay in Brawlhalla (copy into the replay folder) and let the game show it, possibly captured with OBS. | 1–3 days | No integration in WaveDash: external rendering, game required and only for the **same patch version**. Replaying a replay is a feature the game provides, so no terms of service issue (**[H]**). |
 
-## 4. Risques : conditions d'utilisation et légal
+## 4. Risks: terms of service and legal
 
-- Les conditions d'utilisation de Brawlhalla et d'Ubisoft n'ont **pas été lues** pendant cette
-  étude : la recherche ne les a pas trouvées. Les CGU des grands éditeurs interdisent en
-  général décompilation et rétro-ingénierie, et un tribunal américain a déjà jugé une telle
-  clause opposable (affaire bnetd/Blizzard). **[H]** pour Brawlhalla, à vérifier sur le texte officiel.
-- Droit de l'UE (directive 2009/24, art. 6) : la décompilation est tolérée sous conditions
-  strictes **pour l'interopérabilité**. Un simulateur concurrent du moteur va probablement
-  au-delà. **[H]**, pas un avis juridique.
-- Distribution : ne **jamais** livrer de code décompilé, de `.swz` déchiffrés ni d'assets du jeu
-  dans WaveDash. La pratique de la communauté (Wally, brawlhalla-sim) est de lire
-  l'installation locale de l'utilisateur au moment de l'exécution. Une table « LevelID → segments
-  de collision » générée est un dérivé des données : zone grise, plus sûre si elle est
-  extraite localement. **[H]**
-- Anti-triche : on ne touche pas au processus du jeu, on ne lit que des fichiers. Pas de risque
-  identifié. **[H]**
-- Maintenance : chaque patch change la clé `.swz` (suffixe = numéro de patch, retrouvé par
-  force brute ou par le motif `ANE_RawData.Init` dans l'ABC, comme bhswz-rs), les noms
-  obfusqués, le format de replay (versions 261 à 271 déjà vues) et l'équilibrage. **[V]** pour le
-  mécanisme de la clé (lu dans `keyfinder.rs`), **[H]** pour la fréquence.
+- The Brawlhalla and Ubisoft terms of service were **not read** during this
+  study: the search did not find them. Major publishers' terms usually forbid
+  decompiling and reverse engineering, and a US court has already upheld such a
+  clause (bnetd/Blizzard case). **[H]** for Brawlhalla, to check against the official text.
+- EU law (directive 2009/24, art. 6): decompiling is allowed under strict conditions
+  **for interoperability**. A simulator competing with the engine probably goes
+  beyond that. **[H]**, not legal advice.
+- Distribution: **never** ship decompiled code, decrypted `.swz` files or game assets
+  in WaveDash. The community practice (Wally, brawlhalla-sim) is to read
+  the user's local install at runtime. A generated "LevelID → collision
+  segments" table is derived from the data: a grey area, safer if it is
+  extracted locally. **[H]**
+- Anti-cheat: the game process is not touched, only files are read. No risk
+  identified. **[H]**
+- Maintenance: every patch changes the `.swz` key (suffix = patch number, found by
+  brute force or through the `ANE_RawData.Init` pattern in the ABC, like bhswz-rs), the obfuscated
+  names, the replay format (versions 261 to 271 already seen) and the balance. **[V]** for the
+  key mechanism (read in `keyfinder.rs`), **[H]** for the frequency.
 
-## 5. Prochaines étapes proposées (option A)
+## 5. Proposed next steps (option A)
 
-1. Ajouter au plugin un lecteur de `LevelDesc` (segments `*Collision`, `Respawn`,
-   `CameraBounds`) et `LevelTypes` (`LevelID` → nom et zones de KO). La source reste à
-   choisir : déchiffrement local des `.swz` (clé à trouver) ou table embarquée.
-2. Écran de détail : SVG de la carte, et en dessous une frise par joueur (inputs regroupés en
-   actions, KOs), avec lecture à vitesse variable.
-3. Réévaluer l'option C si brawlhalla-sim annonce un jour la validation « ordered replay
-   outcomes » sur un corpus de replays (étape 6 de sa feuille de route).
+1. Add a `LevelDesc` reader to the plugin (`*Collision` segments, `Respawn`,
+   `CameraBounds`) and `LevelTypes` (`LevelID` → name and KO zones). The source is still
+   to choose: local decryption of the `.swz` files (key to find) or an embedded table.
+2. Detail screen: SVG of the map, and below it a timeline per player (inputs grouped into
+   actions, KOs), with variable-speed playback.
+3. Reassess option C if brawlhalla-sim ever announces "ordered replay
+   outcomes" validation on a corpus of replays (step 6 of its roadmap).
 
 ## Sources
 
@@ -156,8 +156,8 @@ invulnérabilité, règles de mode) → positions et état d'animation à chaque
 - https://github.com/allhailcheese/WallyAnmRenderer, https://github.com/allhailcheese/BrawlhallaAnimLib
 - https://github.com/moffel1020/WallyMapEditor
 - https://github.com/allhailcheese/BrawlhallaReplayLibrary
-- https://github.com/allhailcheese/BrawlhallaDeobfuscate (arborescence)
+- https://github.com/allhailcheese/BrawlhallaDeobfuscate (file tree)
 - https://github.com/allhailcheese/bhswz-rs (`swz_random.rs`, `swz_reader.rs`, `swz_utils.rs`, `keyfinder.rs`)
 - https://github.com/itselectroz/brawlhalla-replay-reader, https://github.com/Talafhah1/BrawlhallaReplayReader, https://github.com/Anton1P/Workspace-BRAT
 - https://www.pinsentmasons.com/out-law/news/battlenet-emulator-broke-dmca-and-eula (bnetd/Blizzard)
-- Dossier local du jeu : `BrawlhallaAir.swf`, `Init/Game/Dynamic/Engine.swz`, `anims/`, `bones/`, `META-INF/AIR/application.xml`
+- Local game folder: `BrawlhallaAir.swf`, `Init/Game/Dynamic/Engine.swz`, `anims/`, `bones/`, `META-INF/AIR/application.xml`

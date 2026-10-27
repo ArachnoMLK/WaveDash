@@ -1,9 +1,9 @@
-// Écran de validation avant installation : liste ce que le plugin demande, puis installe sur confirmation.
+// Confirmation screen before install: lists what the plugin asks for, then installs on confirmation.
 import { useEffect, useState } from 'react'
 import { loc, PluginInspect, PluginManifest } from '@shared/plugin'
 import { useApp } from '../lib/AppContext'
 
-/** Résumé lisible des permissions d'un manifeste (réutilisé dans la liste des plugins installés). */
+/** Readable summary of a manifest's permissions (reused in the list of installed plugins). */
 export function PermissionList({ m }: { m: PluginManifest }): JSX.Element {
   const { t, settings } = useApp()
   const rows: string[] = []
@@ -16,7 +16,7 @@ export function PermissionList({ m }: { m: PluginManifest }): JSX.Element {
   return <ul style={{ paddingLeft: 18, lineHeight: 1.7, fontSize: 13.5 }}>{rows.map((r) => <li key={r}>{r}</li>)}</ul>
 }
 
-/** Traduit un code d'erreur d'inspection (« manifest:id », « zip:corrupt »…). */
+/** Translates an inspection error code ("manifest:id", "zip:corrupt"…). */
 export function inspectError(t: (k: string, v?: Record<string, string>) => string, code: string): string {
   if (code.startsWith('manifest:')) return t('plugins.err.manifest', { field: code.slice(9) })
   if (code.startsWith('zip:')) return t('plugins.err.zip')

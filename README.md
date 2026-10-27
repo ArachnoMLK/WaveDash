@@ -1,99 +1,85 @@
 # WaveDash
 
-Dashboard Windows centralisé pour tes statistiques **YouTube, Brawlhalla, TikTok, Discord** et tout ce qu'un plugin sait lire.
-Windows dashboard for your **YouTube, Brawlhalla, TikTok, Discord** stats, and anything a plugin can read.
+A Windows dashboard for your **YouTube, Brawlhalla, TikTok and Discord** stats, and anything a plugin can read.
 
-Electron · React · TypeScript · SQLite · ECharts — gris/noir/blanc, verre dépoli, thèmes sombre/clair, FR/EN.
+Electron · React · TypeScript · SQLite · ECharts. Grey/black/white design, frosted glass, dark and light themes, 9 languages.
 
-> **Version 1.5.0** : Studio : boucle des emotes comme en jeu (intro, boucle, fin) et export d'une **durée voulue** (ex. 10 s d'emote en boucle) ;  éditeur de **miniatures** façon MiniaMaker (calques, banque d'assets du jeu, textes stylés, effets, lumières, colorimétrie, export YouTube), attaques rangées par coup (NLight, SAir, Recovery…), aperçu animé au survol, timeline avec sélection d'images, composition de plusieurs rendus.
+> **Version 1.6.0**: WaveDash follows the Windows language on first launch and is available in English, French, Spanish, Portuguese (Brazil), German, Italian, Japanese, Chinese (Simplified) and Arabic (right-to-left layout). The code, docs and plugins are now English-first.
 >
-> **Version 1.3.1** : Studio : skins d'arme, lecture image par image (barre, repères, PNG d'une image), effets classés par légende et effets en plusieurs parties.
+> **Version 1.5.0**: Studio emotes loop like in game (intro, loop, ending), and exports can last a **chosen duration** (e.g. 10 s of a looping emote). Also: a MiniaMaker-style **thumbnail editor** (layers, game asset bank, styled texts, effects, lights, colour grading, YouTube export), attacks sorted by move (NLight, SAir, Recovery…), animated preview on hover, a timeline with frame selection, and composition of several renders.
 >
-> **Version 1.3.0** : nouveau **Studio Brawlhalla** (rendus de légendes, cosmétiques, assets et musiques du jeu installé).
+> **Version 1.3.0**: new **Brawlhalla Studio** (renders of legends, cosmetics, assets and music from the installed game).
 >
-> Les mises à jour automatiques lisent les Releases GitHub : le dépôt doit rester **public**.
+> Automatic updates read the GitHub Releases, so the repository must stay **public**.
 
----
+## What WaveDash does
+- **Built-in platform**: YouTube (subscribers, views, videos, likes and comments of the last 50 videos, top videos). Everything else goes through plugins.
+- **Local history** (SQLite) from the moment tracking starts; line, area, bar, pie and radar charts.
+- **Overview**, **goals**, **milestones** (10, 20, 50, 100…) with Windows notifications and a celebration screen, data **export** (CSV, JSON, PDF report).
+- **Demo mode**: simulated data to try everything without an API key.
+- **Customization**: theme, language, glass (the desktop can stay visible even when the window is enlarged), animations, tabs you can rename, reorder and hide (plugins included), refresh rate, chart type per statistic, launch with Windows, system tray.
+- **Silent automatic updates** from GitHub Releases (installer checked with SHA-512).
 
-## 🇫🇷 Français
+## Languages
+English, Français, Español, Português (Brasil), Deutsch, Italiano, 日本語, 中文（简体） and العربية. On first launch WaveDash picks the first supported language in the Windows language list (English otherwise); the choice can be changed in Settings › Appearance. Interface texts live in `src/renderer/src/i18n/` (`en` is the reference; `npm test` checks that every language has every text with the same `{variables}`). Notification texts and the PDF report use `src/shared/labels.ts`.
 
-### Ce que fait WaveDash
-- **Plateforme intégrée** : YouTube (abonnés, vues, vidéos, likes et commentaires des 50 dernières vidéos, meilleures vidéos). Tout le reste passe par des plugins.
-- **Historique local** (SQLite) dès le début du suivi ; graphiques courbe, aire, barres, camembert, radar.
-- **Vue d'ensemble**, **objectifs**, **paliers** (10, 20, 50, 100…) avec notification Windows et célébration, **export** des données.
-- **Mode démo** : données simulées pour tout essayer sans clé API.
-- **Personnalisation** : thème, langue, verre (et bureau visible même fenêtre agrandie), animations, onglets renommables, réordonnables et masquables (plugins compris), fréquence d'actualisation, type de graphique par statistique, démarrage avec Windows, barre système.
-- **Mises à jour automatiques** silencieuses depuis les Releases GitHub (installateur vérifié par SHA-512).
+## `.wdsh` plugins
+A plugin adds a data source. It runs in a **QuickJS sandbox**, inside a **separate process**: it only sees what its declared permissions allow (network domains, one read-only folder) and cannot freeze the interface. Full guide: [docs/PLUGINS.md](docs/PLUGINS.md).
 
-### Plugins `.wdsh`
-Un plugin ajoute une source de données. Il tourne dans un **bac à sable QuickJS**, dans un **processus séparé** : il ne voit que ce que ses permissions déclarées autorisent (domaines réseau, un dossier en lecture seule) et ne peut pas figer l'interface. Guide complet : [docs/PLUGINS.md](docs/PLUGINS.md).
+- **Online catalog** ([WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins)): **signed** index (Ed25519), every package checked with SHA-256, silent updates only when the permissions do not change.
+- **Bundled plugins** (`examples/plugins/`):
+  - **Brawlhalla (official API)**: ELO, rankings, wins and legends with your Blue Mammoth Games key (replaces the old built-in platform).
+  - **Brawlhalla Replays**: reads and imports your `.replay` files (patches 10.02 to 11.00). Overview per legend, weapon, map, mode, teammate and opponent, with a Mode / Patch / Period bar that rebuilds the whole page for a single mode; a preview of each game with the map thumbnail (taken from your installed game) and a timeline of KOs, throws and taunts; search for a player, a map or a legend, and a "Cross your data" tool (e.g. "Legends × Modes with someone").
+  - **TikTok (public profile)**: followers, likes and videos from the profile's public page.
+  - **Discord (servers)**: members, online members, boosts and channel activity through a bot (official API).
+  - **Weather** and **Folder stats**: simple examples to write your own plugin.
+- Modular plugin pages: modules can be collapsed, moved and hidden; sortable tables; heat maps.
+- Adjustable milestones for every plugin metric, and notifications sent by plugins (e.g. a Brawlhalla rank change).
 
-- **Catalogue en ligne** ([WaveDash-Plugins](https://github.com/ArachnoMLK/WaveDash-Plugins)) : index **signé** (Ed25519), chaque paquet vérifié par SHA-256, mises à jour silencieuses seulement si les permissions ne changent pas.
-- **Plugins fournis** (`examples/plugins/`) :
-  - **Brawlhalla (API officielle)** : ELO, classements, victoires et légendes avec ta clé Blue Mammoth Games (remplace l'ancienne plateforme intégrée).
-  - **Brawlhalla Replays** : lit et importe tes fichiers `.replay` (patchs 10.02 à 11.00). Bilan par légende, arme, carte, mode, coéquipier et adversaire, avec une barre Mode / Patch / Période qui refait toute la page pour un seul mode ; aperçu de chaque partie avec la vignette de la carte (prise dans ton jeu installé) et une frise des KOs, lancers et provocations ; recherche d'un joueur, d'une carte ou d'une légende, et outil « Croiser tes données » (ex. « Légendes × Modes avec Untel »).
-  - **TikTok (profil public)** : abonnés, likes, vidéos depuis la page publique du profil.
-  - **Discord (serveurs)** : membres, en ligne, boosts et activité des salons via un bot (API officielle).
-  - **Météo** et **Statistiques de dossier** : exemples simples pour écrire son propre plugin.
-- Pages de plugin modulables : modules à réduire, déplacer, masquer ; tableaux triables ; cartes de chaleur.
-- Paliers réglables pour chaque métrique de plugin, et notifications envoyées par les plugins (ex. changement de rang Brawlhalla).
+## Brawlhalla Studio
+Renders read straight from the installed game files (nothing is downloaded):
+- **Legends**: legend, skin and colour, then animations sorted automatically: signatures (neutral / side / down of each weapon, follow-ups included), attacks and stances of both weapons, 277 emotes and dances.
+- **Cosmetics**: emojis, companions, sidekicks, podiums, frames, badges; legend **portraits**; visual **effects** (`SFX_*.swf` files, e.g. Yumiko's flames).
+- **Exports**: transparent GIF, APNG, WebM and MOV, MP4 on a green background (CapCut), or PNG frames.
+- Game **assets** (banners, avatars, sprites, backgrounds, map art, images) and **music** (Wwise → MP3).
 
-### Studio Brawlhalla
-Rendus lus directement dans les fichiers du jeu installé (rien n'est téléchargé) :
-- **Légendes** : légende, skin, couleur, puis animations rangées automatiquement — signatures (neutre / côté / bas de chaque arme, enchaînements compris), attaques et postures des deux armes, 277 emotes et danses.
-- **Cosmétiques** : emojis, compagnons, sidekicks, podiums, cadres, insignes ; **portraits** des légendes ; **effets** visuels (fichiers `SFX_*.swf`, ex. les flammes de Yumiko).
-- **Exports** : GIF, APNG, WebM et MOV transparents, MP4 sur fond vert (CapCut), ou images PNG.
-- **Assets** (bannières, avatars, sprites, décors, map art, images) et **musiques** du jeu (Wwise → MP3).
+Rendering is done by `BrawlRender.exe`, a .NET engine from the BrawlStudio repository based on [WallyAnmRenderer](https://github.com/allhailcheese/WallyAnmRenderer) (MIT). Before `npm run dev` or `npm run dist`, put BrawlStudio next to WaveDash (`git clone --recurse-submodules`) and run `npm run studio:engine` (.NET 8 SDK required): the engine and vgmstream are copied to `resources/studio/` (not versioned). Without them, the Studio page simply says the engine is missing.
 
-Le rendu est fait par `BrawlRender.exe`, un moteur .NET du dépôt BrawlStudio basé sur [WallyAnmRenderer](https://github.com/allhailcheese/WallyAnmRenderer) (MIT). Avant `npm run dev` ou `npm run dist`, place BrawlStudio à côté de WaveDash (`git clone --recurse-submodules`) et lance `npm run studio:engine` (SDK .NET 8 requis) : le moteur et vgmstream sont copiés dans `resources/studio/` (non versionné). Sans eux, la page Studio indique simplement que le moteur manque.
+Published installers include the engine: the *Release* workflow downloads the `studio-engine.zip` archive from the `studio-engine-rN` pre-release named by `STUDIO_ENGINE_TAG` in `.github/workflows/release.yml` (pre-releases are ignored by automatic updates). To publish a new engine: `npm run studio:engine`, zip the content of `resources/studio/` as `studio-engine.zip`, publish it in a new `studio-engine-rN` pre-release, then put that name in `STUDIO_ENGINE_TAG`.
 
-Les installateurs publiés incluent le moteur : le workflow *Release* télécharge l'archive `studio-engine.zip` de la pré-release `studio-engine-r1` (ignorée par les mises à jour automatiques). Pour publier un nouveau moteur : `npm run studio:engine`, compresser le contenu de `resources/studio/` en `studio-engine.zip`, le publier dans une pré-release `studio-engine-rN`, puis mettre ce nom dans `STUDIO_ENGINE_TAG` (`.github/workflows/release.yml`).
+## Install
+Download `WaveDash-Setup-x.y.z.exe` from the **Releases** tab. The installer is **not signed**: SmartScreen shows "unknown publisher" on first launch ("More info" › "Run anyway").
 
-### Installer
-Télécharge `WaveDash-Setup-x.y.z.exe` dans l'onglet **Releases**. L'installateur n'est **pas signé** : SmartScreen affiche « éditeur inconnu » au premier lancement (« Informations complémentaires » › « Exécuter quand même »).
-
-### Clés API (Paramètres › Comptes connectés, chiffrées par Windows DPAPI)
-| Source | Ce qu'il faut | Limites |
+## API keys (Settings › Connected accounts, encrypted with Windows DPAPI)
+| Source | What you need | Limits |
 |---|---|---|
-| YouTube | Clé « YouTube Data API v3 » (Google Cloud Console, gratuit) | Likes/commentaires = 50 dernières vidéos |
-| Brawlhalla (plugin) | Clé personnelle demandée à Blue Mammoth Games | Recherche par ID Brawlhalla ou Steam ID64 |
-| Discord (plugin) | Jeton d'un bot invité sur le serveur | Ne lit jamais le contenu des messages |
-| TikTok (plugin) | Aucune | Page publique, peut casser si TikTok la change |
+| YouTube | A "YouTube Data API v3" key (Google Cloud Console, free) | Likes/comments = last 50 videos |
+| Brawlhalla (plugin) | A personal key requested from Blue Mammoth Games | Lookup by Brawlhalla ID or Steam ID64 |
+| Discord (plugin) | The token of a bot invited to the server | Never reads message content |
+| TikTok (plugin) | Nothing | Public page, may break if TikTok changes it |
 
-Les clés ne sont jamais écrites en clair, jamais commitées, et jamais renvoyées à l'interface. Instagram n'est pas pris en charge (pas d'API pour les comptes personnels).
+Keys are never written in plain text, never committed, and never sent back to the interface. Instagram is not supported (no API for personal accounts).
 
-### Développement
+## Development
 ```bash
 npm install
-npm run dev        # application avec rechargement à chaud
-npm run typecheck  # vérifie les types
-npm test           # tests automatiques (bac à sable, réseau, fichiers, ZIP, base, plugins fournis)
-npm run dist       # installateur dans /dist (sous Windows)
+npm run dev        # app with hot reload
+npm run typecheck  # type check
+npm test           # automated tests (sandbox, network, files, ZIP, database, bundled plugins, translations)
+npm run dist       # installer in /dist (on Windows)
 ```
-Chaque envoi sur GitHub lance le workflow *Tests* (types et tests). Publier une version : incrémenter `package.json`, puis `git tag vX.Y.Z && git push origin vX.Y.Z` ; le workflow *Release* relance les tests, puis construit et publie l'installateur.
-
----
-
-## 🇬🇧 English
-
-WaveDash tracks YouTube natively, keeps a local SQLite history, and shows it with charts, goals, milestones (Windows notifications) and export. A **demo mode** works without any API key.
-
-**Plugins** (`.wdsh`) add data sources. Each runs in a QuickJS sandbox inside a separate process, limited to the network domains and the read-only folder it declares. The online catalog is **signed** (Ed25519) and every package is checked by SHA-256. Bundled plugins: Brawlhalla official API (ELO, rankings, legends), Brawlhalla Replays (reads your `.replay` files: per legend/map/mode/teammate stats, search, data crossing), TikTok public profile, Discord servers (bot, official API), weather and folder stats examples. Plugin guide (French): [docs/PLUGINS.md](docs/PLUGINS.md).
-
-Download the installer from **Releases** (unsigned: SmartScreen warns on first launch). API keys are entered in Settings › Connected accounts and encrypted with Windows DPAPI. Development: `npm install && npm run dev`.
-
----
+Every push to GitHub runs the *Tests* workflow (types and tests). To release a version: bump `package.json`, then `git tag vX.Y.Z && git push origin vX.Y.Z`; the *Release* workflow runs the tests again, then builds and publishes the installer.
 
 ## Structure
 ```
-src/main        Processus principal : base SQLite, secrets, planificateur, fournisseurs (providers/), plugins (plugins/), Studio (studio/), IPC
-src/preload     Pont sécurisé exposé à l'interface
-src/renderer    Interface React (pages/, components/, lib/, i18n/)
-src/shared      Types communs et validation des plugins
-examples        Plugins fournis
-tests           Tests automatiques (npm test)
-docs            Guide des plugins, étude du lecteur de replays
+src/main        Main process: SQLite database, secrets, scheduler, providers (providers/), plugins (plugins/), Studio (studio/), IPC
+src/preload     Secure bridge exposed to the interface
+src/renderer    React interface (pages/, components/, lib/, i18n/)
+src/shared      Shared types, labels and plugin validation
+examples        Bundled plugins
+tests           Automated tests (npm test)
+docs            Plugin guide, replay player study
 ```
 
-## Licence
+## License
 MIT

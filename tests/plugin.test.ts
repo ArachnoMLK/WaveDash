@@ -6,11 +6,11 @@ import { exampleIds, exampleRaw, manifest } from './helpers'
 const base = { wdsh: 1, id: 'test.plugin', name: 'Test', version: '1.0.0', metrics: [{ key: 'n', label: 'N' }] }
 const err = (over: Record<string, unknown>): string | undefined => { const v = validateManifest({ ...base, ...over }); return v.ok ? undefined : v.error }
 
-test('les manifestes des plugins fournis sont valides', () => {
+test('the bundled plugin manifests are valid', () => {
   for (const id of exampleIds()) { const v = validateManifest(exampleRaw(id)); assert.ok(v.ok, `${id} : ${v.ok ? '' : v.error}`) }
 })
 
-test('manifeste : refus de ce qui est incorrect', () => {
+test('manifest: incorrect values are rejected', () => {
   assert.equal(err({ wdsh: 2 }), 'format_version')
   assert.equal(err({ id: 'A' }), 'id')
   assert.equal(err({ id: '../evil' }), 'id')
@@ -30,7 +30,7 @@ test('manifeste : refus de ce qui est incorrect', () => {
   assert.equal(err({ inputs: [{ key: 'a', label: 'A', type: 'text' }, { key: 'a', label: 'B', type: 'text' }] }), 'inputs')
 })
 
-test('manifeste : valeurs par défaut et bornes', () => {
+test('manifest: defaults and bounds', () => {
   const m = manifest({ refreshMinutes: 1 })
   assert.equal(m.refreshMinutes, 5)
   assert.equal(manifest({ refreshMinutes: 99999 }).refreshMinutes, 1440)
@@ -42,7 +42,7 @@ test('manifeste : valeurs par défaut et bornes', () => {
   assert.ok(manifest({ cross: { measures: [{ key: 'm', label: 'M' }], dimensions: [{ key: 'd', label: 'D' }] } }).cross)
 })
 
-test('manifeste : paliers proposés par une métrique', () => {
+test('manifest: milestones offered by a metric', () => {
   const m = manifest({ metrics: [{ key: 'elo', label: 'ELO', milestone: { increment: 100, notifyDown: true } }] })
   assert.deepEqual(m.metrics[0].milestone, { enabled: undefined, increment: 100, notifyDown: true })
   assert.equal(err({ metrics: [{ key: 'n', label: 'N', milestone: { increment: 0 } }] }), 'metrics')
@@ -57,7 +57,7 @@ test('versions', () => {
   assert.ok(compareVersions('0.9.0', '1.0.0') < 0)
 })
 
-test('résultat : seules les métriques déclarées, nombres finis, dates plausibles', () => {
+test('result: only declared metrics, finite numbers, plausible dates', () => {
   const m = manifest({ itemColumns: [{ key: 'k', label: 'K' }] }), now = 1_800_000_000_000
   const r = sanitizeRunResult({
     metrics: { n: 5, other: 3, bad: Infinity }, backlog: 12.7,
@@ -75,7 +75,7 @@ test('résultat : seules les métriques déclarées, nombres finis, dates plausi
   assert.equal(sanitizeRunResult({ metrics: { n: 1 }, backlog: -4 }, m).backlog, 0)
 })
 
-test('détail : tailles bornées, types contrôlés', () => {
+test('detail: bounded sizes, checked types', () => {
   const L = DETAIL_LIMITS
   const d = sanitizeDetail({
     chips: Array(50).fill('c'), stats: [{ label: 'a', value: NaN }, null],
@@ -100,7 +100,7 @@ test('détail : tailles bornées, types contrôlés', () => {
   assert.equal(sanitizeDetail('x'), undefined)
 })
 
-test('resolve : identifiant et nom obligatoires', () => {
+test('resolve: identifier and name required', () => {
   assert.deepEqual(sanitizeResolveResult({ externalId: ' a ', displayName: ' B ' }), { externalId: 'a', displayName: 'B' })
   assert.equal(sanitizeResolveResult({ externalId: 'a' }), null)
   assert.equal(sanitizeResolveResult({ externalId: '  ', displayName: 'B' }), null)

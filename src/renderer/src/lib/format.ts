@@ -1,6 +1,6 @@
-import { Lang, MetricKey } from '@shared/types'
+import { Lang, MetricKey, localeOf } from '@shared/types'
 
-const locale = (l: Lang): string => (l === 'fr' ? 'fr-FR' : 'en-US')
+const locale = (l: Lang): string => localeOf(l)
 
 export const fmt = (n: number, l: Lang, digits = 0): string =>
   new Intl.NumberFormat(locale(l), { maximumFractionDigits: digits }).format(n)
@@ -8,7 +8,7 @@ export const fmt = (n: number, l: Lang, digits = 0): string =>
 export const compact = (n: number, l: Lang): string =>
   new Intl.NumberFormat(locale(l), { notation: 'compact', maximumFractionDigits: 1 }).format(n)
 
-/** Formate la valeur d'une métrique (forme compacte au-delà de 100 000). */
+/** Formats a metric value (compact form above 100,000). */
 export function fmtMetric(_k: MetricKey, v: number, l: Lang): string {
   return v >= 100_000 ? compact(v, l) : fmt(v, l)
 }

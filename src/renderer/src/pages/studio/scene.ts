@@ -1,15 +1,15 @@
-// Miniature : modèle de scène (calques) et rendu canvas, utilisé tel quel pour l'affichage et pour l'export.
+// Thumbnail: scene model (layers) and canvas rendering, used as is for display and for export.
 
-/** Colorimétrie (par calque et pour tout le projet). 0 = neutre partout. */
+/** Colour grading (per layer and for the whole project). 0 = neutral everywhere. */
 export interface Grade {
   exposure: number    // -100..100
   contrast: number    // -100..100
   saturation: number  // -100..100
-  vibrance: number    // -100..100 (sature surtout les couleurs ternes)
+  vibrance: number    // -100..100 (mostly saturates dull colours)
   temperature: number // -100 (froid) .. 100 (chaud)
   tint: number        // -100 (vert) .. 100 (magenta)
   hue: number         // -180..180
-  fade: number        // 0..100 (noirs délavés)
+  fade: number        // 0..100 (faded blacks)
 }
 export const NEUTRAL: Grade = { exposure: 0, contrast: 0, saturation: 0, vibrance: 0, temperature: 0, tint: 0, hue: 0, fade: 0 }
 
@@ -38,7 +38,7 @@ interface Base {
   blend: GlobalCompositeOperation
   fx: Fx
 }
-/** Image : rendu du Studio (avec ses images, pour choisir la pose), image du jeu ou fichier importé. */
+/** Image: Studio render (with its frames, to pick the pose), game image or imported file. */
 export interface ImageLayer extends Base {
   kind: 'image'; src: string; w: number; h: number
   render?: { id: string; files: string[]; frame: number }
@@ -82,16 +82,21 @@ export const newDoc = (): Doc => ({ version: 1, name: 'miniature', w: 1280, h: 7
 
 let seq = 0
 export const uid = (): string => `${Date.now().toString(36)}${(seq++).toString(36)}${Math.random().toString(36).slice(2, 6)}`
+// Default names of new layers and presets: French when the interface is in French, English otherwise.
+let french = false
+export const setSceneFrench = (v: boolean): void => { french = v }
+const L = (en: string, fr: string): string => (french ? fr : en)
+
 const base = (name: string, x: number, y: number): Base => ({
   id: uid(), name, visible: true, locked: false, x, y, sx: 1, sy: 1, rot: 0, opacity: 1, flipH: false, flipV: false, blend: 'source-over', fx: noFx()
 })
 
-/* ---------------------------------------------------------------- fabriques */
+/* ---------------------------------------------------------------- factories */
 export const makeImage = (src: string, w: number, h: number, name: string, doc: Doc, render?: ImageLayer['render']): ImageLayer => {
   const s = Math.min(1, (doc.h * 0.85) / h, (doc.w * 0.6) / w)
   return { ...base(name, doc.w / 2, doc.h / 2), kind: 'image', src, w, h, sx: s, sy: s, render }
 }
-/** Fond : couvre tout le canvas. */
+/** Background: covers the whole canvas. */
 export const makeBackground = (src: string, w: number, h: number, name: string, doc: Doc): ImageLayer => {
   const s = Math.max(doc.w / w, doc.h / h)
   return { ...base(name, doc.w / 2, doc.h / 2), kind: 'image', src, w, h, sx: s, sy: s }
@@ -104,9 +109,9 @@ export const TEXT_STYLES: Record<string, (l: TextLayer) => Partial<TextLayer>> =
   neon: (l) => ({ font: 'Bebas Neue', fill: 'solid', color: '#ffffff', inner: { color: '#e879f9', width: 4 }, extrude: { color: '#000000', depth: 0, angle: 90 }, outer: { color: '#000000', width: 0 }, fx: { ...l.fx, glow: { on: true, color: '#e879f9', size: 22, strength: 2, inner: false } } }),
   clean: () => ({ font: 'Montserrat', fill: 'solid', color: '#ffffff', inner: { color: '#000000', width: 0 }, extrude: { color: '#000000', depth: 0, angle: 90 }, outer: { color: '#000000', width: 0 } })
 }
-export const makeText = (doc: Doc, text = 'TITRE'): TextLayer => {
+export const makeText = (doc: Doc, text = L('TITLE', 'TITRE')): TextLayer => {
   const l: TextLayer = {
-    ...base('Texte', doc.w / 2, doc.h * 0.3), kind: 'text', text, font: 'Lilita One', size: 140, spacing: 0, lineHeight: 0.95, align: 'center',
+    ...base(L('Text', 'Texte'), doc.w / 2, doc.h * 0.3), kind: 'text', text, font: 'Lilita One', size: 140, spacing: 0, lineHeight: 0.95, align: 'center',
     fill: 'solid', color: '#4ade80', color2: '#16a34a', accent: '#ef4444',
     inner: { color: '#ffffff', width: 10 }, extrude: { color: '#0b0b0b', depth: 10, angle: 100 }, outer: { color: '#ffffff', width: 4 }, italic: false
   }
@@ -114,28 +119,31 @@ export const makeText = (doc: Doc, text = 'TITRE'): TextLayer => {
   return l
 }
 export const makeTag = (doc: Doc): TagLayer => ({
-  ...base('Tag', doc.w * 0.7, doc.h * 0.2), kind: 'tag', text: 'PSEUDO', font: 'Montserrat', size: 38, team: '#22d3ee', textColor: '#ffffff', arrow: 'down', rot: -10
+  ...base('Tag', doc.w * 0.7, doc.h * 0.2), kind: 'tag', text: L('PLAYER', 'PSEUDO'), font: 'Montserrat', size: 38, team: '#22d3ee', textColor: '#ffffff', arrow: 'down', rot: -10
 })
 export const makeShape = (doc: Doc, shape: ShapeLayer['shape']): ShapeLayer => ({
-  ...base(shape === 'rect' ? 'Rectangle' : shape === 'para' ? 'Parallélogramme' : shape === 'ribbon' ? 'Bandeau' : 'Cercle', doc.w / 2, doc.h * 0.8),
+  ...base(shape === 'rect' ? 'Rectangle' : shape === 'para' ? L('Parallelogram', 'Parallélogramme') : shape === 'ribbon' ? L('Banner', 'Bandeau') : L('Circle', 'Cercle'), doc.w / 2, doc.h * 0.8),
   kind: 'shape', shape, w: shape === 'circle' ? 220 : 520, h: shape === 'circle' ? 220 : 110, radius: shape === 'rect' ? 16 : 0,
   fill: 'solid', color: '#ef4444', color2: '#7f1d1d', stroke: '#ffffff', strokeWidth: 0
 })
 export const makeSpeed = (doc: Doc): SpeedLayer => ({
-  ...base('Lignes de vitesse', doc.w / 2, doc.h / 2), kind: 'speed', count: 60, color: '#ffffff', fade: 80, intensity: 90,
+  ...base(L('Speed lines', 'Lignes de vitesse'), doc.w / 2, doc.h / 2), kind: 'speed', count: 60, color: '#ffffff', fade: 80, intensity: 90,
   fx0: doc.w / 2, fy0: doc.h / 2, inner: 260, maxLen: 420, maxWidth: 12, seed: Math.floor(Math.random() * 1e6), opacity: 0.9
 })
-export const LIGHTS: Record<string, { label: string; make: (doc: Doc) => Partial<LightLayer> }> = {
-  warm: { label: 'Contre-jour chaud', make: (d) => ({ style: 'glow', color: '#fb923c', color2: '#fde68a', radius: d.h * 0.7, intensity: 0.9 }) },
-  cyan: { label: 'Néon cyan', make: (d) => ({ style: 'glow', color: '#22d3ee', color2: '#a5f3fc', radius: d.h * 0.55, intensity: 1 }) },
-  rage: { label: 'Rage rouge', make: (d) => ({ style: 'glow', color: '#dc2626', color2: '#f87171', radius: d.h * 0.6, intensity: 1 }) },
-  aura: { label: 'Aura violette', make: (d) => ({ style: 'glow', color: '#7c3aed', color2: '#e879f9', radius: d.h * 0.6, intensity: 1 }) },
-  spot: { label: 'Projecteur', make: (d) => ({ style: 'spot', color: '#ffffff', color2: '#fef9c3', radius: d.h * 1.1, intensity: 0.7, y: 0 }) },
-  rays: { label: 'Rayons divins', make: (d) => ({ style: 'rays', color: '#fef3c7', color2: '#fbbf24', radius: d.w * 0.8, intensity: 0.7, rays: 14, y: d.h * 0.1 }) },
-  flare: { label: 'Éclat (flare)', make: (d) => ({ style: 'flare', color: '#ffffff', color2: '#60a5fa', radius: d.h * 0.35, intensity: 1 }) }
+export const LIGHTS: Record<string, { label: string; fr: string; make: (doc: Doc) => Partial<LightLayer> }> = {
+  warm: { label: 'Warm backlight', fr: 'Contre-jour chaud', make: (d) => ({ style: 'glow', color: '#fb923c', color2: '#fde68a', radius: d.h * 0.7, intensity: 0.9 }) },
+  cyan: { label: 'Cyan neon', fr: 'Néon cyan', make: (d) => ({ style: 'glow', color: '#22d3ee', color2: '#a5f3fc', radius: d.h * 0.55, intensity: 1 }) },
+  rage: { label: 'Red rage', fr: 'Rage rouge', make: (d) => ({ style: 'glow', color: '#dc2626', color2: '#f87171', radius: d.h * 0.6, intensity: 1 }) },
+  aura: { label: 'Purple aura', fr: 'Aura violette', make: (d) => ({ style: 'glow', color: '#7c3aed', color2: '#e879f9', radius: d.h * 0.6, intensity: 1 }) },
+  spot: { label: 'Spotlight', fr: 'Projecteur', make: (d) => ({ style: 'spot', color: '#ffffff', color2: '#fef9c3', radius: d.h * 1.1, intensity: 0.7, y: 0 }) },
+  rays: { label: 'God rays', fr: 'Rayons divins', make: (d) => ({ style: 'rays', color: '#fef3c7', color2: '#fbbf24', radius: d.w * 0.8, intensity: 0.7, rays: 14, y: d.h * 0.1 }) },
+  flare: { label: 'Flare', fr: 'Éclat (flare)', make: (d) => ({ style: 'flare', color: '#ffffff', color2: '#60a5fa', radius: d.h * 0.35, intensity: 1 }) }
 }
+/** Label of a light or grade preset in the interface language. */
+export const presetLabel = (p: { label: string; fr: string }): string => L(p.label, p.fr)
+const lightLabel = (preset: string): string => (LIGHTS[preset] ? presetLabel(LIGHTS[preset]) : L('Light', 'Lumière'))
 export const makeLight = (doc: Doc, preset: string): LightLayer => ({
-  ...base(LIGHTS[preset]?.label ?? 'Lumière', doc.w / 2, doc.h / 2), kind: 'light', style: 'glow', color: '#ffffff', color2: '#ffffff',
+  ...base(lightLabel(preset), doc.w / 2, doc.h / 2), kind: 'light', style: 'glow', color: '#ffffff', color2: '#ffffff',
   radius: 300, intensity: 1, rays: 12, blend: 'screen', ...(LIGHTS[preset]?.make(doc) ?? {})
 })
 
@@ -159,11 +167,11 @@ export const loadImage = (src: string): Promise<HTMLImageElement> => new Promise
 })
 export const imageSrc = (l: ImageLayer): string => (l.render ? `studio://renders/${l.render.id}/${l.render.files[l.render.frame]}` : l.src)
 
-/* ---------------------------------------------------------------- rendu */
+/* ---------------------------------------------------------------- render */
 const canvas = (w: number, h: number): HTMLCanvasElement => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c }
 const ctx2d = (c: HTMLCanvasElement): CanvasRenderingContext2D => c.getContext('2d')!
 
-/** Filtre CSS de la colorimétrie (exposition, contraste, saturation, teinte). Température, tint et fondu se font par-dessus. */
+/** CSS filter of the colour grading (exposure, contrast, saturation, hue). Temperature, tint and fade are applied on top. */
 export function gradeFilter(g: Grade): string {
   const parts: string[] = []
   if (g.exposure) parts.push(`brightness(${(1 + g.exposure / 100).toFixed(3)})`)
@@ -173,7 +181,7 @@ export function gradeFilter(g: Grade): string {
   if (g.hue) parts.push(`hue-rotate(${g.hue}deg)`)
   return parts.join(' ') || 'none'
 }
-/** Température / tint / fondu, appliqués sur ce qui est déjà dessiné (`atop` = seulement sur les pixels du calque). */
+/** Temperature / tint / fade, applied on what is already drawn (`atop` = only on the layer's pixels). */
 function gradeOverlay(c: CanvasRenderingContext2D, w: number, h: number, g: Grade, atop: boolean): void {
   c.save()
   c.globalCompositeOperation = atop ? 'source-atop' : 'soft-light'
@@ -184,14 +192,14 @@ function gradeOverlay(c: CanvasRenderingContext2D, w: number, h: number, g: Grad
 }
 const gradeUsed = (g: Grade): boolean => Object.values(g).some((v) => v !== 0)
 
-/** Mesures d'un calque (taille locale, avant échelle) : utilisées pour les poignées et la sélection. */
+/** Measurements of a layer (local size, before scaling): used for the handles and the selection. */
 export const metrics = new Map<string, { w: number; h: number }>()
 
 interface Run { text: string; accent: boolean }
 const runs = (line: string): Run[] => line.split(/(\*[^*]+\*)/).filter(Boolean).map((p) => (p.startsWith('*') && p.endsWith('*') && p.length > 2 ? { text: p.slice(1, -1), accent: true } : { text: p, accent: false }))
 const fontOf = (l: { font: string; size: number; italic?: boolean }): string => `${l.italic ? 'italic ' : ''}${l.font === 'Montserrat' ? '800 ' : ''}${l.size}px "${l.font}", "Segoe UI", sans-serif`
 
-/** Contenu brut d'un calque, centré dans un canvas (marge `pad` autour pour les effets). */
+/** Raw content of a layer, centred in a canvas (`pad` margin around it for the effects). */
 function content(l: Layer, pad: number): { c: HTMLCanvasElement; w: number; h: number } | null {
   if (l.kind === 'image') {
     const im = image(imageSrc(l))
@@ -223,7 +231,7 @@ function content(l: Layer, pad: number): { c: HTMLCanvasElement; w: number; h: n
       })
     }
     const ang = (l.extrude.angle * Math.PI) / 180, ex = Math.cos(ang), ey = Math.sin(ang)
-    // extrusion (relief), puis contour extérieur autour du tout, contour intérieur, remplissage
+    // extrusion (relief), then outer stroke around everything, inner stroke, fill
     if (l.extrude.depth > 0) {
       for (let d = l.extrude.depth; d >= 1; d--) {
         if (l.outer.width > 0) { x.strokeStyle = l.outer.color; x.lineWidth = (l.inner.width + l.outer.width) * 2; pass((t, px, py) => x.strokeText(t, px + ex * d, py + ey * d)) }
@@ -277,13 +285,13 @@ function content(l: Layer, pad: number): { c: HTMLCanvasElement; w: number; h: n
   return null
 }
 
-/** Silhouette colorée d'un contenu (pour contour, glow, ombre). */
+/** Coloured silhouette of a content (for stroke, glow, shadow). */
 function silhouette(src: HTMLCanvasElement, color: string): HTMLCanvasElement {
   const c = canvas(src.width, src.height); const x = ctx2d(c)
   x.drawImage(src, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = color; x.fillRect(0, 0, c.width, c.height)
   return c
 }
-/** Dilatation : la silhouette répétée tout autour, sur `r` pixels. */
+/** Dilation: the silhouette repeated all around, over `r` pixels. */
 function ring(target: CanvasRenderingContext2D, sil: HTMLCanvasElement, r: number, ox: number, oy: number): void {
   if (r <= 0) return
   const steps = Math.min(48, Math.max(12, Math.round(r * 3)))
@@ -291,7 +299,7 @@ function ring(target: CanvasRenderingContext2D, sil: HTMLCanvasElement, r: numbe
   if (r > 3) for (let i = 0; i < steps; i++) { const a = (i / steps) * Math.PI * 2; target.drawImage(sil, ox + Math.cos(a) * r * 0.5, oy + Math.sin(a) * r * 0.5) }
 }
 
-/** Calque avec ses effets, prêt à poser : canvas centré sur le calque (taille locale + marge). */
+/** Layer with its effects, ready to place: canvas centred on the layer (local size + margin). */
 function layerBitmap(l: Layer): { c: HTMLCanvasElement; w: number; h: number; pad: number } | null {
   const fx = l.fx
   const pad = Math.ceil(Math.max(
@@ -304,7 +312,7 @@ function layerBitmap(l: Layer): { c: HTMLCanvasElement; w: number; h: number; pa
   const raw = content(l, pad)
   if (!raw) return null
   let src = raw.c
-  // colorimétrie du calque
+  // layer colour grading
   if (gradeUsed(fx.grade)) {
     const g = canvas(src.width, src.height); const x = ctx2d(g)
     x.filter = gradeFilter(fx.grade); x.drawImage(src, 0, 0); x.filter = 'none'
@@ -346,7 +354,7 @@ function layerBitmap(l: Layer): { c: HTMLCanvasElement; w: number; h: number; pa
   return { c: out, w: raw.w, h: raw.h, pad: (out.width - raw.w) / 2 }
 }
 
-/** Petit générateur pseudo-aléatoire reproductible (lignes de vitesse). */
+/** Small reproducible pseudo-random generator (speed lines). */
 function rng(seed: number): () => number { let s = seed >>> 0 || 1; return () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 100000) / 100000 } }
 
 function drawSpeed(x: CanvasRenderingContext2D, l: SpeedLayer, doc: Doc): void {
@@ -389,14 +397,14 @@ function drawLight(x: CanvasRenderingContext2D, l: LightLayer): void {
   x.restore()
 }
 
-/** Dessine la scène entière dans `ctx` (taille doc.w × doc.h, multipliée par `scale`). */
+/** Draws the whole scene into `ctx` (size doc.w × doc.h, multiplied by `scale`). */
 export function drawDoc(target: CanvasRenderingContext2D, doc: Doc, scale = 1): void {
   const W = doc.w * scale, H = doc.h * scale
   const scene = canvas(W, H); const x = ctx2d(scene)
   x.scale(scale, scale)
   x.fillStyle = doc.bg; x.fillRect(0, 0, doc.w, doc.h)
   if (doc.tilt) {
-    // la scène entière penche, agrandie pour couvrir les coins
+    // the whole scene tilts, enlarged to cover the corners
     const a = (doc.tilt * Math.PI) / 180, k = Math.abs(Math.cos(a)) + Math.abs(Math.sin(a)) * Math.max(doc.w / doc.h, doc.h / doc.w)
     x.translate(doc.w / 2, doc.h / 2); x.rotate(a); x.scale(k, k); x.translate(-doc.w / 2, -doc.h / 2)
   }
@@ -412,7 +420,7 @@ export function drawDoc(target: CanvasRenderingContext2D, doc: Doc, scale = 1): 
     else if (l.kind === 'image') metrics.set(l.id, { w: l.w, h: l.h })
     x.restore()
   }
-  // colorimétrie et vignette du projet
+  // project colour grading and vignette
   target.save()
   target.clearRect(0, 0, W, H)
   target.filter = gradeFilter(doc.grade); target.drawImage(scene, 0, 0); target.filter = 'none'
@@ -425,20 +433,20 @@ export function drawDoc(target: CanvasRenderingContext2D, doc: Doc, scale = 1): 
   target.restore()
 }
 
-/** Préréglages de colorimétrie du projet. */
-export const GRADES: Record<string, { label: string; grade: Partial<Grade>; vignette?: number }> = {
-  none: { label: 'Aucun', grade: {} },
-  vivid: { label: 'Vif YouTube', grade: { contrast: 12, saturation: 25, vibrance: 20, exposure: 4 }, vignette: 20 },
-  warm: { label: 'Chaud', grade: { temperature: 35, saturation: 10, contrast: 8 }, vignette: 15 },
-  cold: { label: 'Froid', grade: { temperature: -35, tint: -5, contrast: 8 }, vignette: 15 },
-  cinema: { label: 'Cinéma (teal & orange)', grade: { contrast: 18, saturation: -8, temperature: 12, tint: -10, fade: 12 }, vignette: 35 },
-  punch: { label: 'Punchy', grade: { contrast: 30, saturation: 35, exposure: 6 }, vignette: 25 },
-  faded: { label: 'Délavé', grade: { contrast: -18, saturation: -20, fade: 40 } },
-  bw: { label: 'Noir & blanc', grade: { saturation: -100, contrast: 20 } },
-  night: { label: 'Nuit', grade: { exposure: -25, temperature: -45, saturation: -15, contrast: 10 }, vignette: 45 }
+/** Project colour grading presets. */
+export const GRADES: Record<string, { label: string; fr: string; grade: Partial<Grade>; vignette?: number }> = {
+  none: { label: 'None', fr: 'Aucun', grade: {} },
+  vivid: { label: 'YouTube vivid', fr: 'Vif YouTube', grade: { contrast: 12, saturation: 25, vibrance: 20, exposure: 4 }, vignette: 20 },
+  warm: { label: 'Warm', fr: 'Chaud', grade: { temperature: 35, saturation: 10, contrast: 8 }, vignette: 15 },
+  cold: { label: 'Cold', fr: 'Froid', grade: { temperature: -35, tint: -5, contrast: 8 }, vignette: 15 },
+  cinema: { label: 'Cinema (teal & orange)', fr: 'Cinéma (teal & orange)', grade: { contrast: 18, saturation: -8, temperature: 12, tint: -10, fade: 12 }, vignette: 35 },
+  punch: { label: 'Punchy', fr: 'Punchy', grade: { contrast: 30, saturation: 35, exposure: 6 }, vignette: 25 },
+  faded: { label: 'Faded', fr: 'Délavé', grade: { contrast: -18, saturation: -20, fade: 40 } },
+  bw: { label: 'Black & white', fr: 'Noir & blanc', grade: { saturation: -100, contrast: 20 } },
+  night: { label: 'Night', fr: 'Nuit', grade: { exposure: -25, temperature: -45, saturation: -15, contrast: 10 }, vignette: 45 }
 }
 
-/** Point de la scène → repère local du calque (pour la sélection au clic). */
+/** Scene point → layer local space (for click selection). */
 export function toLocal(l: Layer, px: number, py: number): { x: number; y: number } {
   const dx = px - l.x, dy = py - l.y, a = (-l.rot * Math.PI) / 180
   const rx = dx * Math.cos(a) - dy * Math.sin(a), ry = dx * Math.sin(a) + dy * Math.cos(a)
@@ -450,7 +458,7 @@ export function hit(l: Layer, px: number, py: number): boolean {
   const p = toLocal(l, px, py)
   return Math.abs(p.x) <= m.w / 2 && Math.abs(p.y) <= m.h / 2
 }
-/** Coins du calque dans la scène (poignées). */
+/** Corners of the layer in the scene (handles). */
 export function corners(l: Layer): [number, number][] {
   const m = metrics.get(l.id) ?? { w: 100, h: 100 }
   const a = (l.rot * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a)

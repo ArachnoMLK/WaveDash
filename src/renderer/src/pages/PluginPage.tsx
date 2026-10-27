@@ -1,7 +1,7 @@
-// Page d'un compte de plugin : cartes de métriques, graphique d'évolution, éléments, journal.
+// Plugin account page: metric cards, trend chart, items, log.
 import { Fragment, ReactNode, useEffect, useState } from 'react'
 import { ColumnStat, DetailGrid, DetailTable, loc, PluginColumn, PluginDetail, PluginFilter, PluginItemsPage, PluginManifest } from '@shared/plugin'
-import { ChartType, Lang, Point, RawMetrics } from '@shared/types'
+import { ChartType, Lang, Point, RawMetrics, localeOf } from '@shared/types'
 import { Chart } from '../components/Chart'
 import { Reveal, StatCard, Tabs } from '../components/ui'
 import { useApp } from '../lib/AppContext'
@@ -28,15 +28,15 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [latest, setLatest] = useState<RawMetrics>({})
   const [series, setSeries] = useState<Record<string, Point[]>>({})
   const [extra, setExtra] = useState<{ logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null; filters: PluginFilter[] }>({ logs: [], error: null, backlog: 0, summary: null, filters: [] })
-  // Barre des filtres (ex. Mode, Patch, Période) : choix gardé par compte ; un filtre choisi recalcule toute la page pour ce sous-ensemble.
+  // Filter bar (e.g. Mode, Patch, Period): choice kept per account; a chosen filter recomputes the whole page for that subset.
   const [sel, setSel] = useState<Record<string, string>>({})
   useEffect(() => { try { setSel(JSON.parse(localStorage.getItem(`wd.filters.${accountId}`) ?? '{}') as Record<string, string>) } catch { setSel({}) } }, [accountId])
   const choose = (key: string, value: string): void => {
     const next = { ...sel }; if (value) next[key] = value; else delete next[key]
     setSel(next); setPage(0); setOpenId(null)
-    try { localStorage.setItem(`wd.filters.${accountId}`, JSON.stringify(next)) } catch { /* facultatif */ }
+    try { localStorage.setItem(`wd.filters.${accountId}`, JSON.stringify(next)) } catch { /* optional */ }
   }
-  // Seuls les filtres encore proposés par le plugin comptent (une option disparue est ignorée).
+  // Only filters still offered by the plugin count (a vanished option is ignored).
   const active = Object.fromEntries(Object.entries(sel).filter(([k, v]) => extra.filters.some((f) => f.key === k && f.options.some((o) => o.value === v))))
   const filtered = !!m?.views && Object.keys(active).length > 0
   const activeKey = JSON.stringify(active)
@@ -55,7 +55,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState('all')
-  // Barre du haut : recherche libre calculée par le plugin (joueur, carte, légende…), 400 ms après la dernière frappe.
+  // Top bar: free search computed by the plugin (player, map, legend…), 400 ms after the last keystroke.
   const [topQ, setTopQ] = useState('')
   const [found, setFound] = useState<{ q: string; busy: boolean; detail?: PluginDetail; unsupported?: boolean; error?: string } | null>(null)
   useEffect(() => {
@@ -68,7 +68,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
     }, 400)
     return () => { alive = false; clearTimeout(h) }
   }, [topQ, accountId, activeKey])
-  // La recherche part 300 ms après la dernière frappe.
+  // The search starts 300 ms after the last keystroke.
   useEffect(() => { const h = setTimeout(() => { setQuery(search); setPage(0); setOpenId(null) }, 300); return () => clearTimeout(h) }, [search])
   const [note, setNote] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
@@ -86,7 +86,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
     return () => { alive = false }
   }, [accountId, range, dataVersion, m])
 
-  // Éléments lus page par page (un plugin peut en garder des milliers), éventuellement pour un seul mois.
+  // Items read page by page (a plugin may keep thousands), optionally for a single month.
   useEffect(() => {
     let alive = true
     void window.api.pluginAccountItems(accountId, page * PAGE, PAGE, month || undefined, sort.key, sort.desc, query, scope, active).then((r) => { if (alive) setList(r) })
@@ -113,10 +113,10 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const hasDates = list.items.some((i) => i.ts)
   const hasDetail = list.items.some((i) => i.detail)
   const pages = Math.max(1, Math.ceil(list.total / PAGE))
-  // Un clic trie par la colonne (décroissant d'abord) ; un second clic inverse le sens.
+  // A click sorts by the column (descending first); a second click reverses the order.
   const sortBy = (key: string): void => { setSort((s) => ({ key, desc: s.key === key ? !s.desc : true })); setPage(0); setOpenId(null) }
-  const monthLabel = (ym: string): string => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)) - 1, 1).toLocaleDateString(settings.lang === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })
-  const lang = settings.lang === 'fr' ? 'fr-FR' : 'en-US'
+  const monthLabel = (ym: string): string => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)) - 1, 1).toLocaleDateString(localeOf(settings.lang), { month: 'long', year: 'numeric' })
+  const lang = localeOf(settings.lang)
 
   return (
     <div>
@@ -140,7 +140,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
               </select>
             </label>
           ))}
-          {filtered && <button className="btn small" onClick={() => { setSel({}); try { localStorage.removeItem(`wd.filters.${accountId}`) } catch { /* facultatif */ } }}>{t('pp.filterReset')}</button>}
+          {filtered && <button className="btn small" onClick={() => { setSel({}); try { localStorage.removeItem(`wd.filters.${accountId}`) } catch { /* optional */ } }}>{t('pp.filterReset')}</button>}
         </div>
       )}
       {importing && (
@@ -175,7 +175,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
       {extra.backlog > 0 && <div className="glass pad small muted" style={{ marginBottom: 16 }}>{t('pp.backlog', { count: extra.backlog })}</div>}
       {account.lastError && <div className="err" style={{ marginBottom: 16 }}>{t('pp.error', { error: `${t(`plugin.run.${account.lastError}`)}${extra.error ? ` — ${extra.error}` : ''}` })}</div>}
 
-      {/* Avec un filtre, les compteurs et la courbe (qui portent sur tout le compte) laissent la place au bilan filtré. */}
+      {/* With a filter, the counters and the curve (which cover the whole account) make way for the filtered overview. */}
       {!filtered && <><div className="grid cards">
         {m.metrics.map((x, i) => {
           const s = series[x.key] ?? [], v = latest[x.key]
@@ -234,7 +234,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
               </>}
             </div>
           </div>
-          {/* Recherche dans la liste : seulement pour les plugins qui gardent un historique d'éléments (itemsMode « keep »). */}
+          {/* Search in the list: only for plugins that keep a history of items (itemsMode "keep"). */}
           {m.itemsMode === 'keep' && <div className="row" style={{ gap: 8, margin: '4px 0 8px' }}>
             <select value={scope} style={{ width: 'auto' }} aria-label={t('pp.scope')} onChange={(e) => { setScope(e.target.value); setPage(0); setOpenId(null) }}>
               <option value="all">{t('pp.scopeAll')}</option>
@@ -256,7 +256,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
                   <tr className={it.detail ? `click${open ? ' sel' : ''}` : undefined} onClick={it.detail ? () => setOpenId(open ? null : it.id) : undefined}
                     aria-expanded={it.detail ? open : undefined}><td className="wrap">{it.title}</td>{hasDates && <td>{it.ts ? new Date(it.ts).toLocaleString(lang) : '—'}</td>}
                     {m.itemColumns.map((c) => <td key={c.key}>{it.fields[c.key] ?? '—'}{it.fields[c.key] !== undefined && c.unit ? ` ${c.unit}` : ''}</td>)}</tr>
-                  {/* Le détail s'ouvre sous la ligne cliquée, pas en bas d'une longue liste. */}
+                  {/* The detail opens under the clicked row, not at the bottom of a long list. */}
                   {open && it.detail && <tr className="detail-row"><td colSpan={1 + (hasDates ? 1 : 0) + m.itemColumns.length}>
                     <DetailView accountId={accountId} detail={it.detail} th={th} t={t} onClose={() => setOpenId(null)} /></td></tr>}
                 </Fragment>
@@ -274,13 +274,13 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   )
 }
 
-/** En-tête de colonne cliquable, avec la flèche du sens de tri. */
+/** Clickable column header, with the sort direction arrow. */
 function SortTh({ k, sort, onSort, children }: { k: string; sort: { key: string; desc: boolean }; onSort: (k: string) => void; children: ReactNode }): JSX.Element {
   const on = sort.key === k
   return <th className="sortable" aria-sort={on ? (sort.desc ? 'descending' : 'ascending') : 'none'} onClick={() => onSort(k)}>{children}{on ? (sort.desc ? ' ▼' : ' ▲') : ''}</th>
 }
 
-/** Valeur comparable : nombre, durée « 3:04 » en secondes, pourcentage, sinon texte. */
+/** Comparable value: number, "3:04" duration in seconds, percentage, otherwise text. */
 function sortValue(v: string | number): number | string {
   if (typeof v === 'number') return v
   const d = /^(\d+):(\d{2})$/.exec(v)
@@ -289,7 +289,7 @@ function sortValue(v: string | number): number | string {
   return v.trim() !== '' && Number.isFinite(n) ? n : v.toLowerCase()
 }
 
-/** Tableau du détail ou du bilan, trié au clic sur un en-tête (décroissant d'abord, second clic : croissant). */
+/** Detail or overview table, sorted by clicking a header (descending first, second click: ascending). */
 function SortableTable({ tb }: { tb: DetailTable }): JSX.Element {
   const [sort, setSort] = useState<{ col: number; desc: boolean } | null>(null)
   const rows = sort === null ? tb.rows : [...tb.rows].sort((a, b) => {
@@ -307,17 +307,17 @@ function SortableTable({ tb }: { tb: DetailTable }): JSX.Element {
   )
 }
 
-/** Disposition des modules d'un bilan (ordre, masqués, réduits), gardée dans ce navigateur, par compte. */
+/** Layout of the modules of an overview (order, hidden, collapsed), kept in this browser, per account. */
 interface Layout { order: string[]; hidden: string[]; collapsed: string[] }
 function useLayout(key: string | undefined): [Layout, (l: Layout) => void] {
   const read = (): Layout => { try { const v = key ? JSON.parse(localStorage.getItem(`wd.layout.${key}`) ?? 'null') : null; return v && Array.isArray(v.order) ? v : { order: [], hidden: [], collapsed: [] } } catch { return { order: [], hidden: [], collapsed: [] } } }
   const [layout, setLayout] = useState<Layout>(read)
   useEffect(() => { setLayout(read()) }, [key])        // eslint-disable-line react-hooks/exhaustive-deps
-  const save = (l: Layout): void => { setLayout(l); try { if (key) localStorage.setItem(`wd.layout.${key}`, JSON.stringify(l)) } catch { /* stockage indisponible */ } }
+  const save = (l: Layout): void => { setLayout(l); try { if (key) localStorage.setItem(`wd.layout.${key}`, JSON.stringify(l)) } catch { /* storage unavailable */ } }
   return [layout, save]
 }
 
-/** Grille de chaleur : chaque case montre sa part du total et le nombre en abrégé (exact au survol) ; le texte reste lisible sur fond clair. */
+/** Heat grid: each cell shows its share of the total and the abbreviated count (exact on hover); the text stays readable on a light background. */
 function Heat({ g, caption = true }: { g: DetailGrid; caption?: boolean }): JSX.Element {
   const all = g.values.flat(), max = Math.max(1, ...all), total = all.reduce((a, b) => a + b, 0) || 1
   const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 })
@@ -340,9 +340,9 @@ function Heat({ g, caption = true }: { g: DetailGrid; caption?: boolean }): JSX.
   )
 }
 
-/** Détail d'un élément de plugin, ou bilan du compte : badges, chiffres clés, tableaux, grilles, courbes, frise.
- *  Avec `layoutKey` (bilan), chaque bloc devient un module que l'on peut réduire, déplacer (flèches ou glisser) et masquer. */
-/** Image en tête d'un détail (ex. vignette de la carte) : lue dans le dossier d'images du compte, par le processus principal. */
+/** Detail of a plugin item, or account overview: badges, key figures, tables, grids, curves, timeline.
+ *  With `layoutKey` (overview), each block becomes a module that can be collapsed, moved (arrows or drag) and hidden. */
+/** Image at the top of a detail (e.g. map thumbnail): read from the account's image folder, by the main process. */
 function DetailImageView({ accountId, file, caption }: { accountId: number; file: string; caption?: string }): JSX.Element | null {
   const [src, setSrc] = useState<string | null>(null)
   useEffect(() => { let alive = true; void window.api.pluginImage(accountId, file).then((u) => { if (alive) setSrc(u) }); return () => { alive = false } }, [accountId, file])
@@ -354,7 +354,7 @@ function DetailView({ accountId, detail, th, t, onClose, layoutKey }: { accountI
   const tables = [...(detail.table ? [detail.table] : []), ...(detail.tables ?? [])]
   const blocks: { id: string; title: string; node: ReactNode }[] = []
   if (detail.stats) blocks.push({ id: 'stats', title: t('pp.keyFigures'), node: <div className="mini-stats">{detail.stats.map((s, i) => <div key={i}><span className="small muted">{s.label}</span><b>{s.value}</b></div>)}</div> })
-  // Les graphiques en barres d'abord : ils résument, le tableau détaille.
+  // Bar charts first: they summarize, the table details.
   detail.bars?.forEach((b, k) => blocks.push({ id: `bars:${b.title ?? k}`, title: b.title ?? '', node: <Chart option={barsOption(b, th)} height={Math.max(260, Math.min(420, 200 + b.categories.length * 6))} /> }))
   tables.forEach((tb, k) => blocks.push({ id: `table:${tb.title ?? k}`, title: tb.title ?? `${t('pp.table')} ${k + 1}`, node: <SortableTable tb={tb} /> }))
   if (layoutKey) detail.grids?.forEach((g, k) => blocks.push({ id: `grid:${g.title ?? k}`, title: g.title ?? `${t('pp.grid')} ${k + 1}`, node: <div className="grids"><Heat g={g} caption={false} /></div> }))
@@ -416,9 +416,9 @@ function DetailView({ accountId, detail, th, t, onClose, layoutKey }: { accountI
   )
 }
 
-/** Tes stats sur les éléments trouvés par la recherche, colonne par colonne. */
+/** Your stats on the items found by the search, column by column. */
 function SearchStats({ stats, total, columns, lang, t }: { stats: ColumnStat[]; total: number; columns: PluginColumn[]; lang: Lang; t: (k: string, v?: Record<string, string | number>) => string }): JSX.Element {
-  const nf = new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-US', { maximumFractionDigits: 1 })
+  const nf = new Intl.NumberFormat(localeOf(lang), { maximumFractionDigits: 1 })
   const mmss = (s: number): string => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
   return (
     <div className="search-stats">
@@ -441,7 +441,7 @@ function SearchStats({ stats, total, columns, lang, t }: { stats: ColumnStat[]; 
   )
 }
 
-/** Croiser tes données : un joueur (vide = toi), une mesure, un axe et un second axe facultatif → graphique en barres et tableau. */
+/** Cross your data: a player (empty = you), a measure, an axis and an optional second axis → bar chart and table. */
 function CrossPanel({ accountId, cross, th, filters }: { accountId: number; cross: NonNullable<PluginManifest['cross']>; th: ChartTheme; filters: Record<string, string> }): JSX.Element {
   const { t, settings } = useApp()
   const [req, setReq] = useState({ who: '', measure: cross.measures[0].key, a: cross.dimensions[0].key, b: 'none' })

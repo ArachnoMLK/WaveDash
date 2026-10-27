@@ -2,12 +2,12 @@
   "wdsh": 1,
   "id": "wavedash.brawlhalla-replays",
   "name": "Brawlhalla Replays",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "minAppVersion": "1.1.0",
   "author": "WaveDash",
   "description": {
-    "fr": "Lit tes fichiers .replay Brawlhalla dans un dossier : victoires, défaites, stocks, durée, et le détail de chaque partie (joueurs, scores, frise des KOs). Tout est lu en local, aucun accès réseau.",
-    "en": "Reads your Brawlhalla .replay files from a folder: wins, losses, stocks, duration, and a detail view per match (players, scores, KO timeline). Everything is read locally, no network access."
+    "en": "Reads your Brawlhalla .replay files from a folder: wins, losses, stocks, duration, and a detail view per match (players, scores, KO timeline). Everything is read locally, no network access.",
+    "fr": "Lit tes fichiers .replay Brawlhalla dans un dossier : victoires, défaites, stocks, durée, et le détail de chaque partie (joueurs, scores, frise des KOs). Tout est lu en local, aucun accès réseau."
   },
   "permissions": {
     "network": [],
@@ -23,12 +23,12 @@
       "type": "folder",
       "required": true,
       "label": {
-        "fr": "Dossier des replays",
-        "en": "Replays folder"
+        "en": "Replays folder",
+        "fr": "Dossier des replays"
       },
       "help": {
-        "fr": "Dans le jeu : Brawlhalla > Replays, ou le dossier où tu les enregistres.",
-        "en": "In game: Brawlhalla > Replays, or the folder where you save them."
+        "en": "In game: Brawlhalla > Replays, or the folder where you save them.",
+        "fr": "Dans le jeu : Brawlhalla > Replays, ou le dossier où tu les enregistres."
       }
     },
     {
@@ -36,13 +36,13 @@
       "type": "text",
       "required": true,
       "label": {
-        "fr": "Ton pseudo en jeu",
-        "en": "Your in-game name"
+        "en": "Your in-game name",
+        "fr": "Ton pseudo en jeu"
       },
       "placeholder": "Pseudo",
       "help": {
-        "fr": "Sert à savoir quelle partie tu as gagnée. Le tag de clan peut être omis. Plusieurs pseudos : sépare-les par des virgules.",
-        "en": "Used to know which matches you won. The clan tag can be omitted. Several names: separate them with commas."
+        "en": "Used to know which matches you won. The clan tag can be omitted. Several names: separate them with commas.",
+        "fr": "Sert à savoir quelle partie tu as gagnée. Le tag de clan peut être omis. Plusieurs pseudos : sépare-les par des virgules."
       }
     },
     {
@@ -50,12 +50,12 @@
       "type": "images",
       "required": false,
       "label": {
-        "fr": "Vignettes des cartes (facultatif)",
-        "en": "Map thumbnails (optional)"
+        "en": "Map thumbnails (optional)",
+        "fr": "Vignettes des cartes (facultatif)"
       },
       "help": {
-        "fr": "Le dossier images\\thumbnails de ton jeu, par exemple C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brawlhalla\\images\\thumbnails. WaveDash y affiche la vignette de la carte de chaque partie ; le plugin ne lit pas ce dossier.",
-        "en": "Your game's images\\thumbnails folder, for example C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brawlhalla\\images\\thumbnails. WaveDash shows each match's map thumbnail from it; the plugin does not read this folder."
+        "en": "Your game's images\\thumbnails folder, for example C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brawlhalla\\images\\thumbnails. WaveDash shows each match's map thumbnail from it; the plugin does not read this folder.",
+        "fr": "Le dossier images\\thumbnails de ton jeu, par exemple C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brawlhalla\\images\\thumbnails. WaveDash y affiche la vignette de la carte de chaque partie ; le plugin ne lit pas ce dossier."
       }
     }
   ],
@@ -63,30 +63,30 @@
     {
       "key": "games",
       "label": {
-        "fr": "Parties",
-        "en": "Games"
+        "en": "Games",
+        "fr": "Parties"
       },
       "primary": true
     },
     {
       "key": "wins",
       "label": {
-        "fr": "Victoires",
-        "en": "Wins"
+        "en": "Wins",
+        "fr": "Victoires"
       }
     },
     {
       "key": "losses",
       "label": {
-        "fr": "Défaites",
-        "en": "Losses"
+        "en": "Losses",
+        "fr": "Défaites"
       }
     },
     {
       "key": "winrate",
       "label": {
-        "fr": "Taux de victoire",
-        "en": "Win rate"
+        "en": "Win rate",
+        "fr": "Taux de victoire"
       },
       "format": "percent",
       "decimals": 1
@@ -94,30 +94,30 @@
     {
       "key": "stocks_taken",
       "label": {
-        "fr": "Stocks pris à l'adversaire",
-        "en": "Stocks taken"
+        "en": "Stocks taken",
+        "fr": "Stocks pris à l'adversaire"
       }
     },
     {
       "key": "stocks_lost",
       "label": {
-        "fr": "Stocks perdus",
-        "en": "Stocks lost"
+        "en": "Stocks lost",
+        "fr": "Stocks perdus"
       }
     },
     {
       "key": "avg_duration",
       "label": {
-        "fr": "Durée moyenne",
-        "en": "Average length"
+        "en": "Average length",
+        "fr": "Durée moyenne"
       },
       "format": "duration"
     },
     {
       "key": "apm",
       "label": {
-        "fr": "Appuis par minute",
-        "en": "Presses per minute"
+        "en": "Presses per minute",
+        "fr": "Appuis par minute"
       },
       "decimals": 0
     }
@@ -126,50 +126,50 @@
     {
       "key": "mode",
       "label": {
-        "fr": "Mode",
-        "en": "Mode"
+        "en": "Mode",
+        "fr": "Mode"
       }
     },
     {
       "key": "patch",
       "label": {
-        "fr": "Patch",
-        "en": "Patch"
+        "en": "Patch",
+        "fr": "Patch"
       }
     },
     {
       "key": "result",
       "label": {
-        "fr": "Résultat",
-        "en": "Result"
+        "en": "Result",
+        "fr": "Résultat"
       }
     },
     {
       "key": "duration",
       "label": {
-        "fr": "Durée",
-        "en": "Length"
+        "en": "Length",
+        "fr": "Durée"
       }
     },
     {
       "key": "kos",
       "label": {
-        "fr": "KOs (total)",
-        "en": "KOs (total)"
+        "en": "KOs (total)",
+        "fr": "KOs (total)"
       }
     },
     {
       "key": "apm",
       "label": {
-        "fr": "Appuis/min",
-        "en": "Presses/min"
+        "en": "Presses/min",
+        "fr": "Appuis/min"
       }
     },
     {
       "key": "map",
       "label": {
-        "fr": "Carte",
-        "en": "Map"
+        "en": "Map",
+        "fr": "Carte"
       }
     }
   ],
@@ -181,29 +181,29 @@
       {
         "key": "games",
         "label": {
-          "fr": "Parties",
-          "en": "Games"
+          "en": "Games",
+          "fr": "Parties"
         }
       },
       {
         "key": "wins",
         "label": {
-          "fr": "Victoires",
-          "en": "Wins"
+          "en": "Wins",
+          "fr": "Victoires"
         }
       },
       {
         "key": "losses",
         "label": {
-          "fr": "Défaites",
-          "en": "Losses"
+          "en": "Losses",
+          "fr": "Défaites"
         }
       },
       {
         "key": "winrate",
         "label": {
-          "fr": "% de victoire",
-          "en": "Win %"
+          "en": "Win %",
+          "fr": "% de victoire"
         }
       }
     ],
@@ -211,57 +211,57 @@
       {
         "key": "legend",
         "label": {
-          "fr": "Légendes",
-          "en": "Legends"
+          "en": "Legends",
+          "fr": "Légendes"
         }
       },
       {
         "key": "map",
         "label": {
-          "fr": "Cartes",
-          "en": "Maps"
+          "en": "Maps",
+          "fr": "Cartes"
         }
       },
       {
         "key": "mode",
         "label": {
-          "fr": "Modes",
-          "en": "Modes"
+          "en": "Modes",
+          "fr": "Modes"
         }
       },
       {
         "key": "result",
         "label": {
-          "fr": "Résultat",
-          "en": "Result"
+          "en": "Result",
+          "fr": "Résultat"
         }
       },
       {
         "key": "side",
         "label": {
-          "fr": "Avec / contre",
-          "en": "With / against"
+          "en": "With / against",
+          "fr": "Avec / contre"
         }
       },
       {
         "key": "month",
         "label": {
-          "fr": "Mois",
-          "en": "Month"
+          "en": "Month",
+          "fr": "Mois"
         }
       },
       {
         "key": "weekday",
         "label": {
-          "fr": "Jour",
-          "en": "Day"
+          "en": "Day",
+          "fr": "Jour"
         }
       },
       {
         "key": "hour",
         "label": {
-          "fr": "Heure",
-          "en": "Hour"
+          "en": "Hour",
+          "fr": "Heure"
         }
       }
     ]

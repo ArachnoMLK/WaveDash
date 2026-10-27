@@ -1,4 +1,4 @@
-// Export des données et sauvegarde / restauration de la configuration.
+// Data export and configuration backup / restore.
 import { useState } from 'react'
 import { Row, Section } from '../components/settingsUi'
 import { useApp } from '../lib/AppContext'
@@ -15,7 +15,7 @@ export function DataSettings(): JSX.Element {
       const ok = typeof r === 'boolean' ? r : r.ok
       const error = typeof r === 'boolean' ? undefined : r.error
       if (ok) setMsg(t(okKey))
-      else if (error) setMsg(t(error === 'invalid' ? 'data.invalid' : 'data.fail'))   // pas de message si l'utilisateur a simplement annulé
+      else if (error) setMsg(t(error === 'invalid' ? 'data.invalid' : 'data.fail'))   // no message if the user simply cancelled
     } finally { setBusy(false) }
   }
 

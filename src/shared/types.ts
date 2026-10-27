@@ -1,17 +1,40 @@
-// Types partagés entre le processus principal, le preload et l'interface.
+// Types shared by the main process, the preload and the interface.
 
-// Seul YouTube reste intégré : Brawlhalla (1.0.1), TikTok et le reste passent par des plugins ; Instagram n'a pas d'API
-// pour les comptes personnels (retiré en 1.1.0, il n'affichait que « bientôt disponible »).
+// Only YouTube stays built in: Brawlhalla (1.0.1), TikTok and the rest go through plugins; Instagram has no API
+// for personal accounts (removed in 1.1.0, it only showed "coming soon").
 export type Platform = 'youtube'
 export const PLATFORMS: Platform[] = ['youtube']
-/** Plateformes dont le fournisseur est livré dans cette version. */
+/** Platforms whose provider ships in this version. */
 export const AVAILABLE_PLATFORMS: Platform[] = ['youtube']
 
 export type ChartType = 'line' | 'area' | 'bar' | 'pie' | 'radar'
 export type ThemeMode = 'dark' | 'light'
-export type Lang = 'fr' | 'en'
+export type Lang = 'en' | 'fr' | 'es' | 'pt' | 'de' | 'it' | 'ja' | 'zh' | 'ar'
+/** Interface languages: native name, locale used for dates and numbers, right-to-left script. */
+export const LANGS: { id: Lang; name: string; locale: string; rtl?: boolean }[] = [
+  { id: 'en', name: 'English', locale: 'en-US' },
+  { id: 'fr', name: 'Français', locale: 'fr-FR' },
+  { id: 'es', name: 'Español', locale: 'es-ES' },
+  { id: 'pt', name: 'Português (Brasil)', locale: 'pt-BR' },
+  { id: 'de', name: 'Deutsch', locale: 'de-DE' },
+  { id: 'it', name: 'Italiano', locale: 'it-IT' },
+  { id: 'ja', name: '日本語', locale: 'ja-JP' },
+  { id: 'zh', name: '中文（简体）', locale: 'zh-CN' },
+  { id: 'ar', name: 'العربية', locale: 'ar', rtl: true }
+]
+export const isLang = (v: unknown): v is Lang => LANGS.some((l) => l.id === v)
+export const localeOf = (l: Lang): string => LANGS.find((x) => x.id === l)?.locale ?? 'en-US'
+export const isRtl = (l: Lang): boolean => !!LANGS.find((x) => x.id === l)?.rtl
+/** First supported language among the system's preferred ones ("fr-FR", "pt-BR", "zh-Hans-CN"…), English otherwise. */
+export function detectLang(preferred: readonly string[]): Lang {
+  for (const tag of preferred) {
+    const base = String(tag).toLowerCase().split(/[-_]/)[0]
+    if (isLang(base)) return base
+  }
+  return 'en'
+}
 
-/** Clés de métriques stockées dans la table `snapshots`. */
+/** Metric keys stored in the `snapshots` table. */
 export type MetricKey =
   | 'subscribers' | 'views' | 'likes' | 'comments' | 'videos'
 
@@ -22,13 +45,13 @@ export const METRICS_BY_PLATFORM: Record<Platform, MetricKey[]> = {
 export interface Account {
   id: number
   platform: Platform
-  /** Ce que l'utilisateur a saisi (lien, @handle…). */
+  /** What the user entered (link, @handle…). */
   input: string
   displayName: string
-  /** Identifiant stable côté plateforme (ID de chaîne…). */
+  /** Stable identifier on the platform side (channel ID…). */
   externalId: string
   avatar?: string
-  /** true = données simulées (mode démo). */
+  /** true = simulated data (demo mode). */
   demo: boolean
   createdAt: number
   lastSyncAt: number | null
@@ -47,7 +70,7 @@ export interface ItemStat {
   comments: number
 }
 
-/** Résultat d'une actualisation par un fournisseur. */
+/** Result of a refresh by a provider. */
 export interface ProviderResult {
   metrics: Partial<Record<MetricKey, number>>
   items?: ItemStat[]
@@ -56,28 +79,28 @@ export interface ProviderResult {
 export type SoundKind = 'chime' | 'pulse' | 'bell'
 export type TemplateKey = 'up' | 'down' | 'rankUp' | 'rankDown'
 
-/** Règle de paliers d'une statistique : séquence 10-20-50…, incrément, valeurs précises (cumulables). */
+/** Milestone rule of a statistic: sequence 10-20-50…, increment, exact values (combinable). */
 export interface MilestoneRule {
   enabled: boolean
-  /** 10, 20, 50, 100, 200, 500, 1 000… qui se prolonge automatiquement. */
+  /** 10, 20, 50, 100, 200, 500, 1,000… which extends automatically. */
   sequence: boolean
-  /** Un palier tous les N (0 = désactivé). */
+  /** A milestone every N (0 = disabled). */
   increment: number
   custom: number[]
-  /** Notifier aussi quand la valeur repasse sous un palier. */
+  /** Also notify when the value drops back below a milestone. */
   notifyDown: boolean
 }
 
 export interface MilestoneEvent {
   id: number
   accountId: number
-  /** Plateforme intégrée, ou 'plugin' (alors `source` donne le nom du plugin). */
+  /** Built-in platform, or 'plugin' (then `source` gives the plugin name). */
   platform: Platform | 'plugin'
   source?: string
   account: string
-  /** Une métrique, 'rank' pour un changement de rang, ou 'notice' pour une notification envoyée par un plugin. */
+  /** A metric, 'rank' for a rank change, or 'notice' for a notification sent by a plugin. */
   metric: string
-  /** Nom lisible de la métrique (paliers des plugins) ; sinon traduit d'après `metric`. */
+  /** Readable metric name (plugin milestones); otherwise translated from `metric`. */
   label?: string
   threshold: number
   previous: number
@@ -106,33 +129,33 @@ export interface Settings {
   closeToTray: boolean
   autoUpdate: boolean
 
-  /* --- Paliers et notifications --- */
+  /* --- Milestones and notifications --- */
   notificationsEnabled: boolean
-  /** Notifier les changements de rang Brawlhalla. */
+  /** Notify Brawlhalla rank changes. */
   notifyRank: boolean
   notifySound: boolean
   notifySoundKind: SoundKind
   /** 0–100 */
   notifyVolume: number
-  /** Écran de célébration dans l'appli. */
+  /** In-app celebration screen. */
   notifyCelebration: boolean
-  /** Textes personnalisés ; vide = texte par défaut de la langue. */
+  /** Custom texts; empty = default text of the language. */
   notifyTemplates: Partial<Record<TemplateKey, string>>
-  /** Règles de paliers par statistique, clé « plateforme.métrique ». Absent = règle par défaut. */
+  /** Milestone rules per statistic, key "platform.metric". Absent = default rule. */
   milestoneRules: Record<string, MilestoneRule>
 
-  /* --- Apparence (sauvegardable en préréglage / exportable en thème) --- */
-  /** Effet verre : false = panneaux opaques, sans flou. */
+  /* --- Appearance (can be saved as a preset / exported as a theme) --- */
+  /** Glass effect: false = opaque panels, no blur. */
   glassEnabled: boolean
-  /** 0–100 : flou du verre. */
+  /** 0–100: glass blur. */
   glass: number
-  /** 0–100 : opacité des panneaux. */
+  /** 0–100: panel opacity. */
   glassOpacity: number
-  /** 100–200 (%) : saturation derrière le verre. */
+  /** 100–200 (%): saturation behind the glass. */
   glassSaturation: number
-  /** Matériau natif de la fenêtre (Windows 11 uniquement). */
+  /** Native window material (Windows 11 only). */
   nativeMaterial: NativeMaterial
-  /** Fenêtre agrandie : garder le bureau visible à travers (Windows rend opaque une fenêtre réellement maximisée). */
+  /** Enlarged window: keep the desktop visible through it (Windows makes a truly maximized window opaque). */
   seeThroughMaximized: boolean
   bgMode: BgMode
   bgColor: string
@@ -144,28 +167,28 @@ export interface Settings {
   accentEnabled: boolean
   accentColor: string
   chartPalette: ChartPalette
-  /** Arrondi des coins en px. */
+  /** Corner radius in px. */
   radius: number
   density: Density
   /** Taille de l'interface en %. */
   uiScale: number
   fontFamily: FontFamily
-  /** 0–100 : intensité des animations (0 = aucune). */
+  /** 0–100: animation intensity (0 = none). */
   animations: number
 
-  /* --- Données locales, non exportées dans un thème --- */
-  /** Nom du fichier d'image de fond copié dans le dossier de l'appli. */
+  /* --- Local data, not exported in a theme --- */
+  /** File name of the background image copied into the app folder. */
   bgImage: string | null
   navOrder: string[]
   navHidden: string[]
-  /** Noms personnalisés des onglets (identifiant d'onglet → nom) ; absent = nom par défaut. */
+  /** Custom tab names (tab identifier → name); absent = default name. */
   navLabels: Record<string, string>
-  /** Notifications envoyées par les plugins : false = coupées pour ce plugin (identifiant → activé). */
+  /** Notifications sent by plugins: false = turned off for this plugin (identifier → enabled). */
   pluginNotices: Record<string, boolean>
   themePresets: Record<string, ThemeData>
 }
 
-/** Réglages d'apparence regroupés dans un thème. */
+/** Appearance settings grouped into a theme. */
 export const THEME_KEYS = [
   'theme', 'glassEnabled', 'glass', 'glassOpacity', 'glassSaturation', 'nativeMaterial',
   'bgMode', 'bgColor', 'bgColor2', 'bgAngle', 'bgBlur', 'bgDim', 'ambient',
@@ -175,7 +198,7 @@ export type ThemeKey = (typeof THEME_KEYS)[number]
 export type ThemeData = Pick<Settings, ThemeKey>
 
 export const DEFAULT_SETTINGS: Settings = {
-  theme: 'dark', lang: 'fr', refreshMinutes: 30, chartTypes: {}, scrapingEnabled: false,
+  theme: 'dark', lang: 'en', refreshMinutes: 30, chartTypes: {}, scrapingEnabled: false,
   startWithWindows: false, closeToTray: true, autoUpdate: true,
   glassEnabled: true, glass: 70, glassOpacity: 50, glassSaturation: 120, nativeMaterial: 'acrylic', seeThroughMaximized: true,
   bgMode: 'default', bgColor: '#101010', bgColor2: '#2a2a2a', bgAngle: 160, bgBlur: 8, bgDim: 35, ambient: true,
@@ -196,19 +219,19 @@ export type SecretKey = 'youtube.apiKey'
 import type { InstalledPlugin, PluginAccount, PluginDetail, PluginFilter, PluginInspect, PluginItemsPage } from './plugin'
 import type { StudioApi } from './studio'
 
-/** Valeurs de métriques par clé : les plugins définissent leurs propres clés. */
+/** Metric values by key: plugins define their own keys. */
 export type RawMetrics = Record<string, number>
 
 export interface AddAccountInput {
   platform: Platform
   input: string
   demo?: boolean
-  /** true = remplace le compte existant de cette plateforme (une fois le nouveau compte validé). */
+  /** true = replaces the existing account of this platform (once the new account is validated). */
   replace?: boolean
 }
 export interface AddAccountResult { ok: boolean; account?: Account; error?: string }
 
-/** API exposée à l'interface par le preload. Aucun secret ne remonte jamais vers l'interface. */
+/** API exposed to the interface by the preload. No secret ever goes up to the interface. */
 export interface WaveApi {
   appInfo(): Promise<AppInfo>
   getSettings(): Promise<Settings>
@@ -240,24 +263,24 @@ export interface WaveApi {
   pluginAccountData(accountId: number): Promise<{ logs: string[]; error: string | null; backlog: number; summary: PluginDetail | null; filters: PluginFilter[] }>
   pluginAccountCross(accountId: number, req: { who: string; measure: string; a: string; b: string }, filters?: Record<string, string>): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }>
   pluginAccountSearch(accountId: number, query: string, filters?: Record<string, string>): Promise<{ ok: boolean; unsupported?: boolean; detail?: PluginDetail; error?: string }>
-  /** Bilan recalculé par le plugin pour les filtres de la barre du haut (manifeste `views`). */
+  /** Overview recomputed by the plugin for the top bar filters (manifest `views`). */
   pluginAccountView(accountId: number, filters: Record<string, string>): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }>
   pluginsBundled(): Promise<{ path: string; id: string; name: string; version: string; description: import('./plugin').LocalText; installedVersion: string | null }[]>
   pluginsCatalog(force?: boolean): Promise<{ entries: { id: string; name: string; version: string; author: string; description: import('./plugin').LocalText;
     permissions: { network?: string[]; folder?: boolean }; installedVersion: string | null }[]; fetchedAt: number | null; offline: boolean }>
   pluginsCatalogFetch(id: string): Promise<{ ok: boolean; path?: string; error?: string }>
   pluginAccountItems(accountId: number, offset: number, limit: number, month?: string, sortKey?: string, desc?: boolean, query?: string, scope?: string, filters?: Record<string, string>): Promise<PluginItemsPage>
-  /** Ouvre le sélecteur de fichiers et importe les fichiers choisis pour ce compte ; null si annulé. */
+  /** Opens the file picker and imports the chosen files for this account; null if cancelled. */
   pluginImportFiles(accountId: number, extensions: string[]): Promise<{ imported: number; skipped: number } | null>
   pluginImportPaths(accountId: number, paths: string[]): Promise<{ imported: number; skipped: number }>
-  /** Image du dossier d'images d'un compte de plugin, en data URL (null si absente ou refusée). */
+  /** Image from a plugin account's image folder, as a data URL (null if missing or refused). */
   pluginImage(accountId: number, file: string): Promise<string | null>
   pluginAccountUpdate(accountId: number, inputs: Record<string, string>): Promise<{ ok: boolean; error?: string }>
   pluginOpenImportDir(accountId: number): Promise<string>
   pluginSecretSet(pluginId: string, key: string, value: string): Promise<boolean>
   pluginSecretDelete(pluginId: string, key: string): Promise<void>
   pickFolder(): Promise<string | null>
-  /** Chemin d'un fichier déposé dans la fenêtre (glisser-déposer). */
+  /** Path of a file dropped onto the window (drag and drop). */
   pathForFile(file: File): string
   takePendingPluginFile(): Promise<string | null>
   onPluginFile(cb: (path: string) => void): () => void

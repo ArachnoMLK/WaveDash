@@ -1,11 +1,11 @@
-// Coffre de secrets : chiffrement via Windows DPAPI (safeStorage d'Electron).
-// Les secrets ne quittent jamais le processus principal : l'interface ne peut qu'écrire / tester la présence.
+// Secret vault: encryption through Windows DPAPI (Electron's safeStorage).
+// Secrets never leave the main process: the interface can only write / test for presence.
 import { app, safeStorage } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { SecretKey } from '@shared/types'
 
-/** Clé d'un secret de plugin : `plugin:<idPlugin>:<clé>`. */
+/** Key of a plugin secret: `plugin:<pluginId>:<key>`. */
 export type PluginSecretKey = `plugin:${string}:${string}`
 type AnyKey = SecretKey | PluginSecretKey
 
@@ -18,7 +18,7 @@ function load(): Record<string, string> {
 export const encryptionAvailable = (): boolean => safeStorage.isEncryptionAvailable()
 
 export function setSecret(key: AnyKey, value: string): void {
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('Le chiffrement du système n’est pas disponible.')
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('System encryption is not available.')
   const data = load()
   data[key] = safeStorage.encryptString(value.trim()).toString('base64')
   writeFileSync(file(), JSON.stringify(data), { mode: 0o600 })

@@ -1,6 +1,6 @@
-// Studio Brawlhalla : rendus de légendes et de cosmétiques depuis les fichiers du jeu installé.
-// Le rendu est fait par BrawlRender.exe (moteur .NET basé sur WallyAnmRenderer, MIT) ; ffmpeg sert aux exports,
-// vgmstream au décodage des musiques Wwise. Les images sont servies à l'interface par le protocole studio://.
+// Brawlhalla Studio: renders of legends and cosmetics from the installed game files.
+// Rendering is done by BrawlRender.exe (.NET engine based on WallyAnmRenderer, MIT); ffmpeg is used for exports,
+// vgmstream for decoding Wwise music. Images are served to the interface through the studio:// protocol.
 import { app, BrowserWindow, dialog, ipcMain, net, protocol } from 'electron'
 import { execFile } from 'child_process'
 import { createHash, randomBytes } from 'crypto'
@@ -14,12 +14,13 @@ import type {
 } from '@shared/studio'
 import { exportSequence } from '@shared/studio'
 import { Engine } from './engine'
+import { getSettings } from '../db'
 import { AnimListing, buildLegendGroups, effectItems, heroEffectTest, parseCsv, parseHeroes, WEAPON_ANM } from './presets'
 
 const run = promisify(execFile)
 const DEFAULT_GAME = 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Brawlhalla'
 
-/** À appeler avant `app.whenReady()` : le protocole doit être déclaré tôt. */
+/** Call before `app.whenReady()`: the protocol must be declared early. */
 export function registerStudioScheme(): void {
   protocol.registerSchemesAsPrivileged([{ scheme: 'studio', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }])
 }
@@ -42,18 +43,18 @@ function readConfig(): Config {
 }
 let config: Config
 const gameOk = (p: string): boolean => existsSync(join(p, 'Game.swz')) && existsSync(join(p, 'anims'))
-/** Clé de cache : change à chaque patch du jeu. */
+/** Cache key: changes with every game patch. */
 const gameStamp = (): string => { try { return String(Math.round(statSync(join(config.gamePath, 'Game.swz')).mtimeMs)) } catch { return '0' } }
 
-/* ---------------------------------------------------------------- moteur */
+/* ---------------------------------------------------------------- engine */
 let engine: Engine | null = null
 let engineState: StudioStatus['state'] = 'starting'
 let engineError: string | undefined
 let busy = 0
 
 function getEngine(): Engine {
-  if (!existsSync(enginePath())) { engineState = 'missing-engine'; throw new Error('Moteur de rendu absent : lance « npm run studio:engine ».') }
-  if (!gameOk(config.gamePath)) { engineState = 'missing-game'; throw new Error('Dossier Brawlhalla introuvable.') }
+  if (!existsSync(enginePath())) { engineState = 'missing-engine'; throw new Error('Render engine missing: run "npm run studio:engine".') }
+  if (!gameOk(config.gamePath)) { engineState = 'missing-game'; throw new Error('Brawlhalla folder not found.') }
   if (!engine) {
     engine = new Engine(enginePath(), config.gamePath)
     engineState = 'starting'
@@ -67,7 +68,7 @@ const call = async <T>(cmd: string, params: Record<string, unknown> = {}): Promi
   try { return await getEngine().call<T>(cmd, params) } finally { busy-- }
 }
 
-/** Résultat JSON mis en cache sur disque pour la version du jeu en cours. */
+/** JSON result cached on disk for the current game version. */
 async function cached<T>(name: string, produce: () => Promise<T>): Promise<T> {
   const file = join(dir('cache', gameStamp()), name.replace(/[^\w.-]/g, '_') + '.json')
   if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8')) as T
@@ -78,19 +79,19 @@ async function cached<T>(name: string, produce: () => Promise<T>): Promise<T> {
 
 const swzFile = (name: string): Promise<string> =>
   cached(`swz-${name}`, async () => (await call<{ content: string }>('swzfile', { swz: 'Game.swz', name })).content)
-// « anims2 » : depuis le moteur r5, la liste donne aussi la fin de boucle (recoveryStart) ; l'ancien cache ne l'a pas.
+// "anims2": since engine r5, the list also gives the loop end (recoveryStart); the old cache does not have it.
 const listing = (anm: string): Promise<AnimListing> => cached(`anims2-${anm}`, () => call<AnimListing>('anims', { file: `anims/${anm}.anm` }))
 
-/** Lecture en tâche de fond des fichiers lourds (emotes ~40 s la première fois) pour que tout soit instantané ensuite. */
+/** Background reading of the heavy files (emotes ~40 s the first time) so everything is instant afterwards. */
 let preloading = false
 async function preload(): Promise<void> {
   if (preloading) return
   preloading = true
-  try { for (const f of ['Animation_Emote', ...new Set(Object.values(WEAPON_ANM))]) await listing(f) } catch { /* réessayé à la demande */ }
+  try { for (const f of ['Animation_Emote', ...new Set(Object.values(WEAPON_ANM))]) await listing(f) } catch { /* retried on demand */ }
   preloading = false
 }
 
-/* ---------------------------------------------------------------- catalogue et animations */
+/* ---------------------------------------------------------------- catalog and animations */
 type EngineCatalog = { heroes: { name: string; bio: string }[]; costumes: { name: string; display: string; hero: string }[]; colors: string[] }
 
 async function heroes(): Promise<ReturnType<typeof parseHeroes>> { return parseHeroes(await swzFile('HeroTypes.xml')) }
@@ -108,7 +109,7 @@ async function catalog(): Promise<StudioCatalog> {
 }
 
 let powerMap: Map<string, Record<string, string>> | null = null
-/** Skins d'arme compatibles avec les armes d'une légende : ceux de la légende d'abord, puis les autres par nom. */
+/** Weapon skins matching a legend's weapons: the legend's own first, then the others by name. */
 async function weaponSkins(heroName: string): Promise<StudioWeaponSkins> {
   const hero = (await heroes()).find((h) => h.name === heroName)
   if (!hero) return {}
@@ -126,7 +127,7 @@ async function weaponSkins(heroName: string): Promise<StudioWeaponSkins> {
   return out
 }
 
-/** Une image précise d'un rendu, enregistrée en PNG. */
+/** One specific frame of a render, saved as PNG. */
 async function exportFrame(win: BrowserWindow | null, id: string, index: number): Promise<{ ok: boolean; path?: string }> {
   const meta = readRender(id)
   const file = meta?.files[Math.max(0, Math.min(meta.files.length - 1, Math.floor(index)))]
@@ -146,7 +147,7 @@ async function legendAnims(heroName: string): Promise<StudioAnimGroup[]> {
   const files = hero.weapons.map((w) => WEAPON_ANM[w]).filter(Boolean)
   const listings: Record<string, AnimListing> = {}
   for (const f of files) listings[f] = await listing(f)
-  return buildLegendGroups(hero, powerMap, listings, await listing('Animation_Emote'))
+  return buildLegendGroups(hero, powerMap, listings, await listing('Animation_Emote'), getSettings().lang)
 }
 
 type Cosmetics = Record<string, StudioItem[]>
@@ -157,8 +158,8 @@ async function items(kind: StudioKind, query = '', file?: string): Promise<Studi
     list = s.symbols.filter((n) => n.startsWith('a_Roster_Pose_') && !/M$/.test(n)).sort()
       .map((n) => ({ name: n, display: n.replace('a_Roster_Pose_', '').replace(/([a-z])([A-Z])/g, '$1 $2'), animClass: `UI_Icons.swf/${n}` }))
   } else if (kind === 'effect') {
-    // « * » : tous les fichiers ; « hero:Ninja » : les effets d'une légende, rangés par le jeu selon l'arme
-    // (SFX_Sword, SFX_Spear…) et dans les rigs des fichiers d'animation des armes
+    // "*": all files; "hero:Ninja": a legend's effects, filed by the game by weapon
+    // (SFX_Sword, SFX_Spear…) and in the rigs of the weapon animation files
     const hero = file?.startsWith('hero:') ? (await heroes()).find((h) => h.name === file.slice(5)) : undefined
     const files = file === '*' || hero ? effectFiles() : file && /^SFX_[\w-]+\.swf$/.test(file) ? [file] : []
     list = []
@@ -176,7 +177,7 @@ async function items(kind: StudioKind, query = '', file?: string): Promise<Studi
         }
       }
       const mine = heroEffectTest(hero.name)
-      // effets de base d'abord, puis ceux des skins (_SwapAang…)
+      // base effects first, then the skins' ones (_SwapAang…)
       list = list.filter((x) => mine(x.sequence?.[0] ?? x.name)).sort((a, b) => Number(/Swap/.test(a.name)) - Number(/Swap/.test(b.name)) || a.display.localeCompare(b.display))
     }
   } else {
@@ -191,14 +192,14 @@ function effectFiles(): string[] {
   return readdirSync(config.gamePath).filter((f) => /^SFX_.*\.swf$/i.test(f) && statSync(join(config.gamePath, f)).size > 1000).sort()
 }
 
-/* ---------------------------------------------------------------- rendus */
+/* ---------------------------------------------------------------- renders */
 function engineRequest(req: StudioRenderRequest): Record<string, unknown> {
   const r: Record<string, unknown> = { scale: Math.min(Math.max(Number(req.scale) || 2, 0.5), 8), flip: !!req.flip }
   if (req.kind === 'legend') Object.assign(r, { kind: 'legend', animClass: req.animClass, animation: req.animation, costume: req.costume, color: req.color || undefined, weapon: req.weapon || undefined, animations: Array.isArray(req.animations) ? req.animations.filter((n) => typeof n === 'string').slice(0, 12) : undefined })
   else if (req.kind === 'portrait' || req.kind === 'effect') Object.assign(r, { kind: 'swf', animClass: req.animClass, animation: '' })
   if (req.kind === 'effect' && Array.isArray(req.sequence)) r.sequence = req.sequence.filter((n) => typeof n === 'string' && /^[\w-]+$/.test(n)).slice(0, 400)
   else Object.assign(r, { kind: req.kind, item: req.item })
-  // Rig d'une seule image (emojis, symboles) dont le dessin peut s'animer seul : on rend une boucle, réduite à 1 image si fixe.
+  // Single-frame rig (emojis, symbols) whose drawing may animate on its own: render a loop, reduced to 1 frame if static.
   if (req.kind === 'emoji' || req.kind === 'effect' || req.kind === 'portrait') r.minFrames = 48
   return r
 }
@@ -207,8 +208,8 @@ function readRender(id: string): StudioRender | null {
   try { return JSON.parse(readFileSync(join(dir('renders'), id, 'render.json'), 'utf8')) as StudioRender } catch { return null }
 }
 
-/** Boucle d'un rendu de légende, d'après les données du jeu : une emote joue son intro une fois, répète sa boucle (loopStart
- *  à recoveryStart), puis sa fin. Coup en plusieurs parties : la boucle de la dernière partie. */
+/** Loop of a legend render, from the game data: an emote plays its intro once, repeats its loop (loopStart
+ *  to recoveryStart), then its ending. Multi-part move: the loop of the last part. */
 async function loopOf(req: StudioRenderRequest, animation: string): Promise<{ start: number; end: number } | undefined> {
   if (req.kind !== 'legend' || !req.animClass) return undefined
   const file = req.animClass.split('/')[0].replace(/\.swf$/i, '')
@@ -248,24 +249,24 @@ function render(req: StudioRenderRequest): StudioJob {
   return job
 }
 
-/** Vignette : première image, petite échelle, mise en cache. */
+/** Thumbnail: first frame, small scale, cached. */
 async function thumb(req: StudioRenderRequest): Promise<string | null> {
   const key = createHash('sha1').update(JSON.stringify({ ...req, label: '' }) + gameStamp()).digest('hex').slice(0, 20)
   const out = join(dir('thumbs'), key)
   if (!existsSync(join(out, 'frame_0000.png'))) {
     const scale = req.kind === 'portrait' ? 1 : req.kind === 'legend' ? 0.7 : 0.9
-    // certains effets démarrent vides (la 1re image n'a rien) : on essaie quelques images plus loin
+    // some effects start empty (the 1st frame has nothing): try a few frames further
     const tries = req.kind === 'effect' ? [0, 3, 8, 15, 30] : [0]
     let ok = false
     for (const f of tries) {
-      try { await call('render', { ...engineRequest({ ...req, scale }), start: f, end: f, outDir: out }); ok = true; break } catch { /* image vide */ }
+      try { await call('render', { ...engineRequest({ ...req, scale }), start: f, end: f, outDir: out }); ok = true; break } catch { /* empty image */ }
     }
     if (!ok) return null
   }
   return `studio://thumbs/${key}/frame_0000.png`
 }
 
-/** Aperçu animé (survol d'une vignette) : toutes les images en petit, rangées avec les vignettes, hors bibliothèque. */
+/** Animated preview (hovering a thumbnail): all frames at small size, stored with the thumbnails, outside the library. */
 const previews = new Map<string, Promise<{ base: string; files: string[] } | null>>()
 function preview(req: StudioRenderRequest): Promise<{ base: string; files: string[] } | null> {
   const key = 'p-' + createHash('sha1').update(JSON.stringify({ ...req, label: '' }) + gameStamp()).digest('hex').slice(0, 20)
@@ -283,7 +284,7 @@ function preview(req: StudioRenderRequest): Promise<{ base: string; files: strin
   return job
 }
 
-/** Composition fusionnée (plusieurs rendus superposés) : enregistrée comme un rendu de la bibliothèque. */
+/** Merged composition (several renders stacked): saved as a library render. */
 function saveComposite(frames: Uint8Array[], label: string, width: number, height: number): StudioRender {
   const id = `${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)}-${randomBytes(2).toString('hex')}`
   const out = dir('renders', id)
@@ -302,10 +303,10 @@ async function exportRender(win: BrowserWindow | null, id: string, format: Studi
   if (!meta) return { ok: false, error: 'introuvable' }
   const name = meta.label.replace(/[^\w .-]/g, '_') || id
   const fps = Math.min(60, Math.max(1, Math.round(Number(opts.fps) || 24)))
-  // images choisies dans la bande et/ou durée voulue (images répétées en boucle) : copiées et renumérotées à part, dans l'ordre
+  // frames picked in the strip and/or desired duration (frames repeated in a loop): copied and renumbered separately, in order
   const seq = exportSequence(meta.files.length, opts, meta.loopStart, meta.loopEnd)
   const picked = seq.length === meta.files.length && seq.every((v, i) => v === i) ? [] : seq
-  // Copie renumérotée dans un dossier propre à cet export (deux exports en même temps ne se gênent pas), effacé à la fin.
+  // Renumbered copy in a folder of its own for this export (two exports at the same time do not clash), deleted at the end.
   let tmp = ''
   const prepare = (): { src: string; files: string[] } => {
     const base = join(dir('renders'), id)
@@ -339,15 +340,15 @@ async function exportRender(win: BrowserWindow | null, id: string, format: Studi
     apng: [...input, '-plays', '0', '-f', 'apng', r.filePath],
     webm: [...input, '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '24', r.filePath],
     mov: [...input, '-c:v', 'prores_ks', '-profile:v', '4444', '-pix_fmt', 'yuva444p10le', r.filePath],
-    // MP4 n'a pas de transparence : fond vert, prêt pour l'incrustation dans CapCut. Le fond suit la cadence de l'export
-    // (sinon 25 i/s par défaut : images dupliquées, légers à-coups).
+    // MP4 has no transparency: green background, ready for keying in CapCut. The background follows the export frame rate
+    // (otherwise 25 fps by default: duplicated frames, slight stutter).
     mp4: [...input, '-filter_complex', `color=c=0x00ff00:s=16x16:r=${fps}[c];[c][0:v]scale2ref[c2][v];[c2][v]overlay=shortest=1,pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuv420p`, '-c:v', 'libx264', '-crf', '16', r.filePath]
   }
   try { await run(ffmpegPath(), args[format as Exclude<StudioExportFormat, 'png'>], { windowsHide: true }); return { ok: true, path: r.filePath } } catch (e) { return { ok: false, error: (e as Error).message.slice(-300) } }
   }
 }
 
-/* ---------------------------------------------------------------- assets (fichiers images du jeu) */
+/* ---------------------------------------------------------------- assets (game image files) */
 const assetIndex = new Map<StudioAssetKind, string[]>()
 function walk(base: string, exts: RegExp, out: string[] = []): string[] {
   if (!existsSync(base)) return out
@@ -363,7 +364,7 @@ function assetList(kind: StudioAssetKind): string[] {
     const g = config.gamePath, img = /\.(png|jpe?g)$/i
     const lists: Record<StudioAssetKind, () => string[]> = {
       sprites: () => walk(join(g, 'sprites'), img),
-      // Chaque bannière est découpée en morceaux (1a, 1b, 2c…, pour l'animation du drapeau) : un seul par bannière.
+      // Each banner is cut into pieces (1a, 1b, 2c…, for the flag animation): only one per banner.
       banners: () => walk(join(g, 'sprites'), img).filter((f) => /\/a_Flag1a_/i.test(f)),
       avatars: () => walk(join(g, 'sprites'), img).filter((f) => /Sprites_Avatars/i.test(f)),
       backgrounds: () => walk(join(g, 'mapArt', 'Backgrounds'), img),
@@ -379,7 +380,7 @@ function assets(kind: StudioAssetKind, query: string, offset: number, limit: num
   const all = assetList(kind).filter((f) => !q || f.toLowerCase().includes(q))
   return { total: all.length, items: all.slice(Math.max(0, offset), Math.max(0, offset) + Math.min(limit, 300)) }
 }
-/** Chemin sûr dans le dossier du jeu (refuse « .. » et tout ce qui sort du dossier). */
+/** Safe path inside the game folder (rejects ".." and anything leaving the folder). */
 function gameFile(rel: string): string | null {
   const full = resolve(config.gamePath, rel)
   return full.startsWith(resolve(config.gamePath) + sep) && existsSync(full) ? full : null
@@ -393,7 +394,7 @@ async function saveCopy(win: BrowserWindow | null, src: string, name: string): P
   return true
 }
 
-/* ---------------------------------------------------------------- musiques (Wwise → MP3) */
+/* ---------------------------------------------------------------- music (Wwise → MP3) */
 async function tracks(): Promise<StudioTrack[]> {
   return cached('tracks', async () => {
     const out: StudioTrack[] = []
@@ -420,7 +421,7 @@ async function trackMp3(id: string): Promise<string | null> {
   return mp3
 }
 
-/* ---------------------------------------------------------------- statut */
+/* ---------------------------------------------------------------- status */
 function status(): StudioStatus {
   let state = engineState
   if (!existsSync(enginePath())) state = 'missing-engine'
@@ -428,11 +429,11 @@ function status(): StudioStatus {
   return { state, error: engineError, gamePath: config.gamePath, enginePath: enginePath(), busy }
 }
 
-/* ---------------------------------------------------------------- enregistrement */
+/* ---------------------------------------------------------------- saving */
 export function registerStudio(win: () => BrowserWindow | null): void {
   config = readConfig()
 
-  // studio://renders/<id>/<fichier> · studio://thumbs/<clé>/<fichier> · studio://game/<chemin> · studio://music/<id>.mp3
+  // studio://renders/<id>/<file> · studio://thumbs/<key>/<file> · studio://game/<path> · studio://music/<id>.mp3
   protocol.handle('studio', async (request) => {
     const url = new URL(request.url)
     const path = decodeURIComponent(url.pathname).replace(/^\/+/, '')
@@ -443,7 +444,7 @@ export function registerStudio(win: () => BrowserWindow | null): void {
     } else if (url.host === 'game') file = gameFile(path)
     else if (url.host === 'music') file = await trackMp3(path.replace(/\.mp3$/, '')).catch(() => null)
     if (!file) return new Response('not found', { status: 404 })
-    // CORS ouvert : l'éditeur de miniatures dessine ces images dans un canvas qu'il doit pouvoir exporter
+    // Open CORS: the thumbnail editor draws these images into a canvas it must be able to export
     const res = await net.fetch(pathToFileURL(file).toString())
     const headers = new Headers(res.headers)
     headers.set('Access-Control-Allow-Origin', '*')
@@ -489,15 +490,15 @@ export function registerStudio(win: () => BrowserWindow | null): void {
   ipcMain.handle('studio:tracks', () => tracks())
   ipcMain.handle('studio:saveTrack', async (_e, id: string) => { const f = await trackMp3(String(id)); return f ? saveCopy(win(), f, `brawlhalla_${id}.mp3`) : false })
 
-  // Démarre le moteur en arrière-plan pour que le Studio soit prêt à l'ouverture.
-  try { getEngine() } catch { /* état visible dans le Studio */ }
+  // Starts the engine in the background so the Studio is ready when opened.
+  try { getEngine() } catch { /* state shown in the Studio */ }
 }
 
 export function stopStudio(): void { engine?.stop() }
 
-/* ---------------------------------------------------------------- éditeur de miniatures */
+/* ---------------------------------------------------------------- thumbnail editor */
 const IMG_EXT = /^(png|jpe?g|webp|gif)$/i
-/** Image ajoutée par l'utilisateur : copiée dans le Studio pour que le projet la retrouve. */
+/** Image added by the user: copied into the Studio so the project finds it again. */
 function storeUpload(bytes: Uint8Array, ext: string): string {
   const e = IMG_EXT.test(ext) ? ext.toLowerCase() : 'png'
   const name = `${createHash('sha1').update(bytes).digest('hex').slice(0, 16)}.${e}`

@@ -1,4 +1,4 @@
-// Gestion des plugins : installation (bouton ou glisser-déposer), comptes, clés, activation, désinstallation.
+// Plugin management: install (button or drag and drop), accounts, keys, enabling, uninstall.
 import { useEffect, useState } from 'react'
 import { compareVersions, InstalledPlugin, loc } from '@shared/plugin'
 import { PermissionList, PluginInstallDialog } from '../components/PluginInstallDialog'
@@ -67,7 +67,7 @@ function PluginCard({ plugin, onAddAccount }: { plugin: InstalledPlugin; onAddAc
   )
 }
 
-/** `openPath` : fichier reçu par double-clic ; `onOpenHandled` le consomme. */
+/** `openPath`: file received by double-click; `onOpenHandled` consumes it. */
 export function PluginsPage({ openPath, onOpenHandled }: { openPath: string | null; onOpenHandled: () => void }): JSX.Element {
   const { t, plugins, settings } = useApp()
   const [installPath, setInstallPath] = useState<string | null>(null)
@@ -86,7 +86,7 @@ export function PluginsPage({ openPath, onOpenHandled }: { openPath: string | nu
     setFetching(null)
     if (r.ok && r.path) setInstallPath(r.path); else setCatalogError(r.error ?? '')
   }
-  // Sans catalogue (hors ligne au premier lancement), les plugins fournis avec l'appli restent proposés.
+  // Without the catalog (offline on first launch), the plugins bundled with the app are still offered.
   const offered = catalog?.entries.length ? [] : bundled.filter((b) => !b.installedVersion || b.installedVersion !== b.version)
 
   const pick = async (): Promise<void> => { const p = await window.api.pluginsPickPackage(); if (p) setInstallPath(p) }
@@ -114,7 +114,7 @@ export function PluginsPage({ openPath, onOpenHandled }: { openPath: string | nu
           <p className="muted small" style={{ marginBottom: 6 }}>{t('plugins.catalogHint')}{catalog.offline ? ` ${t('plugins.catalogOffline')}` : ''}</p>
           {catalogError && <div className="err" style={{ marginBottom: 8 }}>{catalogError}</div>}
           {catalog.entries.map((e) => {
-            const upToDate = e.installedVersion !== null && compareVersions(e.installedVersion, e.version) >= 0   // jamais de retour en arrière
+            const upToDate = e.installedVersion !== null && compareVersions(e.installedVersion, e.version) >= 0   // never go backwards
             return (
               <div key={e.id} className="row between" style={{ padding: '8px 0', borderTop: '1px solid var(--line)', gap: 12 }}>
                 <div className="grow"><b>{e.name}</b> <span className="muted small">{e.version}{e.author ? ` · ${e.author}` : ''}{e.installedVersion && !upToDate ? ` (${t('plugins.installedV', { v: e.installedVersion })})` : ''}</span>

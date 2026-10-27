@@ -1,15 +1,15 @@
-// Logique des paliers : valeurs de seuil, prochain palier, franchissement. Fonctions pures, utilisées par
-// le processus principal (détection) et par l'interface (objectifs, barres de progression).
+// Milestone logic: threshold values, next milestone, crossing. Pure functions, used by
+// the main process (detection) and by the interface (goals, progress bars).
 import { MetricKey, MilestoneRule, Platform } from './types'
 import type { PluginManifest, PluginMetric } from './plugin'
 
-/** Statistiques pour lesquelles on peut définir des paliers. */
+/** Statistics for which milestones can be defined. */
 export const MILESTONE_METRICS: Record<Platform, MetricKey[]> = {
   youtube: ['subscribers', 'views', 'likes', 'comments', 'videos']
 }
 
 export const ruleKey = (p: Platform, m: MetricKey): string => `${p}.${m}`
-/** Règle par défaut : séquence 10-20-50… pour les compteurs principaux. */
+/** Default rule: sequence 10-20-50… for the main counters. */
 export function defaultRule(_p: Platform, m: MetricKey): MilestoneRule {
   return { enabled: ['subscribers', 'views', 'likes'].includes(m), sequence: true, increment: 0, custom: [], notifyDown: false }
 }
@@ -17,12 +17,12 @@ export function defaultRule(_p: Platform, m: MetricKey): MilestoneRule {
 export const getRule = (rules: Record<string, MilestoneRule>, p: Platform, m: MetricKey): MilestoneRule =>
   ({ ...defaultRule(p, m), ...rules[ruleKey(p, m)] })
 
-/* ---------- Paliers des plugins ---------- */
+/* ---------- Plugin milestones ---------- */
 export const pluginRuleKey = (pluginId: string, metric: string): string => `plugin:${pluginId}.${metric}`
-/** Métriques de plugin qui peuvent avoir des paliers : nombres et pourcentages (pas les rangs ni les durées). */
+/** Plugin metrics that can have milestones: numbers and percentages (not ranks or durations). */
 export const pluginMilestoneMetrics = (m: PluginManifest): PluginMetric[] => m.metrics.filter((x) => x.format === 'number' || x.format === 'percent')
-/** Règle par défaut : celle que propose le manifeste (ex. un palier tous les 100 pour un ELO), sinon la séquence 10-20-50…
- *  sur la métrique principale seulement. */
+/** Default rule: the one offered by the manifest (e.g. a milestone every 100 for an ELO), otherwise the sequence 10-20-50…
+ *  on the main metric only. */
 export function pluginDefaultRule(x: PluginMetric): MilestoneRule {
   const ms = x.milestone
   if (ms) return { enabled: ms.enabled ?? true, sequence: !ms.increment, increment: ms.increment ?? 0, custom: [], notifyDown: ms.notifyDown ?? false }
@@ -32,19 +32,19 @@ export const getPluginRule = (rules: Record<string, MilestoneRule>, pluginId: st
   ({ ...pluginDefaultRule(x), ...rules[pluginRuleKey(pluginId, x.key)] })
 
 const SEQ = [1, 2, 5]
-/** Plus petit terme de 10, 20, 50, 100, 200, 500… strictement supérieur à v. */
+/** Smallest term of 10, 20, 50, 100, 200, 500… strictly greater than v. */
 function seqNext(v: number): number {
   for (let k = 1; k <= 15; k++) for (const m of SEQ) { const t = m * 10 ** k; if (t > v) return t }
   return Infinity
 }
-/** Plus grand terme de la séquence inférieur ou égal à v (null sous 10). */
+/** Largest term of the sequence less than or equal to v (null under 10). */
 function seqPrev(v: number): number | null {
   let best: number | null = null
   for (let k = 1; k <= 15; k++) for (const m of SEQ) { const t = m * 10 ** k; if (t <= v) best = t }
   return best
 }
 
-/** Plus petit palier strictement supérieur à v. */
+/** Smallest milestone strictly greater than v. */
 export function nextThreshold(rule: MilestoneRule, v: number): number | null {
   const c: number[] = []
   if (rule.sequence) c.push(seqNext(v))
@@ -54,7 +54,7 @@ export function nextThreshold(rule: MilestoneRule, v: number): number | null {
   return Number.isFinite(m) ? m : null
 }
 
-/** Plus grand palier inférieur ou égal à v (null s'il n'y en a pas). */
+/** Largest milestone less than or equal to v (null if there is none). */
 export function prevThreshold(rule: MilestoneRule, v: number): number | null {
   const c: number[] = []
   if (rule.sequence) { const s = seqPrev(v); if (s !== null) c.push(s) }
@@ -63,14 +63,14 @@ export function prevThreshold(rule: MilestoneRule, v: number): number | null {
   return c.length ? Math.max(...c) : null
 }
 
-/** Palier franchi à la hausse entre `from` et `to` (le plus proche de `to`), sinon null. */
+/** Milestone crossed upwards between `from` and `to` (the closest to `to`), otherwise null. */
 export function crossedUp(rule: MilestoneRule, from: number, to: number): number | null {
   if (to <= from) return null
   const p = prevThreshold(rule, to)
   return p !== null && p > from ? p : null
 }
 
-/** Palier repassé à la baisse entre `from` et `to` (le plus proche de `to`), sinon null. */
+/** Milestone crossed downwards between `from` and `to` (the closest to `to`), otherwise null. */
 export function crossedDown(rule: MilestoneRule, from: number, to: number): number | null {
   if (to >= from) return null
   const n = nextThreshold(rule, to)
