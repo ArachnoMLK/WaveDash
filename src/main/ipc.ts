@@ -13,6 +13,7 @@ import * as secrets from './secrets'
 import { applySystemSettings, hasNativeGlass } from './system'
 import { exportBackup, exportData, importBackup } from './export'
 import * as plugins from './plugins/manager'
+import { exportBank, importBank } from './bank'
 import { fetchPackage, getCatalog } from './plugins/catalog'
 import { fireTest, initMilestones } from './milestones'
 import { checkUpdate, getUpdateStatus, installUpdate } from './updater'
@@ -157,6 +158,26 @@ export function registerIpc(win: () => BrowserWindow | null): void {
   ipcMain.handle('plugins:accountCross', (_e, id: number, req: Record<string, string>, filters?: unknown) => plugins.pluginAccountCross(Number(id), req ?? {}, filters))
   ipcMain.handle('plugins:accountSearch', (_e, id: number, query: string, filters?: unknown) => plugins.pluginAccountSearch(Number(id), String(query ?? ''), filters))
   ipcMain.handle('plugins:accountView', (_e, id: number, filters?: unknown) => plugins.pluginAccountView(Number(id), filters))
+  /* ---------- Player bank ---------- */
+  ipcMain.handle('bank:search', (_e, query: string) => plugins.searchBank(String(query ?? '')))
+  ipcMain.handle('bank:sheet', (_e, source: string, key: string) => plugins.playerSheet(String(source), String(key)))
+  ipcMain.handle('bank:stats', () => db.bankStats())
+  ipcMain.handle('bank:forget', (_e, origin: string) => (typeof origin === 'string' && origin.startsWith('import:') ? db.forgetBankOrigin(origin) : 0))
+  ipcMain.handle('bank:export', async () => {
+    const d = new Date(), stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const opts = { defaultPath: `WaveDash-players-${stamp}.wdbank`, filters: [{ name: 'WaveDash player bank', extensions: ['wdbank'] }] }
+    const w = win()
+    const r = w ? await dialog.showSaveDialog(w, opts) : await dialog.showSaveDialog(opts)
+    if (r.canceled || !r.filePath) return null
+    return exportBank(r.filePath, app.getVersion())
+  })
+  ipcMain.handle('bank:import', async () => {
+    const opts = { properties: ['openFile' as const, 'multiSelections' as const], filters: [{ name: 'WaveDash player bank', extensions: ['wdbank'] }] }
+    const w = win()
+    const r = w ? await dialog.showOpenDialog(w, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || !r.filePaths.length) return null
+    return r.filePaths.slice(0, 50).map(importBank)
+  })
   ipcMain.handle('plugins:catalog', (_e, force: boolean) => getCatalog(!!force))
   ipcMain.handle('plugins:catalogFetch', async (_e, id: string) => {
     try { return { ok: true, path: await fetchPackage(String(id)) } } catch (e) { return { ok: false, error: (e as Error).message } }

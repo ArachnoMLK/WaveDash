@@ -3,7 +3,7 @@ import { MILESTONE_METRICS, ruleKey } from './milestones'
 import { sanitizeTheme, themeFromSettings } from './theme'
 import { DEFAULT_SETTINGS, isLang, MilestoneRule, PLATFORMS, Settings, TemplateKey, ThemeData } from './types'
 
-const NAV_IDS = ['overview', 'goals', ...PLATFORMS]
+const NAV_IDS = ['overview', 'goals', 'studio', 'players', ...PLATFORMS]
 const CHARTS = ['line', 'area', 'bar', 'pie', 'radar']
 const num = (v: unknown, min: number, max: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : null

@@ -216,7 +216,7 @@ export interface AppInfo { version: string; nativeGlass: boolean; encryptionAvai
 
 export type SecretKey = 'youtube.apiKey'
 
-import type { InstalledPlugin, PluginAccount, PluginDetail, PluginFilter, PluginInspect, PluginItemsPage } from './plugin'
+import type { BankPlayer, BankStats, InstalledPlugin, PluginAccount, PluginDetail, PluginFilter, PluginInspect, PluginItemsPage } from './plugin'
 import type { StudioApi } from './studio'
 
 /** Metric values by key: plugins define their own keys. */
@@ -265,6 +265,13 @@ export interface WaveApi {
   pluginAccountSearch(accountId: number, query: string, filters?: Record<string, string>): Promise<{ ok: boolean; unsupported?: boolean; detail?: PluginDetail; error?: string }>
   /** Overview recomputed by the plugin for the top bar filters (manifest `views`). */
   pluginAccountView(accountId: number, filters: Record<string, string>): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }>
+  /** Player bank: players matching a name, a player's sheet (built by the plugin that recorded them), content, .wdbank exchange. */
+  bankSearch(query: string): Promise<BankPlayer[]>
+  bankSheet(source: string, key: string): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }>
+  bankStats(): Promise<BankStats>
+  bankForget(origin: string): Promise<number>
+  bankExport(): Promise<{ rows: number } | null>
+  bankImport(): Promise<{ file: string; added: number; known: number; rejected: number; error?: string }[] | null>
   pluginsBundled(): Promise<{ path: string; id: string; name: string; version: string; description: import('./plugin').LocalText; installedVersion: string | null }[]>
   pluginsCatalog(force?: boolean): Promise<{ entries: { id: string; name: string; version: string; author: string; description: import('./plugin').LocalText;
     permissions: { network?: string[]; folder?: boolean }; installedVersion: string | null }[]; fetchedAt: number | null; offline: boolean }>

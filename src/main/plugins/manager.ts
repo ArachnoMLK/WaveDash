@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync } from 'fs'
 import { basename, extname, join } from 'path'
 import {
-  compareVersions, IMAGE_FILE_RE, InstalledPlugin, PluginFilter, sanitizeDetail, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
+  BankPlayer, compareVersions, IMAGE_FILE_RE, PLAYER_LIMITS, InstalledPlugin, PluginFilter, sanitizeDetail, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
 } from '@shared/plugin'
 import * as db from '../db'
 import { processPluginNotices, processPluginRefresh } from '../milestones'
@@ -278,11 +278,12 @@ export async function refreshPluginAccount(accountId: number): Promise<void> {
     const result = sanitizeRunResult(run.value, manifest)
     if (!Object.keys(result.metrics).length && !result.history.length) throw new PluginError('invalid_result', 'No declared metric was returned')
     // Milestones: compared with the previous reading, before saving the new one; a notification error blocks nothing.
-    try { processPluginRefresh(accountId, pa.display_name, manifest, db.getLatest(accountId) as Record<string, number>, result.metrics) } catch (e) { console.error('Paliers plugin :', e) }
-    try { processPluginNotices(accountId, pa.display_name, manifest, result.notices) } catch (e) { console.error('Notifications plugin :', e) }
+    try { processPluginRefresh(accountId, pa.display_name, manifest, db.getLatest(accountId) as Record<string, number>, result.metrics) } catch (e) { console.error('Plugin milestones:', e) }
+    try { processPluginNotices(accountId, pa.display_name, manifest, result.notices) } catch (e) { console.error('Plugin notifications:', e) }
     db.insertHistory(accountId, result.history)
     db.insertSnapshots(accountId, result.metrics)
     db.savePluginItems(accountId, result.items, manifest.itemsMode)
+    if (manifest.players && result.players.length) db.savePlayerRecords(row.id, result.players, 'local')
     // Safety net: a backlog that never goes down (buggy plugin) must not rerun the plugin every 5 s forever.
     const prevBacklog = Number(db.getMeta(accountId, 'backlog')) || 0
     const stalled = result.backlog > 0 && result.backlog >= prevBacklog ? (Number(db.getMeta(accountId, 'stalled')) || 0) + 1 : 0
@@ -410,7 +411,7 @@ export async function syncCatalogUpdates(): Promise<string[]> {
         // The plugin's accounts benefit from the new version right away, without waiting for their next refresh.
         for (const pa of db.listPluginAccountRows()) if (pa.plugin_id === e.id) await refreshPluginAccount(pa.account_id)
       }
-    } catch (err) { console.error('Catalogue :', e.id, err) }
+    } catch (err) { console.error('Catalog:', e.id, err) }
   }
   return updated
 }
@@ -458,6 +459,28 @@ export async function pluginAccountView(accountId: number, filters: unknown): Pr
   if (!m.views) return { ok: false }
   try {
     const run = await runIsolated(buildRequest(row, 'view', JSON.parse(pa.inputs) as Record<string, string>, { id: accountId, externalId: pa.external_id, displayName: pa.display_name }, undefined, undefined, cleanFilters(accountId, filters).sel), { pluginId: row.id, accountId })
+    return { ok: true, detail: sanitizeDetail(run.value) }
+  } catch (e) { return { ok: false, error: msgOf(e) } }
+}
+
+/* ---------- Player bank ---------- */
+/** Players matching a name (or an exact identifier) in the bank: a short list, nothing else. */
+export const searchBank = (query: string): BankPlayer[] => db.searchPlayers(String(query ?? '').slice(0, 60), 50)
+
+/** A player's sheet: the plugin that recorded them builds it from their records (`player` function).
+ *  Only the resulting detail leaves this function; nothing is saved. */
+export async function playerSheet(source: string, key: string): Promise<{ ok: boolean; detail?: PluginDetail; error?: string }> {
+  const row = db.getPluginRow(String(source))
+  if (!row || !row.enabled) return { ok: false, error: 'plugin_missing' }
+  let manifest: PluginManifest
+  try { manifest = loadManifest(row) } catch { return { ok: false, error: 'plugin_missing' } }
+  if (!manifest.players) return { ok: false, error: 'plugin_missing' }
+  const records = db.playerRecords(row.id, String(key), PLAYER_LIMITS.sheet)
+  if (!records.length) return { ok: false, error: 'not_found' }
+  const memory = new Map<string, string>()
+  try {
+    const run = await runIsolated({ manifest, script: row.script, fn: 'player', ctx: { inputs: {}, secrets: {}, lang: db.getSettings().lang, records },
+      storage: { get: (k) => memory.get(k) ?? null, set: (k, v) => { memory.set(k, v) } } })
     return { ok: true, detail: sanitizeDetail(run.value) }
   } catch (e) { return { ok: false, error: msgOf(e) } }
 }

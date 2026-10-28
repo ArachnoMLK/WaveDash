@@ -15,10 +15,10 @@ export const DEFAULT_CHART: Record<string, ChartType> = {
 export const chartKey = (platform: Platform, metric: MetricKey): string => `${platform}.${metric}`
 
 /** Customizable navigation tabs (settings always stay at the bottom). */
-export const NAV_IDS: string[] = ['overview', 'goals', 'studio', ...PLATFORMS]
+export const NAV_IDS: string[] = ['overview', 'goals', 'studio', 'players', ...PLATFORMS]
 /** Translation key of a tab label. */
 export const navLabelKey = (id: string): string =>
-  (id === 'overview' ? 'nav.overview' : id === 'goals' ? 'nav.goals' : id === 'studio' ? 'nav.studio' : `platform.${id}`)
+  (id === 'overview' ? 'nav.overview' : id === 'goals' ? 'nav.goals' : id === 'studio' ? 'nav.studio' : id === 'players' ? 'nav.players' : `platform.${id}`)
 /** Saved order; a tab added since (e.g. Goals in 0.4) is inserted after the overview.
  *  `extra`: tabs of plugin accounts ("plugin:<id>"); a new account is added at the end. */
 export const orderedNav = (saved: string[], extra: string[] = []): string[] => {

@@ -43,8 +43,8 @@ test('Brawlhalla Replays on real replays', { skip: !existsSync(source) && 'no re
   // The plugin reads within a time budget: on a busy machine (parallel tests), it needs more passes.
   // Each pass only returns the games it just read (itemsMode keep): accumulate them, like WaveDash.
   let r = sanitizeRunResult(await run('refresh'), m), loops = 0
-  const items = new Map(r.items.map((i) => [i.id, i]))
-  while (r.backlog > 0 && loops++ < 100) { r = sanitizeRunResult(await run('refresh'), m); r.items.forEach((i) => items.set(i.id, i)) }
+  const items = new Map(r.items.map((i) => [i.id, i])), bank = [...r.players]
+  while (r.backlog > 0 && loops++ < 100) { r = sanitizeRunResult(await run('refresh'), m); r.items.forEach((i) => items.set(i.id, i)); bank.push(...r.players) }
   const games = [...items.values()]
   assert.equal(r.backlog, 0)
   const all = run.logs.join('\n'), failed = [...all.matchAll(/(\d+) unreadable/g)].reduce((s, x) => s + Number(x[1]), 0)
@@ -56,8 +56,8 @@ test('Brawlhalla Replays on real replays', { skip: !existsSync(source) && 'no re
   assert.ok(games.length > 0 && games.every((i) => i.ts && i.detail), 'every game is dated and detailed')
 
   const kinds = new Set(games.flatMap((i) => i.detail?.timeline?.events.map((e) => e.kind ?? 'ko') ?? []))
-  assert.ok(kinds.has('ko') && kinds.has('action'), `frise enrichie : ${[...kinds].join(', ')}`)
-  assert.ok(games.some((i) => i.detail?.image?.file.endsWith('.jpg')), 'vignette de carte')
+  assert.ok(kinds.has('ko') && kinds.has('action'), `richer timeline: ${[...kinds].join(', ')}`)
+  assert.ok(games.some((i) => i.detail?.image?.file.endsWith('.jpg')), 'map thumbnail')
 
   // Top bar: filters offered, and overview recomputed for a single mode.
   assert.deepEqual(r.filters.map((f) => f.key), ['mode', 'patch', 'period'])
@@ -73,7 +73,19 @@ test('Brawlhalla Replays on real replays', { skip: !existsSync(source) && 'no re
   const player = games[0].detail!.table?.rows.map((row) => String(row[0])).find((n) => n && !/close/i.test(n))
   if (player) assert.ok(sanitizeDetail(await run('search', { query: player.replace(/^.*\|\s*/, '').slice(0, 20) })), 'player search')
   const cross = sanitizeDetail(await run('cross', { cross: { who: '', measure: m.cross!.measures[0].key, a: m.cross!.dimensions[0].key, b: 'none' } }))
-  assert.ok(cross?.bars?.length || cross?.table, 'croisement')
+  assert.ok(cross?.bars?.length || cross?.table, 'cross tool')
+
+  // Player bank: one record per player and per game read, with the same game identifier for every player of a game.
+  const byGame = new Map<string, number>()
+  for (const p of bank) byGame.set(p.game, (byGame.get(p.game) ?? 0) + 1)
+  assert.equal(byGame.size, 40, 'one game identifier per replay')
+  assert.ok([...byGame.values()].every((n) => n >= 2), 'every game has at least two players')
+  const counts = new Map<string, number>()
+  for (const p of bank) counts.set(p.key, (counts.get(p.key) ?? 0) + 1)
+  const top = [...counts].sort((a, b) => b[1] - a[1])[0][0]
+  const sheet = sanitizeDetail(await run('player', { records: bank.filter((p) => p.key === top) }))
+  assert.equal(sheet?.stats?.find((x) => x.label === 'Games recorded')?.value, counts.get(top))
+  assert.ok(sheet?.tables?.some((t) => t.title === 'Legends'), 'legends of the player')
 })
 
 test('Brawlhalla (official API): clear messages without a key or with an invalid input', async () => {

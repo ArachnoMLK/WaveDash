@@ -49,6 +49,7 @@ Then in WaveDash: **Plugins › Install a plugin** (or drop the file onto the wi
 | `notices` | `true` if the plugin sends notifications (`notices` in its result, see below). Shown at install time; each plugin can be muted in Settings › Notifications. |
 | `search` | `true` if the script defines `search`: the account page then shows the top search bar. |
 | `cross` | "Cross your data" tool: `{ "measures": [{ "key", "label" }], "dimensions": [{ "key", "label" }] }` (2 to 12 each). The script defines `cross(ctx)`; `ctx.cross` = `{ who, measure, a, b }` (`b` may be `none`); it returns a detail, usually `bars` (`{ title, categories, series: [{ name, values }], stacked }`) and a table. |
+| `players` | `true` if the plugin feeds the **player bank** (`players` in its result) and defines `player(ctx)`, which builds a player's sheet for the **Players** page (see below). |
 | `itemsMode` | `replace` (default): each refresh replaces the item list. `keep`: returned items are added to the ones already saved (same `id` = updated), up to 20,000 per account; the page shows them 50 at a time, with a month filter. Useful for a history (one game per file, for example). |
 | `refreshMinutes` | minimum delay between two refreshes (5 to 1440, 30 by default). |
 
@@ -90,9 +91,15 @@ var plugin = {
 
 **`notices`** (manifest `notices: true`): at most 3 notifications per run (`title` 40 characters, `text` 200, `direction` `up` or `down`), sent like a milestone (Windows notification, sound, celebration, history). Each `id` is sent **only once** per account: give each event a new identifier. The user can mute a plugin's notifications in Settings › Notifications.
 
+**`players`** (manifest `players: true`): up to 3,000 records per run, one per player and per game: `{ key, name, game, ts, data }`. `key` is a stable player identifier (letters, digits, `.` `:` `|` `-` `_`, at most 64; e.g. an account ID), `game` identifies the game and must be **the same for every player who recorded it** (derive it from the game content, not from a file name), so a game imported twice is stored once. `data` holds up to 40 fields: numbers, texts (300 characters) or lists of up to 16 numbers. WaveDash stores them in its own table; nothing is sent anywhere.
+
+The **Players** page searches the bank by name (current or former) or exact `key`. Opening a player calls `player(ctx)` with `ctx.records`, the player's records newest first (3,000 at most, from this PC and imported files), and shows the detail it returns (same format as `detail`). Nothing is saved and the function has no folder access.
+
+During the test phase the bank is shared by file: **Export my data** writes a `.wdbank` file (gzipped JSON with only the records read on this PC, never the source files), and **Import** merges `.wdbank` files received from other players; every row is validated again, and the rows of one imported file can be removed together.
+
 **`history` is authoritative**: for each metric, the points already saved between the first returned point and now are replaced by these. A plugin that fills in past data (for example files read over several runs) thus corrects the values computed before; older points are left untouched.
 
-`ctx` contains: `inputs` (entered values), `secrets` (your keys, decrypted), `lang` (interface language: `en`, `fr`, `es`, `pt`, `de`, `it`, `ja`, `zh` or `ar`), `account` (`{ externalId, displayName }`, in `refresh`).
+`ctx` contains: `records` (in `player` only), `inputs` (entered values), `secrets` (your keys, decrypted), `lang` (interface language: `en`, `fr`, `es`, `pt`, `de`, `it`, `ja`, `zh` or `ar`), `account` (`{ externalId, displayName }`, in `refresh`).
 
 An item can also carry an optional **`detail`**, shown under its row when clicked. Every part is optional:
 
@@ -167,11 +174,12 @@ A plugin account page shows the error of the last refresh and a **log** (`host.l
 
 ## Bundled plugin: Brawlhalla Replays
 
-`examples/brawlhalla-replays-1.10.1.wdsh` reads **all** the `.replay` files of a folder, plus the imported ones (`folder` permission, no network).
+`examples/brawlhalla-replays-1.11.0.wdsh` reads **all** the `.replay` files of a folder, plus the imported ones (`folder` permission, no network).
 
 - **Curve and cards**: games, wins, losses, win rate, stocks taken and lost, average length, presses per minute.
 - **Top bar**: Mode (1v1 Unranked, 1v1 Ranked, 2v2 Friendly, 2v2 Ranked, 3v3 Ranked, then the other modes played), Patch and Period. The whole overview, the game list, the search and the cross tool are limited to the choice.
 - **Overview**: key figures, tables per legend, map, mode, teammate, opponent, day and hour, direction of your dodges, breakdown of your attacks.
+- **Player bank**: every player of every game read (yourself included) is recorded with their legend, result, mode, map, KOs, dodges, attacks, jumps, throws, presses per minute, teammates and opponents. The **Players** page shows any player's sheet from all the games recorded on this PC and in imported `.wdbank` files.
 - **Game detail**: map thumbnail (if you give the game's `images\thumbnails` folder: WaveDash shows it from your install, no image ships with the plugin), map, mode, patch, date, length, lives, settings; for each player, legend, weapons, stance, placement, KOs taken, KOs dealt (in 1v1), light and heavy attacks per direction, dodges, jumps, throws, taunts, movement time, presses per minute; dodge direction grid, activity curve every 15 s, game timeline (KOs, with their author in 1v1; weapon throws; taunts).
 
 Every game of the folder counts: the totals, the curve (dated by each file's date) and the game list go back to the oldest replay. The plugin decompresses each file itself (table-driven inflate in JavaScript, checked identical to zlib on 9012 files) inside the sandbox: about 50 ms per replay in WaveDash, 2 s of reading per run. On first install, it reports the rest (`backlog`) and WaveDash reruns it every few seconds: about 20 to 30 minutes for 9000 replays, only once. Afterwards, only new files are read. The cache keeps only a summary of each game (about 100 bytes); the detail is sent once to WaveDash, which keeps it (`itemsMode: keep`). The name field accepts several names separated by commas (useful after a name change). The catch-up runs in the plugin process: the interface stays smooth meanwhile.

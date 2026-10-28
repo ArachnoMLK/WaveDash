@@ -49,6 +49,8 @@ export interface PluginManifest {
   notices: boolean
   /** The script defines `view`: with the top bar filters (`filters` in its result), it recomputes the overview. */
   views: boolean
+  /** The plugin feeds the player bank (`players` in its result) and defines `player`, which builds a player's sheet from their records. */
+  players: boolean
   /** "Cross your data" tool: measures and axes offered in the menus; the script then defines `cross`. */
   cross?: { measures: { key: string; label: LocalText }[]; dimensions: { key: string; label: LocalText }[] }
   refreshMinutes: number
@@ -183,7 +185,7 @@ export function validateManifest(raw: unknown): Result {
   const refresh = typeof m.refreshMinutes === 'number' && Number.isFinite(m.refreshMinutes) ? Math.min(1440, Math.max(5, Math.round(m.refreshMinutes))) : 30
   return { ok: true, manifest: { wdsh: 1, id: m.id, name: m.name.trim(), version: m.version, author, description, minAppVersion: m.minAppVersion as string | undefined, entry,
     permissions: { network: network as string[], folder, folderExtensions: (exts as string[]).map((e) => e.toLowerCase()), images },
-    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, notices: m.notices === true, views: m.views === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
+    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, notices: m.notices === true, views: m.views === true, players: m.players === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
 }
 
 /* ---------- Results returned by a plugin ---------- */
@@ -227,6 +229,8 @@ export interface PluginRunResult {
   notices: PluginNotice[]
   /** Top bar filters (manifest `views: true`). */
   filters: PluginFilter[]
+  /** Player bank records (manifest `players: true`). */
+  players: PlayerRecord[]
 }
 export interface PluginNotice { id: string; title: string; text: string; direction: 'up' | 'down' }
 /** Top bar filter (e.g. Mode, Patch, Period). `field`: item column filtered by exact match; "$ts": the
@@ -246,6 +250,29 @@ export function sanitizeFilters(raw: unknown): PluginFilter[] {
   }
   return out
 }
+/** One player seen in one game. `key`: stable player identifier chosen by the plugin (e.g. an account ID); `game`: identifier
+ *  of the game, identical for every player who recorded it, so the same game imported twice is stored once. `data`: numbers,
+ *  short texts or short lists of numbers; the plugin's `player` function reads them back to build the sheet. */
+export interface PlayerRecord { key: string; name: string; game: string; ts: number; data: Record<string, string | number | number[]> }
+export const PLAYER_LIMITS = { perRun: 3000, fields: 40, text: 300, list: 16, sheet: 3000 }
+const PLAYER_KEY_RE = /^[\w.:|-]{1,64}$/
+export function sanitizePlayerRecord(raw: unknown, now = Date.now()): PlayerRecord | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>, L = PLAYER_LIMITS, ts = num(r.ts)
+  if (typeof r.key !== 'string' || !PLAYER_KEY_RE.test(r.key) || typeof r.game !== 'string' || !PLAYER_KEY_RE.test(r.game)) return null
+  if (typeof r.name !== 'string' || !r.name.trim() || ts === null || ts <= 0 || ts > now + 86_400_000) return null
+  const data: PlayerRecord['data'] = {}
+  if (r.data && typeof r.data === 'object' && !Array.isArray(r.data)) {
+    for (const [k, v] of Object.entries(r.data as Record<string, unknown>).slice(0, L.fields)) {
+      if (!/^[a-zA-Z][a-zA-Z0-9_]{0,15}$/.test(k)) continue
+      if (typeof v === 'string') data[k] = v.slice(0, L.text)
+      else if (Array.isArray(v)) data[k] = v.slice(0, L.list).map((x) => num(x) ?? 0)
+      else { const n = num(v); if (n !== null) data[k] = n }
+    }
+  }
+  return { key: r.key, name: r.name.trim().slice(0, 40), game: r.game, ts, data }
+}
+
 export const NOTICE_LIMITS = { perRun: 3, id: 80, title: 40, text: 200 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e15 ? v : null)
@@ -322,7 +349,7 @@ export function sanitizeDetail(raw: unknown): PluginDetail | undefined {
 }
 
 export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.now()): PluginRunResult {
-  const out: PluginRunResult = { metrics: {}, items: [], history: [], backlog: 0, notices: [], filters: [] }
+  const out: PluginRunResult = { metrics: {}, items: [], history: [], backlog: 0, notices: [], filters: [], players: [] }
   if (!raw || typeof raw !== 'object') return out
   const r = raw as Record<string, unknown>
   const keys = new Set(m.metrics.map((x) => x.key))
@@ -334,6 +361,7 @@ export function sanitizeRunResult(raw: unknown, m: PluginManifest, now = Date.no
   out.metrics = pickMetrics(r.metrics)
   out.summary = sanitizeDetail(r.summary)
   if (m.views) out.filters = sanitizeFilters(r.filters)
+  if (m.players && Array.isArray(r.players)) for (const p of r.players.slice(0, PLAYER_LIMITS.perRun)) { const x = sanitizePlayerRecord(p, now); if (x) out.players.push(x) }
   const backlog = num(r.backlog)
   out.backlog = backlog !== null && backlog > 0 ? Math.min(1e7, Math.floor(backlog)) : 0
   if (m.notices && Array.isArray(r.notices)) {
@@ -374,6 +402,10 @@ export function sanitizeResolveResult(raw: unknown): { externalId: string; displ
 }
 
 /* ---------- Types exchanged with the interface ---------- */
+/** A player found in the bank: `source` is the plugin that recorded them, `key` their identifier there. */
+export interface BankPlayer { source: string; key: string; name: string; games: number; last: number }
+/** Content of the bank: records, distinct players and games, and records per origin ('local' or 'import:<file>'). */
+export interface BankStats { rows: number; players: number; games: number; origins: { origin: string; rows: number }[] }
 export interface PluginItemsPage {
   items: PluginItem[]
   /** Number of items matching the filter. */

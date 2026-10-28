@@ -9,7 +9,7 @@ var BUDGET_MS = 2000       // past that, stop: the rest follows on the next run 
 var MAX_POINTS = 5000      // maximum history points returned (WaveDash limit)
 var BUCKETS = 76             // storage keys of the game cache (c0 to c75; WaveDash allows 100 keys of 64 KB)
 var PLAYER_BUCKETS = 20      // other players' profiles: keys c76 to c95 (same keys as before, nothing more)
-var CACHE_V = 12           // cache content version: an older entry is read again
+var CACHE_V = 13           // cache content version: an older entry is read again
 
 // Legends: replay identifier = legend_id of the official API = in-game HeroID (HeroTypes table of patch 11.00).
 // A legend newer than this table is shown as "#id".
@@ -17,16 +17,16 @@ var LEGENDS = { 3: 'Bödvar', 4: 'Cassidy', 5: 'Orion', 6: 'Lord Vraxx', 7: 'Gna
 function legendName(id) { return LEGENDS[id] || '#' + id }
 // Weapons of each legend (BaseWeapon1/2) and map names (LevelTypes), taken from the game data, patch 11.00.
 var WEAPONS = { 3: 'Hammer/Sword', 4: 'Pistol/Hammer', 5: 'RocketLance/Spear', 6: 'RocketLance/Pistol', 7: 'Hammer/Spear', 8: 'Spear/Katar', 9: 'Katar/Pistol', 10: 'Sword/Spear', 11: 'RocketLance/Sword', 12: 'Hammer/RocketLance', 13: 'Sword/Pistol', 14: 'Pistol/Spear', 15: 'Hammer/Katar', 16: 'Axe/Hammer', 17: 'Boots/Orb', 18: 'Bow/Katar', 19: 'Axe/Spear', 20: 'Katar/Sword', 21: 'Axe/Pistol', 22: 'Axe/RocketLance', 23: 'Bow/Axe', 24: 'Bow/Sword', 25: 'Bow/Pistol', 26: 'Axe/Sword', 27: 'Katar/Scythe', 28: 'Fists/Hammer', 29: 'Fists/Spear', 30: 'Fists/Sword', 31: 'Katar/Axe', 32: 'Pistol/Fists', 33: 'Scythe/Spear', 34: 'Scythe/Pistol', 35: 'Scythe/Fists', 36: 'Bow/Hammer', 37: 'RocketLance/Scythe', 38: 'Fists/Katar', 39: 'Cannon/Sword', 40: 'Cannon/Axe', 41: 'Cannon/Pistol', 42: 'Spear/Bow', 43: 'Sword/Scythe', 44: 'Katar/Cannon', 45: 'Fists/Bow', 46: 'Fists/Axe', 47: 'Spear/Orb', 48: 'Scythe/Orb', 49: 'Hammer/Orb', 50: 'Fists/Orb', 51: 'RocketLance/Bow', 52: 'Axe/Scythe', 53: 'Fists/Cannon', 54: 'Sword/Greatsword', 55: 'Katar/Greatsword', 56: 'Hammer/Greatsword', 57: 'Pistol/Orb', 58: 'Bow/Scythe', 59: 'Spear/Greatsword', 60: 'Sword/Orb', 61: 'Spear/Cannon', 62: 'Boots/RocketLance', 63: 'Boots/Fists', 64: 'Boots/Pistol', 65: 'Axe/Greatsword', 66: 'Hammer/Boots', 67: 'Chakram/Sword', 68: 'Chakram/Bow', 69: 'Chakram/Scythe', 70: 'Katar/RocketLance', 71: 'Chakram/Spear', 72: 'Orb/Cannon' }
-var WEAPON_NAMES = { Hammer: ['Marteau', 'Hammer'], Sword: ['Épée', 'Sword'], Pistol: ['Blasters', 'Blasters'], RocketLance: ['Lance-roquettes', 'Rocket Lance'],
-  Spear: ['Lance', 'Spear'], Katar: ['Katars', 'Katars'], Axe: ['Hache', 'Axe'], Bow: ['Arc', 'Bow'], Fists: ['Gantelets', 'Gauntlets'], Scythe: ['Faux', 'Scythe'],
-  Cannon: ['Canon', 'Cannon'], Orb: ['Orbe', 'Orb'], Greatsword: ['Grande épée', 'Greatsword'], Boots: ['Bottes', 'Battle Boots'], Chakram: ['Chakram', 'Chakram'] }
+var WEAPON_NAMES = { Hammer: ['Hammer', 'Marteau'], Sword: ['Sword', 'Épée'], Pistol: ['Blasters', 'Blasters'], RocketLance: ['Rocket Lance', 'Lance-roquettes'],
+  Spear: ['Spear', 'Lance'], Katar: ['Katars', 'Katars'], Axe: ['Axe', 'Hache'], Bow: ['Bow', 'Arc'], Fists: ['Gauntlets', 'Gantelets'], Scythe: ['Scythe', 'Faux'],
+  Cannon: ['Cannon', 'Canon'], Orb: ['Orb', 'Orbe'], Greatsword: ['Greatsword', 'Grande épée'], Boots: ['Battle Boots', 'Bottes'], Chakram: ['Chakram', 'Chakram'] }
 // Thumbnail of each map (file in the game's images\thumbnails folder), from LevelTypes of patch 11.00.
 // WaveDash shows it from the player's install ("images" permission); no image ships with the plugin.
 var THUMBS = {"1": "a_LevelThumbNailBitmap03.jpg", "2": "a_LevelThumbNailBitmap01.jpg", "3": "grumpytemple.jpg", "4": "testmap.jpg", "6": "random.jpg", "7": "greathall.jpg", "8": "nordickungfoot.jpg", "10": "gladekungfoot.jpg", "11": "kingspass.jpg", "12": "smallkingspass.jpg", "13": "testmap.jpg", "14": "testmap.jpg", "15": "brawlball_360.jpg", "16": "bombsketball_360.jpg", "17": "Dodgebomb.jpg", "18": "bp12.jpg", "19": "gladeffa.jpg", "20": "Beachbrawl.jpg", "22": "GolemGulch.jpg", "24": "unnamed.jpg", "25": "Lagoon.jpg", "26": "elysiumarena.jpg", "27": "testmap.jpg", "28": "bp13.jpg", "29": "smallwasteland.jpg", "31": "shrekmuddy.jpg", "33": "wasteland.jpg", "35": "shrekswamp.jpg", "39": "brawlball_360.jpg", "40": "enigma_360.jpg", "42": "smallfortressofwolves.jpg", "43": "Cathedral.jpg", "45": "a_LevelThumbNailBitmap03.jpg", "46": "bp14.jpg", "47": "Mammoth.jpg", "49": "testmap.jpg", "50": "testmap.jpg", "51": "testmap.jpg", "53": "brawlball_360.jpg", "54": "wally.jpg", "55": "bigtitansend.jpg", "56": "bigthundergard.jpg", "57": "biggrove.jpg", "58": "biggreathall.jpg", "59": "LabyrinthBig.jpg", "62": "smallthunder.jpg", "63": "MammothSmall.jpg", "64": "SmallBlackguard.jpg", "65": "smallgreathall.jpg", "66": "Lagoon.jpg", "67": "testmap.jpg", "68": "testmap.jpg", "70": "Fangwild.jpg", "71": "testmap.jpg", "72": "testmap.jpg", "73": "Labyrinth.jpg", "74": "Dodgebomb.jpg", "76": "MiamiDome.jpg", "81": "smallgrumpytemple.jpg", "84": "testmap.jpg", "89": "testmap.jpg", "90": "testmap.jpg", "91": "testmap.jpg", "93": "testmap.jpg", "94": "BrawlhavenSmall.jpg", "95": "SteamSmall.jpg", "96": "testmap.jpg", "97": "testmap.jpg", "98": "testmap.jpg", "99": "elysium.jpg", "100": "SmallFangwild.jpg", "101": "testmap.jpg", "102": "testmap.jpg", "103": "testmap.jpg", "104": "testmap.jpg", "105": "climb.jpg", "106": "Lagoon.jpg", "110": "testmap.jpg", "112": "capturetheflag.jpg", "115": "battlehill.jpg", "116": "testmap.jpg", "117": "testmap.jpg", "118": "testmap.jpg", "119": "testmap.jpg", "120": "testmap.jpg", "121": "testmap.jpg", "123": "soccer.jpg", "124": "warshuttle.jpg", "125": "testmap.jpg", "126": "testmap.jpg", "127": "smallgalvanprime.jpg", "128": "bigmiamidome.jpg", "129": "horde.jpg", "130": "buddy.jpg", "131": "treefort.jpg", "132": "ring.jpg", "135": "demonisland.jpg", "136": "bigcrystal.jpg", "137": "crystaltemple.jpg", "138": "climbffa.jpg", "139": "galvanprime.jpg", "140": "synthwavesoccer.jpg", "141": "synthwaveffa.jpg", "143": "spiritrealmshowdown.jpg", "144": "bp11.jpg", "146": "zombie.jpg", "147": "testmap.jpg", "148": "synthwaveffa.jpg", "150": "zombie.jpg", "151": "spiritrealm.jpg", "152": "norsebrawlball.jpg", "153": "norsebrawlball.jpg", "154": "spiritrealmnotraps.jpg", "174": "norsewinterffa.jpg", "175": "sewersffa.jpg", "176": "Lagoon.jpg", "177": "smallsewers.jpg", "178": "fortressoflions.jpg", "180": "climblions.jpg", "184": "suzakucastlewalls.jpg", "185": "suzakucastle.jpg", "186": "smallspace.jpg", "187": "spaceffa.jpg", "188": "climblions.jpg", "190": "wastelandshowdown.jpg", "191": "bustlingsidestreet.jpg", "210": "giantswordffa.jpg", "211": "giantsword.jpg", "212": "westernairtemple.jpg", "214": "SteamSmall.jpg", "215": "battlehill.jpg", "216": "smallrooftop.jpg", "217": "rooftopffa.jpg", "220": "tabletop.jpg", "221": "volleybattle.jpg", "222": "bigwesternairtemple.jpg", "223": "mishimadojo.jpg", "226": "nightmarehorde.jpg", "227": "mishimavolley.jpg", "229": "bp8small.jpg", "231": "bp8ffa.jpg", "232": "bikinibottom.jpg", "233": "nordic1v1.jpg", "234": "starlightfalls.jpg", "235": "bp9small.jpg", "236": "bp9big.jpg", "237": "mustafar.jpg", "238": "bp9tiny.jpg", "242": "powergenerator.jpg", "246": "smallpowergenerator.jpg", "249": "moseisley.jpg", "250": "Labyrinth.jpg", "251": "Labyrinth.jpg", "252": "Labyrinth.jpg", "253": "fortressoflions.jpg", "254": "Labyrinth.jpg", "255": "mustafar.jpg", "258": "lavabrawl_ivaldi.jpg", "263": "bigcrystal.jpg", "266": "batavia.jpg", "269": "shiganshina2v2.jpg", "271": "shiganshina3v3.jpg"}
 var LEVELS = {"1": "Twilight Grove", "2": "Brawlhaven", "3": "Grumpy Temple", "4": "Small Twilight Grove", "6": "Random", "7": "The Great Hall", "8": "World's End Kung Foot", "10": "Enchanted Forest Arena", "11": "Kings Pass", "12": "Small Kings Pass", "13": "Small Kings Pass Test", "14": "Small Kings Pass Test2", "15": "Brawlball Arena", "16": "Bombsketball Arena", "17": "Dodgebomb Arena", "18": "Jikoku", "19": "Enchanted Forest", "20": "Beachbrawl Arena", "22": "Titan's End", "24": "Thundergard Stadium", "25": "Shipwreck Falls", "26": "Elysium Arena", "27": "Brawlball2", "28": "Shadowscar Landing", "29": "Small Wasteland", "31": "Shrek's Muddy Swamp", "33": "The Wasteland", "35": "Shrek's Swamp", "39": "Big Brawlball Arena", "40": "The Enigma", "42": "Small Fortress of Wolves", "43": "Blackguard Keep", "45": "Dev Grid", "46": "Eternity's End", "47": "Mammoth Fortress", "49": "Short Side", "50": "Pillars", "51": "Pit", "53": "Brawlball_4_30", "54": "Wally", "55": "Big Titan's End", "56": "Big Thundergard Stadium", "57": "Big Twilight Grove", "58": "Big Great Hall", "59": "Big Lost Labyrinth", "62": "Small Thundergard Stadium", "63": "Small Mammoth Fortress", "64": "Small Blackguard Keep", "65": "Small Great Hall", "66": "Plain", "67": "Small Titan's End", "68": "Danger Zone", "70": "The Fangwild", "71": "Wheel", "72": "Chute", "73": "Lost Labyrinth", "74": "Big Dodgebomb Arena", "75": "Catch Bombs", "76": "Miami Dome", "81": "Small Grumpy Temple", "84": "Color Platforms", "89": "Tutorial 1", "90": "Tutorial 2", "91": "Tutorial 3", "93": "Sanctuary", "94": "Small Brawlhaven", "95": "Small Enigma", "96": "Big Enigma", "97": "Big Shipwreck Falls", "98": "Big Brawlhaven", "99": "Elysium", "100": "Small Fangwild", "101": "Competitive Grumpy", "102": "Small Lost Labyrinth", "103": "Spike", "104": "Small Cave 2", "105": "Temple Climb", "106": "Paintbrawl", "110": "Flag Battle", "112": "Demon Island CTF", "115": "Plains of Passage", "116": "Crazy Shipwreck Falls", "117": "Crazy Fangwild", "118": "Crazy Titan's End", "119": "Floor is not Lava", "120": "Crazy Thundergard Stadium", "121": "Xull's Murder Box", "123": "Kung Foot Arena", "124": "Apocalypse", "125": "Big Crazy Fangwild", "126": "Fangwild Dodgebomb", "127": "Small Galvan Prime", "128": "Big Miami Dome", "129": "Horde", "130": "Under the Canopy", "131": "Tree Fort", "132": "Ring", "135": "Demon Island", "136": "Big Crystal Temple", "137": "Crystal Temple", "138": "Temple Ruins", "139": "Galvan Prime", "140": "Synthwave Kung Foot", "141": "Sun Drive City", "143": "Spirit Realm Showdown", "144": "Lich's Tomb", "146": "Walker Attack!", "147": "Hiding Plats 2 Electric Boo", "148": "Small Sun Drive City", "150": "FeudingFlats", "151": "Spirit Realm", "152": "World's End Arena", "153": "Big World's End Arena", "154": "Divine Spirit Showdown", "174": "World's End", "175": "The Turtles' Lair", "176": "Small Plain", "177": "Small Turtles' Lair", "178": "Fortress of the Lions", "180": "Siege of Lions", "184": "Suzaku Castle Walls", "185": "Suzaku Castle", "186": "Void Minor", "187": "Void Major", "188": "Cannonball Mania", "190": "The Wasteland Showdown", "191": "Bustling Side Street", "210": "Fabled City", "211": "Small Fabled City", "212": "Western Air Temple", "214": "Little Boat", "215": "Frozen Plains", "216": "Florence Rooftop", "217": "Florence Terrace", "220": "Shorwind Fishing Port", "221": "Thundergard Sands", "222": "Western Air Temple Brawl", "223": "Mishima Dojo", "226": "Nightmare Horde", "227": "TEKKEN Brawl", "229": "Small Terminus", "231": "Terminus", "232": "Bikini Bottom", "233": "Small World's End", "234": "Starlight Falls", "235": "Crumbling Chasm", "236": "Apocalyptic Chasm", "237": "Mustafar", "238": "Crumbled Chasm", "242": "Theed Power Generator", "246": "Small Theed Generator", "249": "Mos Eisley Spaceport", "250": "Flipped90BP6GiantSword", "251": "TutorialBP6GiantSword", "252": "NTLost Labyrinth", "253": "Tutorial Fortress of the Lions", "254": "NTLostLab2", "255": "Mustafar", "258": "Old Ivaldi Mine", "263": "Dragon Port", "266": "Castle Batavia", "269": "Shiganshina District", "271": "Shiganshina District Brawl"}
 // Format version → patch (checked against replay file names).
 var PATCHES = { 261: '10.02', 262: '10.03', 263: '10.04', 264: '10.05', 265: '10.06', 266: '10.07', 267: '10.08', 268: '10.09', 269: '10.10', 270: '10.11', 271: '11.00' }
-function weaponsOf(id, fr) { var w = WEAPONS[id]; return w ? w.split('/').map(function (x) { return (WEAPON_NAMES[x] || [x, x])[fr ? 0 : 1] }).join(' / ') : '—' }
+function weaponsOf(id, fr) { var w = WEAPONS[id]; return w ? w.split('/').map(function (x) { return (WEAPON_NAMES[x] || [x, x])[fr ? 1 : 0] }).join(' / ') : '—' }
 
 /* ───────── inflate (zlib), output capped at `limit` bytes ───────── */
 var LBASE = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258]
@@ -170,8 +170,8 @@ function utf8(b) {
 /* ───────── game data checksum (from BrawlhallaReplayLibrary, ReplayGameData.CalculateChecksum) ───────── */
 function add() { var s = 0; for (var i = 0; i < arguments.length; i++) s = (s + arguments[i] % 4294967296) % 4294967296; return s }
 function popcount(v) { var n = 0; while (v) { n += v & 1; v >>>= 1 } return n }
-function roundEven(x) { var f = Math.floor(x), d = x - f; return d > 0.5 || (d === 0.5 && f % 2) ? f + 1 : f }   // arrondi de Math.Round en C#
-function FormatError(version) { this.message = 'format non reconnu (version ' + version + ')'; this.unknownFormat = true }
+function roundEven(x) { var f = Math.floor(x), d = x - f; return d > 0.5 || (d === 0.5 && f % 2) ? f + 1 : f }   // rounding of C#'s Math.Round
+function FormatError(version) { this.message = 'unrecognized format (version ' + version + ')'; this.unknownFormat = true }
 
 /* ───────── replay parsing (stops before the "inputs") ───────── */
 function parseBuffer(buf) {
@@ -329,7 +329,7 @@ function saveCache(entries) {
   for (var k in entries) { var b = bucketOf(k.split('|')[0]); (buckets[b] = buckets[b] || {})[k] = entries[k] }
   for (var i = 0; i < BUCKETS; i++) {
     var key = 'c' + i, next = buckets[key] ? JSON.stringify(buckets[key]) : ''
-    if (next.length > 60000) { host.log('Cache plein (' + key + ') : certains replays seront relus.'); continue }
+    if (next.length > 60000) { host.log('Cache full (' + key + '): some replays will be read again.'); continue }
     if ((host.storage.get(key) || '') !== next) host.storage.set(key, next)
   }
 }
@@ -796,9 +796,9 @@ function searchGames(query, lang, filters) {
 
 
 /* ───────── cross your data (WaveDash "Cross" tool) ───────── */
-var CROSS_DIMS = { legend: ['Légendes', 'Legends'], map: ['Cartes', 'Maps'], mode: ['Modes', 'Modes'], result: ['Résultat', 'Result'], side: ['Avec / contre', 'With / against'],
-  month: ['Mois', 'Month'], weekday: ['Jour', 'Day'], hour: ['Heure', 'Hour'] }
-var CROSS_MEASURES = { games: ['Parties', 'Games'], wins: ['Victoires', 'Wins'], losses: ['Défaites', 'Losses'], winrate: ['% de victoire', 'Win %'] }
+var CROSS_DIMS = { legend: ['Legends', 'Légendes'], map: ['Maps', 'Cartes'], mode: ['Modes', 'Modes'], result: ['Result', 'Résultat'], side: ['With / against', 'Avec / contre'],
+  month: ['Month', 'Mois'], weekday: ['Day', 'Jour'], hour: ['Hour', 'Heure'] }
+var CROSS_MEASURES = { games: ['Games', 'Parties'], wins: ['Wins', 'Victoires'], losses: ['Losses', 'Défaites'], winrate: ['Win %', '% de victoire'] }
 
 function crossData(ctx) {
   var fr = ctx.lang === 'fr', R = ctx.cross || {}, who = String(R.who || '').trim(), mine = wantedList(ctx.inputs.playerName)
@@ -851,7 +851,7 @@ function crossData(ctx) {
     return R.measure === 'wins' ? w : R.measure === 'losses' ? l : R.measure === 'winrate' ? (w + l ? Math.round(w * 1000 / (w + l)) / 10 : 0) : list.length
   }
   var A = CROSS_DIMS[R.a] ? R.a : 'legend', B = R.b && R.b !== 'none' && R.b !== A && CROSS_DIMS[R.b] ? R.b : null
-  var M = CROSS_MEASURES[R.measure] ? R.measure : 'games', name = function (o) { return o[fr ? 0 : 1] }
+  var M = CROSS_MEASURES[R.measure] ? R.measure : 'games', name = function (o) { return o[fr ? 1 : 0] }
   var cats = orderOf(A, rows, 25)
   var groups = B ? orderOf(B, rows, 8) : [name(CROSS_MEASURES[M])]
   var series = groups.map(function (gv) {
@@ -863,6 +863,105 @@ function crossData(ctx) {
     bars: [{ title: title, unit: M === 'winrate' ? '%' : undefined, stacked: !!B && M !== 'winrate', categories: cats, series: series }],
     tables: [{ title: title, columns: [name(CROSS_DIMS[A])].concat(series.map(function (s) { return s.name })),
       rows: cats.map(function (c, i) { return [c].concat(series.map(function (s) { return M === 'winrate' ? s.values[i] + ' %' : s.values[i] })) }) }]
+  }
+}
+
+/* ───────── player bank (WaveDash "Players" page) ───────── */
+// One record per player and per game. The game identifier comes from the game content (map, length, players, KOs), so the
+// same game recorded by two people gets the same identifier and is stored once. Texts are stored in English; the sheet translates.
+function fnv(str, seed) { var h = seed >>> 0; for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0 } return ('0000000' + h.toString(16)).slice(-8) }
+function gameIdOf(c) {
+  var who = c.n.map(function (n) { return (n[7] || n[0]) + ':' + n[2] }).sort().join(',')
+  var s = c.m + '|' + c.l + '|' + who + '|' + c.k.map(function (k) { return k.join(':') }).join(',')
+  return 'g' + fnv(s, 2166136261) + fnv(s, 3141592653)
+}
+// Player key: account identifier when there is one; otherwise (games before patch 10.09, second local player) a hash of the name.
+function bankKeyOf(e) { return e.pid && !/•\d+$/.test(e.name) ? 'p' + e.pid : 'n' + fnv(bareName(e.name), 2166136261) }
+function bankRecords(file, c, a) {
+  var places = a.ents.map(function (e) { return c.s[e.id] }).filter(function (v) { return v > 0 })
+  var best = places.length ? Math.min.apply(null, places) : 0, decided = places.some(function (v) { return v !== best })
+  var game = gameIdOf(c), mode = modeLabel(c, 'en'), map = mapName(file, c, false), patch = patchOf(file, c), out = []
+  var tag = function (e) { return e.name.slice(0, 32).replace(/[;#]/g, ' ') + '#' + bankKeyOf(e) }
+  a.ents.forEach(function (e) {
+    if (e.bot) return
+    var place = c.s[e.id], q = presses(c, e.id), apm = apmOf(c, e.id)
+    var others = a.ents.filter(function (o) { return o !== e && !o.bot })
+    var d = { L: e.hero, w: place > 0 && decided ? (place === best ? 1 : 0) : -1, pl: place > 0 ? place : 0, md: mode, mp: map, pt: patch,
+      du: Math.round(c.l / 1000), d: a.deaths[e.id].length, k: a.kills[e.id] === null ? -1 : a.kills[e.id], st: e.stance, pid: e.pid || 0,
+      mates: others.filter(function (o) { return a.sameTeam(o, e) }).map(tag).join(';'), opps: others.filter(function (o) { return !a.sameTeam(o, e) }).map(tag).join(';') }
+    if (q) { d.g = q.g; d.at = q.l.concat(q.h); d.x = q.x || [0, 0, 0]; d.dg = q.d; d.j = q.j; d.th = q.t; d.tt = q.tt }
+    if (apm !== null) d.a = Math.round(apm)
+    out.push({ key: bankKeyOf(e), name: e.name.slice(0, 40), game: game, ts: file.mtime, data: d })
+  })
+  return out
+}
+/** A player's sheet from their records (newest first): totals, habits, legends, modes, maps, teammates, opponents, recent games. */
+function playerSheet(recs, fr) {
+  if (!recs.length) return undefined
+  recs = recs.slice().sort(function (x, y) { return y.ts - x.ts })
+  var n = recs.length, W = 0, Lo = 0, deaths = 0, kos = 0, duels = 0, apm = 0, apmN = 0, inN = 0, dg = 0, j = 0, th = 0
+  var g = [0, 0, 0, 0, 0, 0, 0, 0, 0], at = [0, 0, 0, 0, 0, 0], x = [0, 0, 0], names = {}, pid = 0
+  var legends = {}, modes = {}, maps = {}, mates = {}, opps = {}
+  var bump = function (o, k, r) { if (!k) return; var e = o[k] || (o[k] = { n: 0, w: 0, l: 0 }); e.n++; if (r.data.w === 1) e.w++; else if (r.data.w === 0) e.l++ }
+  recs.forEach(function (r) {
+    var d = r.data
+    if (d.w === 1) W++; else if (d.w === 0) Lo++
+    deaths += d.d || 0
+    if (d.k >= 0) { kos += d.k; duels++ }
+    if (d.a > 0) { apm += d.a; apmN++ }
+    if (d.g) {
+      inN++
+      for (var i = 0; i < 9; i++) g[i] += d.g[i] || 0
+      for (i = 0; i < 6; i++) at[i] += (d.at || [])[i] || 0
+      for (i = 0; i < 3; i++) x[i] += (d.x || [])[i] || 0
+      dg += d.dg || 0; j += d.j || 0; th += d.th || 0
+    }
+    if (!names[r.name] || names[r.name] < r.ts) names[r.name] = r.ts
+    if (d.pid && !pid) pid = d.pid
+    bump(legends, legendName(d.L), r); bump(modes, d.md, r); bump(maps, d.mp, r)
+    String(d.mates || '').split(';').forEach(function (t) { bump(mates, t, r) })
+    String(d.opps || '').split(';').forEach(function (t) { bump(opps, t, r) })
+  })
+  var per = function (v, m) { return m ? Math.round(v * 10 / m) / 10 : '—' }
+  var rateOf = function (e) { return pct(e.w, e.w + e.l) + ' %' }
+  var cols = fr ? ['Parties', 'V', 'D', '% V'] : ['Games', 'W', 'L', 'Win %']
+  var table = function (title, first, o, limit, label) {
+    var rows = Object.keys(o).map(function (k) { var e = o[k]; return [label ? label(k) : k, e.n, e.w, e.l, rateOf(e)] }).sort(function (a, b) { return b[1] - a[1] }).slice(0, limit)
+    return { title: title, columns: [first].concat(cols), rows: rows }
+  }
+  var who = function (t) { return t.slice(0, t.lastIndexOf('#')) || t }
+  var latest = Object.keys(names).sort(function (a, b) { return names[b] - names[a] })
+  var day = function (ts) { return fmtDate(ts).slice(0, 10) }
+  var modeName = function (m) { return m === 'Online room' ? tr(fr, m, 'Salon en ligne') : m === 'Offline' ? tr(fr, m, 'Hors ligne') : m }
+  var result = function (w) { return w === 1 ? tr(fr, 'Win', 'Victoire') : w === 0 ? tr(fr, 'Loss', 'Défaite') : '—' }
+  return {
+    chips: [latest[0]].concat(pid ? ['ID ' + pid] : []).concat(latest.length > 1 ? [tr(fr, 'Also: ', 'Aussi : ') + latest.slice(1, 6).join(', ')] : []),
+    stats: [
+      { label: tr(fr, 'Games recorded', 'Parties enregistrées'), value: n },
+      { label: tr(fr, 'Win rate', 'Taux de victoire'), value: pct(W, W + Lo) + ' %' },
+      { label: tr(fr, 'Stocks lost / game', 'KOs subis / partie'), value: per(deaths, n) },
+      { label: tr(fr, 'KOs dealt / 1v1 game', 'KOs infligés / partie 1v1'), value: per(kos, duels) },
+      { label: tr(fr, 'Presses / min', 'Appuis / min'), value: apmN ? Math.round(apm / apmN) : '—' },
+      { label: tr(fr, 'Dodges / game', 'Esquives / partie'), value: per(dg, inN) },
+      { label: tr(fr, 'Likely dashes / game', 'Dashs probables / partie'), value: per(x[2], inN) },
+      { label: tr(fr, 'Likely chase dodges / game', 'Chase dodges probables / partie'), value: per(x[1], inN) },
+      { label: tr(fr, 'Gravity cancels / game', 'Gravity cancels / partie'), value: per(x[0], inN) },
+      { label: tr(fr, 'Jumps / game', 'Sauts / partie'), value: per(j, inN) },
+      { label: tr(fr, 'Throws / game', 'Lancers / partie'), value: per(th, inN) },
+      { label: tr(fr, 'First seen', 'Vu la première fois'), value: day(recs[n - 1].ts) },
+      { label: tr(fr, 'Last seen', 'Vu la dernière fois'), value: day(recs[0].ts) }],
+    grids: inN ? [
+      { title: tr(fr, 'Dodge directions', 'Direction des esquives'), rows: GRID_ROWS, cols: GRID_COLS, values: grid3(g) },
+      { title: tr(fr, 'Attacks', 'Attaques'), rows: [tr(fr, 'Light', 'Légère'), tr(fr, 'Heavy', 'Lourde')], cols: [tr(fr, 'Neutral', 'Neutre'), tr(fr, 'Side', 'Côté'), tr(fr, 'Down', 'Bas')], values: [at.slice(0, 3), at.slice(3, 6)] }] : [],
+    tables: [
+      table(tr(fr, 'Legends', 'Légendes'), tr(fr, 'Legend', 'Légende'), legends, 30),
+      table('Modes', 'Mode', modes, 15, modeName),
+      table(tr(fr, 'Maps', 'Cartes'), tr(fr, 'Map', 'Carte'), maps, 20),
+      table(tr(fr, 'Teammates', 'Coéquipiers'), tr(fr, 'Player', 'Joueur'), mates, 20, who),
+      table(tr(fr, 'Opponents (their result)', 'Adversaires (son résultat)'), tr(fr, 'Player', 'Joueur'), opps, 20, who),
+      { title: tr(fr, 'Recent games', 'Dernières parties'), columns: fr ? ['Date', 'Résultat', 'Légende', 'Mode', 'Carte', 'Durée'] : ['Date', 'Result', 'Legend', 'Mode', 'Map', 'Length'],
+        rows: recs.slice(0, 30).map(function (r) { return [fmtDate(r.ts), result(r.data.w), legendName(r.data.L), modeName(r.data.md || '—'), r.data.mp || '—', fmtDur(r.data.du || 0)] }) }
+    ].filter(function (t) { return t.rows.length })
   }
 }
 
@@ -883,13 +982,15 @@ var plugin = {
   },
   // "Cross your data" tool: a player, a measure, an axis and an optional second axis.
   cross: async function (ctx) { return crossData(ctx) },
+  // Player bank (WaveDash "Players" page): the sheet of one player, from their records (this PC and imported files).
+  player: async function (ctx) { return playerSheet(ctx.records || [], ctx.lang === 'fr') },
 
   refresh: async function (ctx) {
     var lang = ctx.lang, wanted = wantedList(ctx.inputs.playerName)
     var myPids = {}; try { myPids = JSON.parse(host.storage.get('myPids') || '{}') } catch (e) { myPids = {} }
     var learned = false
     var files = host.files.list()                                       // the whole folder, newest to oldest
-    var cache = loadCache(), next = {}, fresh = 0, failed = 0, backlog = 0, items = [], unknown = {}
+    var cache = loadCache(), next = {}, fresh = 0, failed = 0, backlog = 0, items = [], unknown = {}, bank = []
     var players = loadPlayers()
     var started = Date.now()                                            // the budget only counts replay reading
     for (var i = 0; i < files.length; i++) {
@@ -906,9 +1007,10 @@ var plugin = {
         // The cache keeps only a summary per game; the detail goes straight to WaveDash, which stores it.
         next[key] = { v: CACHE_V, t: f.mtime, s: a.me ? summaryOf(f, full, a, lang) : 0 }
         addPlayers(players, full, a, f.mtime)
+        bank = bank.concat(bankRecords(f, full, a))
         if (a.me) items.push(buildItem(f, full, a, lang))
       } catch (e) {
-        failed++; host.log('Illisible : ' + f.name + ' — ' + (e && e.message ? e.message : e)); next[key] = { v: CACHE_V, bad: 1 }
+        failed++; host.log('Unreadable: ' + f.name + ' — ' + (e && e.message ? e.message : e)); next[key] = { v: CACHE_V, bad: 1 }
       }
     }
     saveCache(next)
@@ -940,6 +1042,6 @@ var plugin = {
     if (decided) metrics.winrate = T.wins * 100 / decided
     if (T.games) metrics.avg_duration = T.dur / T.games
     if (T.apmN) metrics.apm = T.apm / T.apmN
-    return { metrics: metrics, items: items.slice(0, 200), history: history, summary: buildSummary(games, lang), backlog: backlog, filters: filtersOf(games, lang === 'fr') }
+    return { metrics: metrics, items: items.slice(0, 200), history: history, summary: buildSummary(games, lang), backlog: backlog, filters: filtersOf(games, lang === 'fr'), players: bank }
   }
 }

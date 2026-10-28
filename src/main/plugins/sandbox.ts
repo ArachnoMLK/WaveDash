@@ -3,7 +3,7 @@
 // below, each function of which is checked on the WaveDash side according to the manifest permissions.
 // Every run uses a fresh engine, with limits on memory, compute time and requests.
 import type { QuickJSContext, QuickJSDeferredPromise } from 'quickjs-emscripten'
-import type { PluginManifest } from '@shared/plugin'
+import type { PlayerRecord, PluginManifest } from '@shared/plugin'
 import { setMaxListeners } from 'events'
 import { FolderAccess, listFiles, readFileSafe } from './files'
 import { httpRequest, NetConfig, NetError } from './net'
@@ -32,8 +32,8 @@ export const DEFAULT_LIMITS: Limits = {
 export interface RunRequest {
   manifest: PluginManifest
   script: string
-  fn: 'resolve' | 'refresh' | 'search' | 'cross' | 'view'
-  ctx: { inputs: Record<string, string>; secrets: Record<string, string>; lang: string; account?: { externalId: string; displayName: string }; query?: string; cross?: Record<string, string>; filters?: Record<string, string> }
+  fn: 'resolve' | 'refresh' | 'search' | 'cross' | 'view' | 'player'
+  ctx: { inputs: Record<string, string>; secrets: Record<string, string>; lang: string; account?: { externalId: string; displayName: string }; query?: string; cross?: Record<string, string>; filters?: Record<string, string>; records?: PlayerRecord[] }
   storage: { get(key: string): string | null; set(key: string, value: string): void }
   /** Present only if the manifest asks for the "folder" permission and the user picked one. */
   folder?: FolderAccess

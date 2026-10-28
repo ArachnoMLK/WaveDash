@@ -350,7 +350,7 @@ function DetailImageView({ accountId, file, caption }: { accountId: number; file
   return <figure className="detail-image"><img src={src} alt={caption ?? ''} />{caption && <figcaption>{caption}</figcaption>}</figure>
 }
 
-function DetailView({ accountId, detail, th, t, onClose, layoutKey }: { accountId: number; detail: PluginDetail; th: ChartTheme; t: (k: string, v?: Record<string, string | number>) => string; onClose?: () => void; layoutKey?: string }): JSX.Element {
+export function DetailView({ accountId, detail, th, t, onClose, layoutKey }: { accountId: number; detail: PluginDetail; th: ChartTheme; t: (k: string, v?: Record<string, string | number>) => string; onClose?: () => void; layoutKey?: string }): JSX.Element {
   const tables = [...(detail.table ? [detail.table] : []), ...(detail.tables ?? [])]
   const blocks: { id: string; title: string; node: ReactNode }[] = []
   if (detail.stats) blocks.push({ id: 'stats', title: t('pp.keyFigures'), node: <div className="mini-stats">{detail.stats.map((s, i) => <div key={i}><span className="small muted">{s.label}</span><b>{s.value}</b></div>)}</div> })

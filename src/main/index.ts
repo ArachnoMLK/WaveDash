@@ -34,6 +34,11 @@ function createWindow(): void {
     webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   })
   win.once('ready-to-show', () => win?.show())
+  // Safety net: on some launches (translucent window, first start after an update) 'ready-to-show' never fires
+  // and the window stayed hidden. Show it once the page has loaded, or after 4 s at the latest.
+  const showOnce = (): void => { if (win && !win.isDestroyed() && !win.isVisible()) win.show() }
+  win.webContents.once('did-finish-load', () => setTimeout(showOnce, 500))
+  setTimeout(showOnce, 4000)
   // After a minimize, some setups (translucent window) do not repaint the content: force a render.
   const repaint = (): void => win?.webContents.invalidate()
   win.on('restore', repaint); win.on('show', repaint); win.on('maximize', repaint); win.on('unmaximize', repaint)

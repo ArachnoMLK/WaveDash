@@ -13,6 +13,7 @@ import { Overview } from './pages/Overview'
 import { PlatformPage } from './pages/PlatformPage'
 import { Settings } from './pages/Settings'
 import { StudioPage } from './pages/StudioPage'
+import { PlayersPage } from './pages/PlayersPage'
 
 /** Style of the background layer according to the chosen mode (null = theme default background). */
 function backgroundStyle(s: AppSettings, bgUrl: string | null): CSSProperties | null {
@@ -45,6 +46,7 @@ export function App(): JSX.Element {
   const page = current === 'overview' ? <Overview onAdd={openAdd} onOpen={setRoute} />
     : current === 'goals' ? <Goals />
     : current === 'studio' ? <StudioPage />
+    : current === 'players' ? <PlayersPage />
     : current === 'plugins' ? <PluginsPage openPath={incoming} onOpenHandled={() => setIncoming(null)} />
     : pluginAccountOfRoute(current) !== null ? <PluginPage accountId={pluginAccountOfRoute(current)!} />
     : current === 'settings' ? <Settings />

@@ -4,6 +4,8 @@ A Windows dashboard for your **YouTube, Brawlhalla, TikTok and Discord** stats, 
 
 Electron · React · TypeScript · SQLite · ECharts. Grey/black/white design, frosted glass, dark and light themes, 9 languages.
 
+> **Version 1.7.0**: new **Players** page, a player bank fed by your replays: search any player you met (by current or former name, or ID) and see their sheet (legends, win rate, habits, teammates, opponents, recent games). For the test phase, banks are shared with `.wdbank` files (export / import), which only hold extracted data, never replay files.
+>
 > **Version 1.6.0**: WaveDash follows the Windows language on first launch and is available in English, French, Spanish, Portuguese (Brazil), German, Italian, Japanese, Chinese (Simplified) and Arabic (right-to-left layout). The code, docs and plugins are now English-first.
 >
 > **Version 1.5.0**: Studio emotes loop like in game (intro, loop, ending), and exports can last a **chosen duration** (e.g. 10 s of a looping emote). Also: a MiniaMaker-style **thumbnail editor** (layers, game asset bank, styled texts, effects, lights, colour grading, YouTube export), attacks sorted by move (NLight, SAir, Recovery…), animated preview on hover, a timeline with frame selection, and composition of several renders.
@@ -17,6 +19,7 @@ Electron · React · TypeScript · SQLite · ECharts. Grey/black/white design, f
 - **Local history** (SQLite) from the moment tracking starts; line, area, bar, pie and radar charts.
 - **Overview**, **goals**, **milestones** (10, 20, 50, 100…) with Windows notifications and a celebration screen, data **export** (CSV, JSON, PDF report).
 - **Demo mode**: simulated data to try everything without an API key.
+- **Player bank** (Players page): every player seen in your replays, searchable by name or ID, with a full sheet; banks can be merged between testers with `.wdbank` files.
 - **Customization**: theme, language, glass (the desktop can stay visible even when the window is enlarged), animations, tabs you can rename, reorder and hide (plugins included), refresh rate, chart type per statistic, launch with Windows, system tray.
 - **Silent automatic updates** from GitHub Releases (installer checked with SHA-512).
 

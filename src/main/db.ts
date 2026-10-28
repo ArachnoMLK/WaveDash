@@ -5,7 +5,7 @@ import { join } from 'path'
 import {
   Account, DEFAULT_SETTINGS, ItemStat, LatestMetrics, MetricKey, MilestoneEvent, Platform, Point, Settings
 } from '@shared/types'
-import { ColumnStat, PLUGIN_LIMITS, PluginItem, PluginItemsPage } from '@shared/plugin'
+import { BankPlayer, BankStats, ColumnStat, PLUGIN_LIMITS, PlayerRecord, PluginItem, PluginItemsPage } from '@shared/plugin'
 
 let db: Database.Database
 
@@ -74,6 +74,14 @@ export function initDb(): void {
       PRIMARY KEY (account_id, item_id)
     );
     CREATE INDEX IF NOT EXISTS idx_plugin_items ON plugin_items(account_id, ts);
+    -- Player bank: one row per player and per game, fed by plugins (origin 'local') or imported from .wdbank files.
+    -- The same game recorded by several people has the same identifier, so it is stored once.
+    CREATE TABLE IF NOT EXISTS player_bank (
+      source TEXT NOT NULL, player TEXT NOT NULL, game TEXT NOT NULL, name TEXT NOT NULL, name_lc TEXT NOT NULL,
+      ts INTEGER NOT NULL, data TEXT NOT NULL, origin TEXT NOT NULL,
+      PRIMARY KEY (source, player, game)
+    );
+    CREATE INDEX IF NOT EXISTS idx_player_bank_player ON player_bank(source, player, ts);
   `)
   // Migration 0.6.2: plugin items used to be a single JSON in account_meta.
   const old = db.prepare("SELECT account_id, value FROM account_meta WHERE key = 'items'").all() as { account_id: number; value: string }[]
@@ -365,3 +373,60 @@ function columnStat(where: string, args: (number | string)[], key: string): Colu
   }
   return { key, kind: 'cat', n, top: groups.slice(0, 6).map((g) => ({ value: g.v.slice(0, 60), n: g.n })) }
 }
+
+/* ---------- Player bank ---------- */
+/** Saves player records. Local records (read by a plugin on this PC) replace an older copy of the same row;
+ *  imported ones never overwrite what is already known. Returns how many rows were new. */
+export function savePlayerRecords(source: string, rows: PlayerRecord[], origin: string): number {
+  const local = origin === 'local'
+  const st = db.prepare(`INSERT ${local ? 'OR REPLACE' : 'OR IGNORE'} INTO player_bank (source, player, game, name, name_lc, ts, data, origin) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+  const has = db.prepare('SELECT 1 FROM player_bank WHERE source = ? AND player = ? AND game = ?')
+  let added = 0
+  db.transaction(() => {
+    for (const r of rows) {
+      if (!has.get(source, r.key, r.game)) added++
+      st.run(source, r.key, r.game, r.name, r.name.toLowerCase(), Math.round(r.ts), JSON.stringify(r.data), origin)
+    }
+  })()
+  return added
+}
+
+/** Players whose current or former name contains the text, or whose key is exactly the text; most seen first. */
+export function searchPlayers(query: string, limit = 50): BankPlayer[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  const rows = db.prepare(`
+    SELECT b.source, b.player, COUNT(*) AS games, MAX(b.ts) AS last,
+      (SELECT name FROM player_bank n WHERE n.source = b.source AND n.player = b.player ORDER BY n.ts DESC LIMIT 1) AS name
+    FROM player_bank b
+    WHERE (b.source, b.player) IN (SELECT DISTINCT source, player FROM player_bank WHERE instr(name_lc, ?) > 0 OR player = ?)
+    GROUP BY b.source, b.player ORDER BY games DESC LIMIT ?`).all(q, query.trim(), Math.min(200, Math.max(1, limit))) as { source: string; player: string; games: number; last: number; name: string }[]
+  return rows.map((r) => ({ source: r.source, key: r.player, name: r.name, games: r.games, last: r.last }))
+}
+
+/** A player's records, newest first (at most `limit`). */
+export function playerRecords(source: string, key: string, limit: number): PlayerRecord[] {
+  const rows = db.prepare('SELECT player, game, name, ts, data FROM player_bank WHERE source = ? AND player = ? ORDER BY ts DESC LIMIT ?').all(source, key, limit) as { player: string; game: string; name: string; ts: number; data: string }[]
+  const out: PlayerRecord[] = []
+  for (const r of rows) { try { out.push({ key: r.player, game: r.game, name: r.name, ts: r.ts, data: JSON.parse(r.data) }) } catch { /* unreadable row ignored */ } }
+  return out
+}
+
+/** Every record of one origin (export), grouped by source. */
+export function bankRecordsOf(origin: string): { source: string; rows: PlayerRecord[] }[] {
+  const rows = db.prepare('SELECT source, player, game, name, ts, data FROM player_bank WHERE origin = ? ORDER BY source, ts').all(origin) as { source: string; player: string; game: string; name: string; ts: number; data: string }[]
+  const by = new Map<string, PlayerRecord[]>()
+  for (const r of rows) {
+    try { (by.get(r.source) ?? by.set(r.source, []).get(r.source)!).push({ key: r.player, game: r.game, name: r.name, ts: r.ts, data: JSON.parse(r.data) }) } catch { /* unreadable row ignored */ }
+  }
+  return [...by].map(([source, list]) => ({ source, rows: list }))
+}
+
+export function bankStats(): BankStats {
+  const t = db.prepare('SELECT COUNT(*) AS rows, COUNT(DISTINCT source || char(0) || player) AS players, COUNT(DISTINCT game) AS games FROM player_bank').get() as { rows: number; players: number; games: number }
+  const origins = db.prepare('SELECT origin, COUNT(*) AS rows FROM player_bank GROUP BY origin ORDER BY origin').all() as { origin: string; rows: number }[]
+  return { ...t, origins }
+}
+
+/** Forgets every record of one origin (e.g. an imported file); local records are rebuilt by the plugins. */
+export const forgetBankOrigin = (origin: string): number => db.prepare('DELETE FROM player_bank WHERE origin = ?').run(origin).changes
