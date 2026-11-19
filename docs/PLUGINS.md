@@ -142,7 +142,7 @@ Nothing else exists: no `fetch`, `require`, `process` or `setTimeout`, and no di
 The script runs in **QuickJS**, an isolated JavaScript engine (WebAssembly), itself started in a **process separate** from WaveDash ("WaveDash · plugins"): a slow plugin never freezes the interface, and if that process stops, it is restarted and the run retried once (what it writes to its error output goes to `plugin-host.log`, in the app folder). The account storage is copied into that process before the run, then the changes are saved afterwards. The script only sees `host`. On every run:
 
 - **memory**: 48 MB; **stack**: 256 KB;
-- **compute**: 8 s of cumulated compute time; **total duration**: 45 s (network included);
+- **compute**: 8 s of cumulated CPU time (measured on the plugin process, so a busy PC does not count against the plugin); **total duration**: 45 s (network included);
 - **network**: 30 requests, 5 MB per response, 15 s per request; HTTPS only; redirects rechecked (to another host, the `Authorization` and `Cookie` headers do not follow); local and private addresses (`localhost`, `192.168.x.x`, `10.x.x.x`…) **always rejected**, even if a domain name points to them;
 - **files**: a single folder, no subfolders or symbolic links, read-only.
 

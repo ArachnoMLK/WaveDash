@@ -102,10 +102,12 @@ export async function runPlugin(req: RunRequest): Promise<{ value: unknown; logs
   rt.setMemoryLimit(limits.memoryBytes)
   rt.setMaxStackSize(limits.stackBytes)
 
-  // Compute time: only the phases where the plugin's JavaScript runs are measured.
-  let cpuUsed = 0, sliceStart = Date.now(), aborted = false
-  rt.setInterruptHandler(() => aborted || cpuUsed + (Date.now() - sliceStart) > limits.cpuMs)
-  const slice = <T,>(fn: () => T): T => { sliceStart = Date.now(); try { return fn() } finally { cpuUsed += Date.now() - sliceStart } }
+  // Compute time: only the phases where the plugin's JavaScript runs are measured, in CPU time of this process
+  // (not wall-clock time): a PC busy with other programs no longer makes a plugin fail.
+  let cpuUsed = 0, sliceStart = process.cpuUsage(), aborted = false
+  const sliceMs = (): number => { const u = process.cpuUsage(sliceStart); return (u.user + u.system) / 1000 }
+  rt.setInterruptHandler(() => aborted || cpuUsed + sliceMs() > limits.cpuMs)
+  const slice = <T,>(fn: () => T): T => { sliceStart = process.cpuUsage(); try { return fn() } finally { cpuUsed += sliceMs() } }
 
   const vm: QuickJSContext = rt.newContext()
   const deferreds: QuickJSDeferredPromise[] = []

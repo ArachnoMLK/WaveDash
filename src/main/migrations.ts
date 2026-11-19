@@ -17,6 +17,12 @@ export function languageDefaults(systemLanguages: readonly string[]): void {
   if (JSON.stringify(next) !== JSON.stringify(tpl)) db.setSettings({ notifyTemplates: next })
 }
 
+/** 1.7.1: compute time used to be measured in wall-clock time, so a busy PC could disable a plugin after 5 timeouts.
+ *  Plugins disabled that way are enabled again (a plugin that really runs too long is disabled again after 5 failures). */
+export function enableTimedOutPlugins(): void {
+  for (const p of db.listPluginRows().filter((r) => !r.enabled && r.failures >= 5 && /^timeout: /.test(r.last_error ?? ''))) db.setPluginEnabled(p.id, true)
+}
+
 /** 1.1.0: the built-in Instagram and TikTok platforms are removed. They had no provider: an account
  *  could only be a demo, removed here. TikTok tracking goes through the "TikTok (public profile)" plugin. */
 export function removeSocialPlaceholders(): void {

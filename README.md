@@ -4,6 +4,8 @@ A Windows dashboard for your **YouTube, Brawlhalla, TikTok and Discord** stats, 
 
 Electron · React · TypeScript · SQLite · ECharts. Grey/black/white design, frosted glass, dark and light themes, 9 languages.
 
+> **Version 1.7.1**: plugin compute time is measured in CPU time, so a busy PC no longer disables a plugin (plugins disabled that way are enabled again).
+>
 > **Version 1.7.0**: new **Players** page, a player bank fed by your replays: search any player you met (by current or former name, or ID) and see their sheet (legends, win rate, habits, teammates, opponents, recent games). For the test phase, banks are shared with `.wdbank` files (export / import), which only hold extracted data, never replay files.
 >
 > **Version 1.6.0**: WaveDash follows the Windows language on first launch and is available in English, French, Spanish, Portuguese (Brazil), German, Italian, Japanese, Chinese (Simplified) and Arabic (right-to-left layout). The code, docs and plugins are now English-first.
