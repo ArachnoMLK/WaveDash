@@ -51,6 +51,9 @@ export interface PluginManifest {
   views: boolean
   /** The plugin feeds the player bank (`players` in its result) and defines `player`, which builds a player's sheet from their records. */
   players: boolean
+  /** The items are replay files (item id = file name) that WaveDash's built-in Brawlhalla replay player can open:
+   *  the account page gets "Statistics" / "Replays" tabs and clicking an item's image opens the player. */
+  replays: boolean
   /** "Cross your data" tool: measures and axes offered in the menus; the script then defines `cross`. */
   cross?: { measures: { key: string; label: LocalText }[]; dimensions: { key: string; label: LocalText }[] }
   refreshMinutes: number
@@ -185,7 +188,7 @@ export function validateManifest(raw: unknown): Result {
   const refresh = typeof m.refreshMinutes === 'number' && Number.isFinite(m.refreshMinutes) ? Math.min(1440, Math.max(5, Math.round(m.refreshMinutes))) : 30
   return { ok: true, manifest: { wdsh: 1, id: m.id, name: m.name.trim(), version: m.version, author, description, minAppVersion: m.minAppVersion as string | undefined, entry,
     permissions: { network: network as string[], folder, folderExtensions: (exts as string[]).map((e) => e.toLowerCase()), images },
-    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, notices: m.notices === true, views: m.views === true, players: m.players === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
+    inputs, secrets, metrics, itemColumns, itemsMode, search: m.search === true, notices: m.notices === true, views: m.views === true, players: m.players === true, replays: m.replays === true, cross: crossOf(m.cross), refreshMinutes: refresh } }
 }
 
 /* ---------- Results returned by a plugin ---------- */

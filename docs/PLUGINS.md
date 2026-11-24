@@ -50,6 +50,7 @@ Then in WaveDash: **Plugins › Install a plugin** (or drop the file onto the wi
 | `search` | `true` if the script defines `search`: the account page then shows the top search bar. |
 | `cross` | "Cross your data" tool: `{ "measures": [{ "key", "label" }], "dimensions": [{ "key", "label" }] }` (2 to 12 each). The script defines `cross(ctx)`; `ctx.cross` = `{ who, measure, a, b }` (`b` may be `none`); it returns a detail, usually `bars` (`{ title, categories, series: [{ name, values }], stacked }`) and a table. |
 | `players` | `true` if the plugin feeds the **player bank** (`players` in its result) and defines `player(ctx)`, which builds a player's sheet for the **Players** page (see below). |
+| `replays` | `true` if the items are replay files of the plugin folder (item `id` = file name). The account page then gets two tabs, **Statistics** and **Replays** (the item list), and clicking a game's map in its detail opens the built-in **replay player** (a preloaded copy of the game, found from the `bh-harness` folder next to WaveDash), with arrows to the previous / next replay. |
 | `itemsMode` | `replace` (default): each refresh replaces the item list. `keep`: returned items are added to the ones already saved (same `id` = updated), up to 20,000 per account; the page shows them 50 at a time, with a month filter. Useful for a history (one game per file, for example). |
 | `refreshMinutes` | minimum delay between two refreshes (5 to 1440, 30 by default). |
 

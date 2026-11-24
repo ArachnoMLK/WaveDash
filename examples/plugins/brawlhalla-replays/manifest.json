@@ -2,7 +2,7 @@
   "wdsh": 1,
   "id": "wavedash.brawlhalla-replays",
   "name": "Brawlhalla Replays",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "minAppVersion": "1.7.0",
   "author": "WaveDash",
   "description": {
@@ -267,5 +267,6 @@
     ]
   },
   "views": true,
-  "players": true
+  "players": true,
+  "replays": true
 }

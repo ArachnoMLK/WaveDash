@@ -12,6 +12,7 @@ import { RangeKey, sinceOf } from '../lib/hooks'
 import { fmtPluginMetric } from '../lib/plugin'
 import { useChartTheme } from '../lib/useChartTheme'
 import { PluginAccountDialog } from '../components/PluginAccountDialog'
+import { ReplayPlayerView } from '../components/ReplayPlayerView'
 
 const RANGES: RangeKey[] = ['7', '30', '90', 'all']
 const PAGE = 50
@@ -75,6 +76,15 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const [over, setOver] = useState(false)
   const [busy, setBusy] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
+  // Plugins whose items are replay files (manifest `replays`): "Statistics" and "Replays" tabs, the item list and the
+  // built-in player in the second one. Tab kept per account.
+  const [tab, setTabState] = useState<'stats' | 'replays'>('stats')
+  useEffect(() => { try { setTabState(localStorage.getItem(`wd.tab.${accountId}`) === 'replays' ? 'replays' : 'stats') } catch { setTabState('stats') } }, [accountId])
+  const setTab = (v: 'stats' | 'replays'): void => { setTabState(v); try { localStorage.setItem(`wd.tab.${accountId}`, v) } catch { /* optional */ } }
+  // Replay shown in the player (item id = file name); `edge`: after a page change, take its first / last item.
+  const [playId, setPlayId] = useState<string | null>(null)
+  const [edge, setEdge] = useState<'first' | 'last' | null>(null)
+  useEffect(() => { setPlayId(null); setEdge(null) }, [accountId])
 
   useEffect(() => {
     if (!m) return
@@ -93,6 +103,10 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
     return () => { alive = false }
   }, [accountId, page, month, dataVersion, sort, query, scope, activeKey])
   useEffect(() => { setPage(0); setMonth(''); setOpenId(null) }, [accountId])
+  useEffect(() => {
+    if (!edge || !list.items.length) return
+    setPlayId(edge === 'first' ? list.items[0].id : list.items[list.items.length - 1].id); setEdge(null)
+  }, [list, edge])
 
   if (!account || !plugin || !m) return <div className="glass empty"><p>{t('goals.noAccounts')}</p></div>
 
@@ -117,19 +131,29 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
   const sortBy = (key: string): void => { setSort((s) => ({ key, desc: s.key === key ? !s.desc : true })); setPage(0); setOpenId(null) }
   const monthLabel = (ym: string): string => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5)) - 1, 1).toLocaleDateString(localeOf(settings.lang), { month: 'long', year: 'numeric' })
   const lang = localeOf(settings.lang)
+  const withTabs = !!m.replays
+  const showStats = !withTabs || tab === 'stats', showList = !withTabs || tab === 'replays'
+  const watch = (id: string): void => { setTab('replays'); setPlayId(id) }
+  const playIndex = playId ? list.items.findIndex((i) => i.id === playId) : -1
+  const stepReplay = (i: number): void => {
+    if (i >= 0 && i < list.items.length) setPlayId(list.items[i].id)
+    else if (i < 0 && page > 0) { setPage(page - 1); setEdge('last') }
+    else if (i >= list.items.length && page < pages - 1) { setPage(page + 1); setEdge('first') }
+  }
 
   return (
     <div>
       <div className="page-head">
         <div className="grow"><h1>{account.displayName}</h1>
-          <div className="muted small">{m.name} · {t('platform.synced', { time: ago(account.lastSyncAt, settings.lang, t('platform.never')) })}</div></div>
+          <div className="muted small">{m.name} · {t('platform.synced', { time: ago(account.lastSyncAt, settings.lang, t('platform.never')) })}</div>
+          {withTabs && <div className="page-tabs"><Tabs value={tab} options={[{ id: 'stats', label: t('rp.tabStats') }, { id: 'replays', label: t('rp.tabReplays') }]} onChange={(v) => { setTab(v); if (v === 'stats') setPlayId(null) }} /></div>}</div>
         {m.permissions.folder && <button className="btn" disabled={busy} onClick={() => setImporting(true)}>{t('pp.import')}</button>}
         <button className="btn" disabled={busy} onClick={() => void refresh()}>{t('platform.refresh')}</button>
         {m.inputs.length > 0 && <button className="btn" onClick={() => setEditing(true)}>{t('pp.edit')}</button>}
         <button className="btn" onClick={() => void window.api.pluginAccountRemove(accountId).then(reloadPlugins)}>{t('pp.removeAccount')}</button>
       </div>
       {editing && <PluginAccountDialog plugin={plugin} account={account} onClose={() => setEditing(false)} />}
-      {m.views && extra.filters.length > 0 && (
+      {showStats && m.views && extra.filters.length > 0 && (
         <div className="glass filter-bar sect" role="toolbar" aria-label={t('pp.filters')}>
           {extra.filters.map((f) => (
             <label key={f.key}>
@@ -162,8 +186,8 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
           </div>
         </div>
       )}
-      {m.cross && <CrossPanel accountId={accountId} cross={m.cross} th={th} filters={active} />}
-      {m.search && <div className="glass pad sect top-search">
+      {showStats && m.cross && <CrossPanel accountId={accountId} cross={m.cross} th={th} filters={active} />}
+      {showStats && m.search && <div className="glass pad sect top-search">
         <input type="search" className="search" value={topQ} onChange={(e) => setTopQ(e.target.value)} placeholder={t('pp.topSearch')} aria-label={t('pp.topSearch')} />
         {found && (found.busy ? <p className="muted small" style={{ marginTop: 8 }}>{t('pp.searching')}</p>
           : found.unsupported ? <p className="muted small" style={{ marginTop: 8 }}>{t('pp.topUnsupported')}</p>
@@ -176,7 +200,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
       {account.lastError && <div className="err" style={{ marginBottom: 16 }}>{t('pp.error', { error: `${t(`plugin.run.${account.lastError}`)}${extra.error ? ` — ${extra.error}` : ''}` })}</div>}
 
       {/* With a filter, the counters and the curve (which cover the whole account) make way for the filtered overview. */}
-      {!filtered && <><div className="grid cards">
+      {showStats && !filtered && <><div className="grid cards">
         {m.metrics.map((x, i) => {
           const s = series[x.key] ?? [], v = latest[x.key]
           const delta = s.length > 1 ? s[s.length - 1].value - s[0].value : undefined
@@ -202,7 +226,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
           : <p className="muted" style={{ padding: '60px 0', textAlign: 'center' }}>{t('platform.noData')}</p>}
       </Reveal></>}
 
-      {filtered ? (
+      {!showStats ? null : filtered ? (
         <Reveal className="glass pad sect" delay={0.04}>
           <h2 style={{ marginBottom: 10 }}>{t('pp.summary')} · <span className="muted" style={{ fontWeight: 400 }}>{extra.filters.filter((f) => active[f.key]).map((f) => f.options.find((o) => o.value === active[f.key])?.label).join(' · ')}</span></h2>
           {view?.error ? <div className="err">{view.error}</div>
@@ -216,10 +240,16 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
         </Reveal>
       )}
 
-      {(list.total > 0 || month || query || filtered) && (
+      {showList && playIndex >= 0 && (
+        <ReplayPlayerView accountId={accountId} index={playIndex} onIndex={stepReplay} onBack={() => setPlayId(null)}
+          replays={list.items.map((it) => ({ id: it.id, title: it.title, sub: [it.ts ? new Date(it.ts).toLocaleString(lang) : '', ...m.itemColumns.map((c) => it.fields[c.key])].filter((v) => v !== undefined && v !== '' && v !== '—').join(' · ') }))}
+          canPrev={playIndex > 0 || page > 0} canNext={playIndex < list.items.length - 1 || page < pages - 1}
+          position={`${page * PAGE + playIndex + 1} / ${list.total}`} />
+      )}
+      {showList && playIndex < 0 && (list.total > 0 || month || query || filtered) && (
         <Reveal className="glass pad sect" delay={0.16}>
           <div className="row between" style={{ marginBottom: 6, flexWrap: 'wrap', gap: 10 }}>
-            <h2>{t('pp.items')} <span className="muted" style={{ fontWeight: 400 }}>· {list.total}</span></h2>
+            <h2>{withTabs ? t('rp.tabReplays') : t('pp.items')} <span className="muted" style={{ fontWeight: 400 }}>· {list.total}</span></h2>
             <div className="row" style={{ gap: 8 }}>
               {list.months.length > 1 && (
                 <select value={month} style={{ width: 'auto' }} aria-label={t('pp.month')} onChange={(e) => { setMonth(e.target.value); setPage(0); setOpenId(null) }}>
@@ -258,7 +288,7 @@ export function PluginPage({ accountId }: { accountId: number }): JSX.Element {
                     {m.itemColumns.map((c) => <td key={c.key}>{it.fields[c.key] ?? '—'}{it.fields[c.key] !== undefined && c.unit ? ` ${c.unit}` : ''}</td>)}</tr>
                   {/* The detail opens under the clicked row, not at the bottom of a long list. */}
                   {open && it.detail && <tr className="detail-row"><td colSpan={1 + (hasDates ? 1 : 0) + m.itemColumns.length}>
-                    <DetailView accountId={accountId} detail={it.detail} th={th} t={t} onClose={() => setOpenId(null)} /></td></tr>}
+                    <DetailView accountId={accountId} detail={it.detail} th={th} t={t} onClose={() => setOpenId(null)} onWatch={withTabs ? () => watch(it.id) : undefined} /></td></tr>}
                 </Fragment>
               )
             })}</tbody>
@@ -343,14 +373,18 @@ function Heat({ g, caption = true }: { g: DetailGrid; caption?: boolean }): JSX.
 /** Detail of a plugin item, or account overview: badges, key figures, tables, grids, curves, timeline.
  *  With `layoutKey` (overview), each block becomes a module that can be collapsed, moved (arrows or drag) and hidden. */
 /** Image at the top of a detail (e.g. map thumbnail): read from the account's image folder, by the main process. */
-function DetailImageView({ accountId, file, caption }: { accountId: number; file: string; caption?: string }): JSX.Element | null {
+function DetailImageView({ accountId, file, caption, onClick, hint }: { accountId: number; file: string; caption?: string; onClick?: () => void; hint?: string }): JSX.Element | null {
   const [src, setSrc] = useState<string | null>(null)
   useEffect(() => { let alive = true; void window.api.pluginImage(accountId, file).then((u) => { if (alive) setSrc(u) }); return () => { alive = false } }, [accountId, file])
   if (!src) return null
+  if (onClick) return (
+    <figure className="detail-image watch"><button className="watch-btn" onClick={onClick} title={hint} aria-label={hint}><img src={src} alt={caption ?? ''} /><span className="play" aria-hidden>▶</span></button>
+      {caption && <figcaption>{caption}</figcaption>}</figure>
+  )
   return <figure className="detail-image"><img src={src} alt={caption ?? ''} />{caption && <figcaption>{caption}</figcaption>}</figure>
 }
 
-export function DetailView({ accountId, detail, th, t, onClose, layoutKey }: { accountId: number; detail: PluginDetail; th: ChartTheme; t: (k: string, v?: Record<string, string | number>) => string; onClose?: () => void; layoutKey?: string }): JSX.Element {
+export function DetailView({ accountId, detail, th, t, onClose, layoutKey, onWatch }: { accountId: number; detail: PluginDetail; th: ChartTheme; t: (k: string, v?: Record<string, string | number>) => string; onClose?: () => void; layoutKey?: string; onWatch?: () => void }): JSX.Element {
   const tables = [...(detail.table ? [detail.table] : []), ...(detail.tables ?? [])]
   const blocks: { id: string; title: string; node: ReactNode }[] = []
   if (detail.stats) blocks.push({ id: 'stats', title: t('pp.keyFigures'), node: <div className="mini-stats">{detail.stats.map((s, i) => <div key={i}><span className="small muted">{s.label}</span><b>{s.value}</b></div>)}</div> })
@@ -376,11 +410,14 @@ export function DetailView({ accountId, detail, th, t, onClose, layoutKey }: { a
       {onClose && (
         <div className="row between" style={{ marginBottom: 6 }}>
           <h3>{t('pp.detail')}</h3>
-          <button className="btn" onClick={onClose}>{t('pp.close')}</button>
+          <div className="row" style={{ gap: 8 }}>
+            {onWatch && !detail.image && <button className="btn primary" onClick={onWatch}>▶ {t('rp.watch')}</button>}
+            <button className="btn" onClick={onClose}>{t('pp.close')}</button>
+          </div>
         </div>
       )}
       {detail.image
-        ? <div className="detail-head"><DetailImageView accountId={accountId} file={detail.image.file} caption={detail.image.caption} />
+        ? <div className="detail-head"><DetailImageView accountId={accountId} file={detail.image.file} caption={detail.image.caption} onClick={onWatch} hint={t('rp.watch')} />
             {detail.chips && <div className="chips">{detail.chips.map((c, i) => <span key={i} className="chip">{c}</span>)}</div>}</div>
         : detail.chips && <div className="chips">{detail.chips.map((c, i) => <span key={i} className="chip">{c}</span>)}</div>}
       {layoutKey && (

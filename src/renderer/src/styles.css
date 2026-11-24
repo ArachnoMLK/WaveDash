@@ -308,3 +308,23 @@ details.rule[open] > summary { margin-bottom: 4px; }
 /* Desired duration of a Studio export */
 .st-duration { gap: 6px; }
 .st-duration input { width: 72px; }
+
+/* Plugin account page tabs (Statistics / Replays) and the built-in replay player. */
+.page-tabs { margin-top: 10px; }
+.detail-image.watch .watch-btn { position: relative; display: block; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--radius-sm); }
+.detail-image.watch .play { position: absolute; inset: 0; margin: auto; width: 54px; height: 54px; border-radius: 999px; display: grid; place-items: center; padding-left: 4px;
+  background: rgba(13,13,13,.55); border: 1px solid rgba(255,255,255,.25); color: #fff; font-size: 20px; backdrop-filter: blur(8px);
+  opacity: .85; transform: scale(.92); transition: opacity .3s var(--ease), transform .3s var(--ease); }
+.detail-image.watch .watch-btn:hover .play, .detail-image.watch .watch-btn:focus-visible .play { opacity: 1; transform: scale(1); }
+.detail-image.watch .watch-btn:hover img { border-color: var(--line-strong); }
+.replay-player { display: flex; flex-direction: column; gap: 12px; height: calc(100vh - 260px); min-height: 420px; }
+.replay-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.replay-title { display: flex; flex-direction: column; min-width: 0; }
+.replay-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.replay-stage { flex: 1; display: flex; align-items: stretch; gap: 10px; min-height: 0; }
+.replay-box { flex: 1; min-width: 0; border-radius: var(--radius-sm); border: 1px solid var(--line); background: #0b0f14; display: grid; place-items: center; overflow: hidden; }
+.replay-msg { text-align: center; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px; }
+.replay-arrow { width: 44px; flex-shrink: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--ctrl); color: var(--fg); font: inherit; font-size: 28px; cursor: pointer;
+  transition: background .3s var(--ease), opacity .3s var(--ease); }
+.replay-arrow:hover:not(:disabled) { background: var(--ctrl-hover); }
+.replay-arrow:disabled { opacity: .3; cursor: default; }

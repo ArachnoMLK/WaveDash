@@ -10,6 +10,10 @@ import { initUpdater } from './updater'
 import { stopPluginHost } from './plugins/isolated'
 import { enableTimedOutPlugins, languageDefaults, migrateBuiltinBrawlhalla, removeSocialPlaceholders } from './migrations'
 import { registerStudio, registerStudioScheme, stopStudio } from './studio'
+import { registerReplayPlayer, stopPlayer } from './replayPlayer'
+
+// Development: a separate data folder (WAVEDASH_USER_DATA), so a dev build runs next to the installed app.
+if (!app.isPackaged && process.env['WAVEDASH_USER_DATA']) app.setPath('userData', process.env['WAVEDASH_USER_DATA'])
 
 registerStudioScheme()
 
@@ -98,11 +102,13 @@ else {
     createTray()
     registerIpc(() => win)
     registerStudio(() => win)
+    // The replay player preloads in the background (hidden, a few frames per second) so replays open fast.
+    registerReplayPlayer(() => win)
     setPendingFile(wdshArg(process.argv) ?? null)
     applySystemSettings(getSettings(), win)
     void refreshAll()
     initUpdater(() => win)
   })
-  app.on('before-quit', () => { quitting = true; stopPluginHost(); stopStudio() })
+  app.on('before-quit', () => { quitting = true; stopPluginHost(); stopStudio(); stopPlayer() })
   app.on('window-all-closed', () => { /* the app stays in the system tray */ })
 }

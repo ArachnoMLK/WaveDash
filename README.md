@@ -4,6 +4,8 @@ A Windows dashboard for your **YouTube, Brawlhalla, TikTok and Discord** stats, 
 
 Electron · React · TypeScript · SQLite · ECharts. Grey/black/white design, frosted glass, dark and light themes, 9 languages.
 
+> **Version 1.8.0**: the Brawlhalla Replays page gets two tabs, **Statistics** and **Replays**. Clicking a game's map opens the **replay player**, a copy of the game kept preloaded in the background (4 frames per second while hidden), so a replay opens in about 0.2 s; side arrows and the ← → keys switch to the previous / next replay.
+>
 > **Version 1.7.1**: plugin compute time is measured in CPU time, so a busy PC no longer disables a plugin (plugins disabled that way are enabled again).
 >
 > **Version 1.7.0**: new **Players** page, a player bank fed by your replays: search any player you met (by current or former name, or ID) and see their sheet (legends, win rate, habits, teammates, opponents, recent games). For the test phase, banks are shared with `.wdbank` files (export / import), which only hold extracted data, never replay files.

@@ -1,7 +1,7 @@
 // Plugin management: install (with validation), accounts, refresh, keys.
 import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync } from 'fs'
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync } from 'fs'
 import { basename, extname, join } from 'path'
 import {
   BankPlayer, compareVersions, IMAGE_FILE_RE, PLAYER_LIMITS, InstalledPlugin, PluginFilter, sanitizeDetail, PLUGIN_LIMITS, PluginAccount, PluginDetail, PluginInspect, PluginItemsPage, PluginManifest, sanitizeResolveResult, sanitizeRunResult, validateManifest
@@ -227,6 +227,24 @@ export function pluginImage(accountId: number, file: string): string | null {
     const buf = readFileSafe({ dir: realpathSync(dir), extensions: ['.jpg', '.jpeg', '.png', '.webp'] }, file, 3 * 1024 * 1024)
     return `data:${MIME[extname(file).slice(1).toLowerCase()]};base64,${buf.toString('base64')}`
   } catch { return null }
+}
+
+/** Full path of one of an account's files (chosen folder first, then its imports), for the replay player.
+ *  Same checks as the plugin's own reads: plain file name, declared extension, no link, no subfolder. */
+export function replayFileOf(accountId: number, name: string): string | null {
+  const pa = db.getPluginAccountRow(accountId), row = pa && db.getPluginRow(pa.plugin_id)
+  if (!pa || !row || !name || name !== basename(name) || /[\\/\0]/.test(name)) return null
+  try {
+    const m = loadManifest(row)
+    const a = folderOf(m, JSON.parse(pa.inputs) as Record<string, string>, accountId)
+    if (!a || !(a.extensions.length === 0 || a.extensions.includes(extname(name).toLowerCase()))) return null
+    for (const dir of [a.dir, a.extra]) {
+      if (!dir) continue
+      const full = join(dir, name)
+      if (existsSync(full) && lstatSync(full).isFile() && !lstatSync(full).isSymbolicLink()) return full
+    }
+  } catch { /* folder gone */ }
+  return null
 }
 
 export function removePluginAccount(accountId: number): void {

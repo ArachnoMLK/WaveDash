@@ -1,6 +1,6 @@
 // Secure bridge: exposes only the functions the interface needs.
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
-import type { MilestoneEvent, UpdateStatus } from '@shared/types'
+import type { MilestoneEvent, ReplayPlayerStatus, UpdateStatus } from '@shared/types'
 import type { WaveApi } from '@shared/types'
 
 const api: WaveApi = {
@@ -107,6 +107,19 @@ const api: WaveApi = {
     saveImage: (bytes, name, ext) => ipcRenderer.invoke('studio:saveImage', bytes, name, ext),
     saveProject: (json, path) => ipcRenderer.invoke('studio:saveProject', json, path),
     openProject: () => ipcRenderer.invoke('studio:openProject')
+  },
+  replayPlayer: {
+    status: () => ipcRenderer.invoke('replayPlayer:status'),
+    open: (accountId, file) => ipcRenderer.invoke('replayPlayer:open', accountId, file),
+    place: (rect) => ipcRenderer.invoke('replayPlayer:place', rect),
+    close: () => ipcRenderer.invoke('replayPlayer:close'),
+    command: (cmd, args) => ipcRenderer.invoke('replayPlayer:command', cmd, args),
+    setDir: () => ipcRenderer.invoke('replayPlayer:setDir'),
+    onStatus: (cb) => {
+      const h = (_e: unknown, s: ReplayPlayerStatus): void => cb(s)
+      ipcRenderer.on('replayPlayer:status', h)
+      return () => ipcRenderer.removeListener('replayPlayer:status', h)
+    }
   },
   onDataUpdated: (cb) => {
     const h = (): void => cb()

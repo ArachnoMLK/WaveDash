@@ -308,4 +308,31 @@ export interface WaveApi {
   getUpdateStatus(): Promise<UpdateStatus>
   onUpdateStatus(cb: (s: UpdateStatus) => void): () => void
   studio: StudioApi
+  replayPlayer: ReplayPlayerApi
+}
+
+/** Brawlhalla replay player (the real game, preloaded hidden): see src/main/replayPlayer.ts. */
+export interface ReplayPlayerStatus {
+  state: 'off' | 'missing' | 'loading' | 'ready' | 'error'
+  error?: string
+  /** Replay being shown (full path), null when closed. */
+  replay: string | null
+  /** The player finished analysing the replay (actions, team combos...). */
+  analysed: boolean
+  dir: string
+  installed: boolean
+}
+/** Rectangle of the page (CSS pixels, from the top-left of the window content) the player covers. */
+export interface ReplayPlayerRect { x: number; y: number; width: number; height: number }
+export interface ReplayPlayerApi {
+  status(): Promise<ReplayPlayerStatus>
+  /** Opens a file of a plugin account (item id = file name). */
+  open(accountId: number, file: string): Promise<{ ok: boolean; error?: string }>
+  /** Moves the player window over `rect`, or hides it (null). */
+  place(rect: ReplayPlayerRect | null): Promise<void>
+  close(): Promise<void>
+  command(cmd: 'pause' | 'seek' | 'speed', args?: Record<string, unknown>): Promise<void>
+  /** Picks the bh-harness folder. */
+  setDir(): Promise<ReplayPlayerStatus>
+  onStatus(cb: (s: ReplayPlayerStatus) => void): () => void
 }
